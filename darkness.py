@@ -1,5 +1,9 @@
+
+
 # User_place это место на котором сейчас находится игрок
 User_place = "menu"
+
+
 
 def menu():
     print("start")
@@ -14,4 +18,5 @@ def menu():
         print("Nothing is here yet")
     else:
          print("I dont understand:(")
-menu()
+while True:
+    menu()
