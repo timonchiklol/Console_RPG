@@ -2,6 +2,7 @@ from random import randint, choice
 from gemini import Gemini
 from dotenv import load_dotenv
 import os
+import json
 
 class DnDGame:
     def __init__(self):
@@ -18,6 +19,7 @@ class DnDGame:
         self.player_class = ""
         self.in_combat = False
         self.enemy = None
+        self.save_folder = "saves"  # Папка для сохранений
         
         # Получаем API ключ из .env файла
         api_key = os.getenv("GEMINI_API_KEY")
@@ -52,6 +54,10 @@ class DnDGame:
             "Dark Cultist": {"hp": 9, "damage": (1,10), "xp": 150, "gold": (3,8)},
             "Giant Spider": {"hp": 10, "damage": (1,8), "xp": 100, "gold": (0,3)}
         }
+        
+        # Создаем папку для сохранений, если её нет
+        if not os.path.exists(self.save_folder):
+            os.makedirs(self.save_folder)
         
     def update_system_prompt(self):
         """Обновляет системный промпт с текущими характеристиками игрока"""
@@ -369,3 +375,59 @@ class DnDGame:
             Your HP: {self.health_points}
             Spell slots remaining: {self.magic_1lvl}
             """
+
+    def save_game(self, save_name="quicksave"):
+        """Сохраняет текущее состояние игры"""
+        save_data = {
+            "player_race": self.player_race,
+            "player_class": self.player_class,
+            "level": self.level,
+            "health_points": self.health_points,
+            "damage": self.damage,
+            "gold": self.gold,
+            "magic_1lvl": self.magic_1lvl,
+            "magic_2lvl": self.magic_2lvl,
+            "in_combat": self.in_combat,
+            "enemy": self.enemy,
+            "message_history": self.message_history
+        }
+        
+        save_path = os.path.join(self.save_folder, f"{save_name}.json")
+        with open(save_path, 'w', encoding='utf-8') as f:
+            json.dump(save_data, f, ensure_ascii=False, indent=4)
+        
+        return f"Игра сохранена в файл {save_name}.json"
+
+    def load_game(self, save_name="quicksave"):
+        """Загружает сохраненное состояние игры"""
+        save_path = os.path.join(self.save_folder, f"{save_name}.json")
+        
+        if not os.path.exists(save_path):
+            return "Сохранение не найдено!"
+            
+        try:
+            with open(save_path, 'r', encoding='utf-8') as f:
+                save_data = json.load(f)
+            
+            self.player_race = save_data["player_race"]
+            self.player_class = save_data["player_class"]
+            self.level = save_data["level"]
+            self.health_points = save_data["health_points"]
+            self.damage = save_data["damage"]
+            self.gold = save_data["gold"]
+            self.magic_1lvl = save_data["magic_1lvl"]
+            self.magic_2lvl = save_data["magic_2lvl"]
+            self.in_combat = save_data["in_combat"]
+            self.enemy = save_data["enemy"]
+            self.message_history = save_data["message_history"]
+            
+            return "Игра успешно загружена!"
+        except Exception as e:
+            return f"Ошибка при загрузке сохранения: {str(e)}"
+
+    def list_saves(self):
+        """Показывает список доступных сохранений"""
+        saves = [f.replace('.json', '') for f in os.listdir(self.save_folder) if f.endswith('.json')]
+        if not saves:
+            return "Сохранений не найдено!"
+        return "Доступные сохранения:\n" + "\n".join(saves)
