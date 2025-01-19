@@ -4,53 +4,6 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-class GeminiChat:
-    def __init__(self, system_instruction=None, temperature=0.9):
-        # Load environment variables
-        load_dotenv()
-        
-        # Configure the Gemini API
-        self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-        
-        # Initialize model and settings
-        self.model = "gemini-2.0-flash-exp"
-        self.temperature = temperature
-        self.system_instruction = system_instruction or "You are a helpful AI assistant."
-        
-        # Configure safety settings
-        self.safety_settings = [
-            types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
-            types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
-            types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
-            types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
-        ]
-        
-        # Initialize chat session
-        self.chat = self._create_chat_session()
-    
-    def _create_chat_session(self):
-        """Create a new chat session with the configured settings."""
-        return self.client.chats.create(
-            model=self.model,
-            config=types.GenerateContentConfig(
-                system_instruction=self.system_instruction,
-                temperature=self.temperature,
-                safety_settings=self.safety_settings
-            )
-        )
-    
-    def send_message(self, message):
-        """Send a message to the chat and return the response."""
-        try:
-            response = self.chat.send_message(message)
-            return response.text
-        except Exception as e:
-            return f"Error: {str(e)}"
-    
-    def reset_chat(self):
-        """Reset the chat session with the same configuration."""
-        self.chat = self._create_chat_session()
-
 
 class Gemini:
     def __init__(self, API_KEY, system_instruction=None, temperature=1):
@@ -101,16 +54,47 @@ class Gemini:
         except Exception as e:
             return f"Error: {str(e)}"
 
+    def create_chat(self):
+        """Create and return a new chat session."""
+        return self.client.chats.create(
+            model=self.model,
+            config=types.GenerateContentConfig(
+                system_instruction=self.system_instruction,
+                temperature=self.temperature,
+                safety_settings=self.safety_settings
+            )
+        )
+
+    def send_chat_message(self, chat, message):
+        """Send a message in a specific chat session and return the response."""
+        try:
+            response = chat.send_message(message)
+            return response.text
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    def send_chat_message_stream(self, chat, message):
+        """Send a message in a specific chat session and return a streaming response."""
+        try:
+            return chat.send_message(message, stream=True)
+        except Exception as e:
+            return f"Error: {str(e)}"
+
 def main():
-    # Create a chat instance
-    chat = GeminiChat()
     load_dotenv()
     gemini = Gemini(os.getenv("GEMINI_API_KEY"))
     
-    print("Chat with Gemini 2.0 Flash (Type 'quit' to exit, 'stream' to toggle streaming mode)")
+    print("Chat with Gemini 2.0 Flash")
+    print("Commands:")
+    print("- 'quit': Exit")
+    print("- 'stream': Toggle streaming mode")
+    print("- 'chat': Toggle chat mode (maintains conversation context)")
+    print("- 'reset': Reset chat session (only in chat mode)")
     print("-" * 50)
     
     streaming_mode = False
+    chat_mode = False
+    chat_session = None
     
     while True:
         user_input = input("\nYou: ").strip()
@@ -123,15 +107,39 @@ def main():
             streaming_mode = not streaming_mode
             print(f"\nStreaming mode: {'enabled' if streaming_mode else 'disabled'}")
             continue
-        
-        if streaming_mode:
-            print("\nGemini:", end=" ")
-            for chunk in gemini.send_message_stream(user_input):
-                print(chunk.text, end="", flush=True)
-            print()  # New line after streaming completes
+            
+        if user_input.lower() == 'chat':
+            chat_mode = not chat_mode
+            if chat_mode:
+                chat_session = gemini.create_chat()
+            else:
+                chat_session = None
+            print(f"\nChat mode: {'enabled' if chat_mode else 'disabled'}")
+            continue
+            
+        if user_input.lower() == 'reset' and chat_mode:
+            chat_session = gemini.create_chat()
+            print("\nChat session reset!")
+            continue
+            
+        if chat_mode:
+            if streaming_mode:
+                print("\nGemini:", end=" ")
+                for chunk in gemini.send_chat_message_stream(chat_session, user_input):
+                    print(chunk.text, end="", flush=True)
+                print()
+            else:
+                response = gemini.send_chat_message(chat_session, user_input)
+                print("\nGemini:", response)
         else:
-            response = gemini.send_message(user_input)
-            print("\nGemini:", response)
+            if streaming_mode:
+                print("\nGemini:", end=" ")
+                for chunk in gemini.send_message_stream(user_input):
+                    print(chunk.text, end="", flush=True)
+                print()
+            else:
+                response = gemini.send_message(user_input)
+                print("\nGemini:", response)
 
 if __name__ == "__main__":
     main()

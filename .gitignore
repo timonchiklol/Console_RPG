@@ -11,3 +11,6 @@ wheels/
 
 # .env
 .env
+
+# gemini_examples.py
+gemini_examples.py
