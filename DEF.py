@@ -3,6 +3,7 @@ from gemini import Gemini
 from dotenv import load_dotenv
 import os
 import json
+import sys
 
 class DnDGame:
     def __init__(self):
@@ -22,28 +23,15 @@ class DnDGame:
         self.enemy = None
         self.save_folder = "saves"  # Папка для сохранений
         
-        # Получаем API ключ из .env файла
-        api_key = os.getenv("GEMINI_API_KEY")
-        
-        # Изменяем системный промпт для лучшей генерации
-        system_prompt = """You are a creative and engaging Dungeon Master in a D&D game.
-        Generate immersive descriptions and respond to player actions in character. Always respond in Russian language only.
-        Current player stats:
-        Race: {race}
-        Class: {class}
-        Level: {level}
-        HP: {hp}
-        Damage: {damage}
-        Gold: {gold}
-        
-        Keep responses concise but atmospheric.
-        Remember last 3 messages for context.
-        Adapt the story based on player choices and stats."""
-        
-        # Передаем API ключ при создании экземпляра Gemini
-        self.chat = Gemini(API_KEY=api_key, system_instruction=system_prompt)
+        # Message generation settings
+        self.streaming_mode = True  # Default to streaming
+        self.context_limit = 50  # Number of messages to keep in context
         self.message_history = []  # Хранение последних сообщений
         
+        # Создаем папку для сохранений, если её нет
+        if not os.path.exists(self.save_folder):
+            os.makedirs(self.save_folder)
+            
         # Добавим список возможных врагов
         self.enemies = {
             "Goblin": {"hp": 7, "damage": (1,6), "xp": 50, "gold": (1,6)},
@@ -55,11 +43,21 @@ class DnDGame:
             "Dark Cultist": {"hp": 9, "damage": (1,10), "xp": 150, "gold": (3,8)},
             "Giant Spider": {"hp": 10, "damage": (1,8), "xp": 100, "gold": (0,3)}
         }
+
+    def initialize_chat(self):
+        """Initialize the chat with the selected language"""
+        # Получаем API ключ из .env файла
+        api_key = os.getenv("GEMINI_API_KEY")
         
-        # Создаем папку для сохранений, если её нет
-        if not os.path.exists(self.save_folder):
-            os.makedirs(self.save_folder)
+        # Simplified system prompt focusing only on role and language
+        system_prompt = """You are a creative and engaging Dungeon Master in a D&D game.
+        Generate immersive descriptions and respond to player actions in character.
+        Always respond in {language} language only.
+        Keep responses concise but atmospheric.""".format(language="Russian" if self.language == "ru" else "English")
         
+        # Initialize the chat with the system prompt
+        self.chat = Gemini(API_KEY=api_key, system_instruction=system_prompt)
+
     def update_system_prompt(self):
         """Обновляет системный промпт с текущими характеристиками игрока"""
         current_stats = f"""Current player stats:
@@ -68,8 +66,9 @@ class DnDGame:
         Level: {self.level}
         HP: {self.health_points}
         Damage: {self.damage}
-        Gold: {self.gold}"""
-        return self.chat.send_message(f"Remember these player stats: {current_stats}")
+        Gold: {self.gold}
+        Language: {self.language}"""
+        return self.chat.send_message(f"Remember these player stats and always respond in {self.language} language: {current_stats}")
     
     def add_to_history(self, user_message, dm_response):
         """Сохраняет последние 3 сообщения"""
@@ -95,14 +94,29 @@ class DnDGame:
         HP: {self.health_points}
         Damage: {self.damage}
         Gold: {self.gold}
+        Magic slots (1st/2nd level): {self.magic_1lvl}/{self.magic_2lvl}
         """
         
-        context = "Previous messages:\n"
-        for msg in self.message_history:
+        # Get limited context from message history
+        start_idx = max(0, len(self.message_history) - self.context_limit)
+        context = f"Previous messages (last {self.context_limit}):\n"
+        for msg in self.message_history[start_idx:]:
             context += f"Player: {msg['user']}\nDM: {msg['dm']}\n"
         
         full_message = f"{current_stats}\n{context}\nCurrent message: {message}"
-        response = self.chat.send_message(full_message)
+        
+        if self.streaming_mode:
+            print(f"\n{self.get_text('Мастер: ', 'Dungeon Master: ')}", end="")
+            response_chunks = []
+            for chunk in self.chat.send_message_stream(full_message):
+                print(chunk.text, end="", flush=True)
+                response_chunks.append(chunk.text)
+            print()
+            response = "".join(response_chunks)
+        else:
+            response = self.chat.send_message(full_message)
+            print(f"\n{self.get_text('Мастер: ', 'Dungeon Master: ')}{response}")
+        
         self.add_to_history(message, response)
         return response
 
@@ -124,17 +138,23 @@ class DnDGame:
         print("""Available languages / Доступные языки:
         1. Русский (Russian)
         2. English (Английский)
+        0. Quit / Выход
         """)
-        choice = input("Choose language / Выберите язык (1/2): ").strip()
+        choice = input("Choose language / Выберите язык (0/1/2): ").strip().lower()
         
         if choice == "1":
             self.language = "ru"
             print("Язык установлен на русский")
+            self.initialize_chat()
             return "ru"
         elif choice == "2":
             self.language = "en"
             print("Language set to English")
+            self.initialize_chat()
             return "en"
+        elif choice in ["0", "quit", "exit", "выход"]:
+            print("Exiting game / Выход из игры")
+            sys.exit()
         else:
             print("Некорректный выбор / Invalid choice")
             return self.choose_language()
@@ -153,6 +173,8 @@ class DnDGame:
         6. Драконорожденный (Огненное дыхание, средние характеристики)
         7. Тифлинг (Темное зрение, магический бонус)
         8. Гном (Умный, дополнительные слоты заклинаний)
+        
+        0. Выход из игры / Quit game
         """
         
         race_options_en = """Race options: 
@@ -164,6 +186,8 @@ class DnDGame:
         6. Dragonborn (Fire breath, medium stats)
         7. Tiefling (Dark vision, magic bonus)
         8. Gnome (Smart, extra magic slots)
+        
+        0. Quit game
         """
         
         # Словарь соответствия номеров и рас
@@ -179,17 +203,20 @@ class DnDGame:
         }
         
         print(self.get_text(race_options_ru, race_options_en))
-        choice_prompt_ru = "Выберите номер расы (1-8): "
-        choice_prompt_en = "Choose race number (1-8): "
+        choice_prompt_ru = "Выберите номер расы (0-8): "
+        choice_prompt_en = "Choose race number (0-8): "
         
         while True:
-            choice = input(self.get_text(choice_prompt_ru, choice_prompt_en)).strip()
+            choice = input(self.get_text(choice_prompt_ru, choice_prompt_en)).strip().lower()
+            if choice in ["0", "quit", "exit", "выход"]:
+                print(self.get_text("Выход из игры", "Exiting game"))
+                sys.exit()
             if choice in race_map:
                 self.player_race = race_map[choice]
                 break
             else:
-                error_ru = "Пожалуйста, введите число от 1 до 8."
-                error_en = "Please enter a number between 1 and 8."
+                error_ru = "Пожалуйста, введите число от 0 до 8."
+                error_en = "Please enter a number between 0 and 8."
                 print(self.get_text(error_ru, error_en))
 
         # Установка характеристик в зависимости от расы
@@ -239,9 +266,6 @@ class DnDGame:
             print("I dont understand:( Please choose from the list.")
             self.choose_race()
         self.update_system_prompt()
-        # Добавляем приветствие от DM после выбора расы
-        welcome_race = self.send_message(f"Welcome our new {self.player_race}! Give a brief lore-friendly comment about this race choice.")
-        print(f"\nDungeon Master: {welcome_race}\n")
 
     def choose_class(self):
         class_options_ru = """Варианты классов:
@@ -255,6 +279,8 @@ class DnDGame:
         8. Жрец (Высокое HP, целебная магия)
         9. Монах (Среднее HP, боевые искусства)
         10. Друид (Среднее HP, природная магия)
+        
+        0. Выход из игры / Quit game
         """
         
         class_options_en = """Class options:
@@ -268,6 +294,8 @@ class DnDGame:
         8. Cleric (High HP, healing magic)
         9. Monk (Medium HP, martial arts)
         10. Druid (Medium HP, nature magic)
+        
+        0. Quit game
         """
         
         # Словарь соответствия номеров и классов
@@ -285,17 +313,20 @@ class DnDGame:
         }
         
         print(self.get_text(class_options_ru, class_options_en))
-        choice_prompt_ru = "Выберите номер класса (1-10): "
-        choice_prompt_en = "Choose class number (1-10): "
+        choice_prompt_ru = "Выберите номер класса (0-10): "
+        choice_prompt_en = "Choose class number (0-10): "
         
         while True:
-            choice = input(self.get_text(choice_prompt_ru, choice_prompt_en)).strip()
+            choice = input(self.get_text(choice_prompt_ru, choice_prompt_en)).strip().lower()
+            if choice in ["0", "quit", "exit", "выход"]:
+                print(self.get_text("Выход из игры", "Exiting game"))
+                sys.exit()
             if choice in class_map:
                 self.player_class = class_map[choice]
                 break
             else:
-                error_ru = "Пожалуйста, введите число от 1 до 10."
-                error_en = "Please enter a number between 1 and 10."
+                error_ru = "Пожалуйста, введите число от 0 до 10."
+                error_en = "Please enter a number between 0 and 10."
                 print(self.get_text(error_ru, error_en))
 
         # Установка характеристик в зависимости от класса
@@ -347,9 +378,6 @@ class DnDGame:
             print("I dont understand:( Please choose from the list.")
             self.choose_class()
         self.update_system_prompt()
-        # Добавляем комментарий от DM после выбора класса
-        welcome_class = self.send_message(f"The player has chosen to be a {self.player_class}. Give a brief encouraging comment about this class choice.")
-        print(f"\nDungeon Master: {welcome_class}\n")
 
     def start_combat(self, enemy_type=None):
         """Начинает бой с случайным или конкретным противником"""
@@ -492,21 +520,24 @@ class DnDGame:
             "magic_2lvl": self.magic_2lvl,
             "in_combat": self.in_combat,
             "enemy": self.enemy,
-            "message_history": self.message_history
+            "message_history": self.message_history,
+            "language": self.language
         }
         
         save_path = os.path.join(self.save_folder, f"{save_name}.json")
         with open(save_path, 'w', encoding='utf-8') as f:
             json.dump(save_data, f, ensure_ascii=False, indent=4)
         
-        return f"Игра сохранена в файл {save_name}.json"
+        save_ru = "Игра сохранена в файл {}.json"
+        save_en = "Game saved to {}.json"
+        return self.get_text(save_ru, save_en).format(save_name)
 
     def load_game(self, save_name="quicksave"):
         """Загружает сохраненное состояние игры"""
         save_path = os.path.join(self.save_folder, f"{save_name}.json")
         
         if not os.path.exists(save_path):
-            return "Сохранение не найдено!"
+            return self.get_text("Сохранение не найдено!", "Save file not found!")
             
         try:
             with open(save_path, 'r', encoding='utf-8') as f:
@@ -523,14 +554,30 @@ class DnDGame:
             self.in_combat = save_data["in_combat"]
             self.enemy = save_data["enemy"]
             self.message_history = save_data["message_history"]
+            self.language = save_data.get("language", self.language)  # Fallback to current language if not saved
             
-            return "Игра успешно загружена!"
+            return self.get_text("Игра успешно загружена!", "Game successfully loaded!")
         except Exception as e:
-            return f"Ошибка при загрузке сохранения: {str(e)}"
+            error_ru = "Ошибка при загрузке сохранения: {}"
+            error_en = "Error loading save file: {}"
+            return self.get_text(error_ru, error_en).format(str(e))
 
     def list_saves(self):
         """Показывает список доступных сохранений"""
         saves = [f.replace('.json', '') for f in os.listdir(self.save_folder) if f.endswith('.json')]
         if not saves:
-            return "Сохранений не найдено!"
-        return "Доступные сохранения:\n" + "\n".join(saves)
+            return self.get_text("Сохранений не найдено!", "No save files found!")
+        saves_list = "\n".join(saves)
+        return self.get_text(f"Доступные сохранения:\n{saves_list}", f"Available saves:\n{saves_list}")
+
+    def toggle_message_style(self):
+        """Toggle between streaming and non-streaming message generation"""
+        self.streaming_mode = not self.streaming_mode
+        style_ru = "Стиль сообщений: "
+        style_en = "Message style: "
+        streaming_ru = "Потоковый"
+        streaming_en = "Streaming"
+        single_ru = "Одиночный ответ"
+        single_en = "Single response"
+        
+        print(f"\n{self.get_text(style_ru, style_en)}{self.get_text(streaming_ru if self.streaming_mode else single_ru, streaming_en if self.streaming_mode else single_en)}")

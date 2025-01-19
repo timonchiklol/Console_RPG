@@ -11,6 +11,27 @@ def main():
     welcome_en = "Welcome to D&D Console Adventure!"
     print(game.get_text(welcome_ru, welcome_en))
     
+    # Показываем доступные команды
+    commands_ru = """
+    Доступные команды:
+    - бой: Начать сражение
+    - сохранить: Сохранить игру
+    - загрузить: Загрузить сохранённую игру
+    - стиль: Переключить стиль сообщений
+    - выход: Выйти из игры
+    - помощь: Показать это сообщение
+    """
+    commands_en = """
+    Available commands:
+    - fight: Start combat
+    - save: Save your game
+    - load: Load a saved game
+    - style: Toggle message style
+    - quit: Exit the game
+    - help: Show this message
+    """
+    print(game.get_text(commands_ru, commands_en))
+    
     # Спрашиваем, хочет ли игрок загрузить сохранение
     load_prompt_ru = "Хотите загрузить сохраненную игру? (да/нет): "
     load_prompt_en = "Would you like to load a saved game? (yes/no): "
@@ -30,7 +51,6 @@ def main():
         game.choose_race()
         game.choose_class()
         opening_scene = game.start_game()
-        print(f"\n{game.get_text('Мастер: ', 'Dungeon Master: ')}{opening_scene}")
     
     # Основной игровой цикл
     while True:
@@ -68,42 +88,18 @@ def main():
             print(game.load_game(save_name))
             continue
             
+        elif user_input.lower() in ['style', 'стиль']:
+            game.toggle_message_style()
+            continue
+            
         elif user_input.lower() in ['help', 'помощь']:
-            help_ru = """
-            Доступные команды:
-            - бой: Начать сражение
-            - сохранить: Сохранить игру
-            - загрузить: Загрузить сохранённую игру
-            - выход: Выйти из игры
-            - помощь: Показать это сообщение
-            
-            В бою:
-            - атака: Атаковать врага
-            - заклинание: Использовать заклинание
-            - бегство: Попытаться сбежать
-            """
-            help_en = """
-            Available commands:
-            - fight: Start combat
-            - save: Save your game
-            - load: Load a saved game
-            - quit: Exit the game
-            - help: Show this message
-            
-            In combat:
-            - attack: Attack the enemy
-            - spell: Cast a spell
-            - flee: Try to run away
-            """
-            print(game.get_text(help_ru, help_en))
+            print(game.get_text(commands_ru, commands_en))
             continue
             
         elif user_input.lower() in ['fight', 'бой']:
-            response = game.start_combat()
+            game.start_combat()
         else:
-            response = game.send_message(user_input)
-            
-        print(f"\n{game.get_text('Мастер: ', 'Dungeon Master: ')}{response}")
+            game.send_message(user_input)
         
         if game.health_points <= 0:
             game_over_ru = "\nИгра окончена! Ваш персонаж погиб!"

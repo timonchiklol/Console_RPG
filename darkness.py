@@ -21,6 +21,9 @@ class DnDGame:
         # Получаем API ключ из .env файла
         api_key = os.getenv("GEMINI_API_KEY")
         
+        # Add message generation style option
+        self.streaming_mode = True  # Default to streaming
+        
         system_prompt = """You are a Dungeon Master in a D&D game. 
         Current player stats:
         Race: {race}
@@ -58,7 +61,13 @@ class DnDGame:
     def send_message(self, message):
         """Отправляет сообщение DM с контекстом последних сообщений"""
         context = "Previous messages:\n"
-        for msg in self.message_history:
+        # Будем использовать последние k сообщений
+        k = 5
+
+        start_idx = max(0, len(self.message_history) - k)
+        context = f"Previous messages (last {k}):\n"
+        for i in range(start_idx, len(self.message_history)):
+            msg = self.message_history[i]
             context += f"Player: {msg['user']}\nDM: {msg['dm']}\n"
         
         # Добавляем текущие характеристики к каждому сообщению
@@ -73,9 +82,26 @@ class DnDGame:
         """
         
         full_message = f"{current_stats}\n{context}\nCurrent message: {message}"
-        response = self.chat.send_message(full_message)
+        
+        if self.streaming_mode:
+            print("\nDungeon Master:", end=" ")
+            response_chunks = []
+            for chunk in self.chat.send_message_stream(full_message):
+                print(chunk.text, end="", flush=True)
+                response_chunks.append(chunk.text)
+            print()
+            response = "".join(response_chunks)
+        else:
+            response = self.chat.send_message(full_message)
+            print("\nDungeon Master:", response)
+        
         self.add_to_history(message, response)
         return response
+
+    def toggle_message_style(self):
+        """Toggle between streaming and non-streaming message generation"""
+        self.streaming_mode = not self.streaming_mode
+        print(f"\nMessage style: {'Streaming' if self.streaming_mode else 'Single response'}")
 
     def choose_race(self):
         print("""Race options: 
@@ -204,6 +230,9 @@ class DnDGame:
 def main():
     game = DnDGame()
     print("Welcome to D&D Console Adventure!")
+    print("\nCommands:")
+    print("- 'quit': Exit game")
+    print("- 'style': Toggle message style (streaming/single)")
     
     # Выбор персонажа
     game.choose_race()
@@ -217,8 +246,10 @@ def main():
         user_input = input("\nYour action: ").strip()
         if user_input.lower() == 'quit':
             break
-        response = game.send_message(user_input)
-        print(f"\nDungeon Master: {response}")
+        elif user_input.lower() == 'style':
+            game.toggle_message_style()
+            continue
+        game.send_message(user_input)  # Remove response assignment and printing
 
 if __name__ == "__main__":
     main()
