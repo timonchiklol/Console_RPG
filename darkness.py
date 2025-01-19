@@ -3,87 +3,222 @@ from random import randint
 from gemini import Gemini
 from dotenv import load_dotenv
 import os
-load_dotenv()
-# глобальные переменные
-start = False
-gold = 0
-magic_1lvl = 0
-magic_2lvl = 0
-level = 0
-health_points = 0
-damage = randint(1,10)
-player_race = ""
-player_class = ""
 
-google_api_key = os.getenv("GEMINI_API_KEY")
-
-#промпт для Ai
-gemini = Gemini(google_api_key,system_instruction="Continue the story from DnD based on the following user input and your answers before. Keep it engaging and creative, and continue in one sentence also make battles every 3 user inputs. and read specifecation in the code 8-16 line of code")
-
-# User_place это место на котором сейчас находится игрок
-User_place = "menu"
-
-def choose_race():
-    global health_points, level, gold, damage, player_race
-    player_race = input("Race options: Human, Elf ")
-    if player_race == "Human":
-        health_points = 15
-        level = 1
-        gold = 5
-        damage = randint(2,7)
+class DnDGame:
+    def __init__(self):
+        # Загружаем переменные окружения
+        load_dotenv()
         
-    elif player_race == "Elf":
-        health_points = 10
-        level = 1
-        gold = 5
-        damage = randint(1,12)
-    else:
-        print("I dont understand:(")
-        choose_race()
-
-def choose_class():
-    global health_points, gold, magic_1lvl, player_class
-    player_class = input("Class options: Warrior, Mage, Ranger ")
-    if player_class == "Warrior":
-        health_points = health_points + 5
-        gold = gold + 2
-        magic_1lvl = 0
+        self.gold = 0
+        self.magic_1lvl = 0
+        self.magic_2lvl = 0
+        self.level = 0
+        self.health_points = 0
+        self.damage = randint(1,10)
+        self.player_race = ""
+        self.player_class = ""
         
-    elif player_class == "Mage":
-        health_points = health_points + 2
-        gold = gold + 1
-        magic_1lvl = 2
+        # Получаем API ключ из .env файла
+        api_key = os.getenv("GEMINI_API_KEY")
         
-    elif player_class == "Ranger":
-        health_points = health_points + 3
-        gold = gold + 3
-        magic_1lvl = 1
+        system_prompt = """You are a Dungeon Master in a D&D game. 
+        Current player stats:
+        Race: {race}
+        Class: {class}
+        Level: {level}
+        HP: {hp}
+        Damage: {damage}
+        Gold: {gold}
         
-    else:
-        print("I dont understand:(")
-        choose_class()
+        Remember these stats and refer to them in your responses.
+        Keep your responses concise and engaging.
+        Remember last 3 messages from conversation for context."""
+        
+        # Передаем API ключ при создании экземпляра Gemini
+        self.chat = Gemini(API_KEY=api_key, system_instruction=system_prompt)
+        self.message_history = []  # Хранение последних сообщений
+        
+    def update_system_prompt(self):
+        """Обновляет системный промпт с текущими характеристиками игрока"""
+        current_stats = f"""Current player stats:
+        Race: {self.player_race}
+        Class: {self.player_class}
+        Level: {self.level}
+        HP: {self.health_points}
+        Damage: {self.damage}
+        Gold: {self.gold}"""
+        return self.chat.send_message(f"Remember these player stats: {current_stats}")
+    
+    def add_to_history(self, user_message, dm_response):
+        """Сохраняет последние 3 сообщения"""
+        self.message_history.append({"user": user_message, "dm": dm_response})
+        if len(self.message_history) > 3:
+            self.message_history.pop(0)
+    
+    def send_message(self, message):
+        """Отправляет сообщение DM с контекстом последних сообщений"""
+        context = "Previous messages:\n"
+        for msg in self.message_history:
+            context += f"Player: {msg['user']}\nDM: {msg['dm']}\n"
+        
+        # Добавляем текущие характеристики к каждому сообщению
+        current_stats = f"""Current player stats:
+        Race: {self.player_race}
+        Class: {self.player_class}
+        Level: {self.level}
+        HP: {self.health_points}
+        Damage: {self.damage}
+        Gold: {self.gold}
+        
+        """
+        
+        full_message = f"{current_stats}\n{context}\nCurrent message: {message}"
+        response = self.chat.send_message(full_message)
+        self.add_to_history(message, response)
+        return response
 
-def menu():
-    global start
-    print("start")
-    print("about") 
-    print("exit")
-    menu_input = input()
-    if menu_input == "start":
-        start = True
-    elif menu_input == "exit":
-        exit()
-    elif menu_input == "about":
-        print("Nothing is here yet")
-        menu()
-    else:
-        print("I dont understand:(")
-        menu()
+    def choose_race(self):
+        print("""Race options: 
+        1. Human (Balanced stats, +5 HP)
+        2. Elf (High damage, lower HP)
+        3. Dwarf (High HP, good gold)
+        4. Orc (Highest damage, lowest HP)
+        5. Halfling (Lucky, bonus gold)
+        6. Dragonborn (Fire breath, medium stats)
+        7. Tiefling (Dark vision, magic bonus)
+        8. Gnome (Smart, extra magic slots)
+        """)
+        self.player_race = input("Choose your race: ").strip()
+        
+        if self.player_race == "Human":
+            self.health_points = 15
+            self.level = 1
+            self.gold = 5
+            self.damage = randint(2,7)
+        elif self.player_race == "Elf":
+            self.health_points = 10
+            self.level = 1
+            self.gold = 5
+            self.damage = randint(1,12)
+        elif self.player_race == "Dwarf":
+            self.health_points = 18
+            self.level = 1
+            self.gold = 8
+            self.damage = randint(1,8)
+        elif self.player_race == "Orc":
+            self.health_points = 8
+            self.level = 1
+            self.gold = 3
+            self.damage = randint(3,12)
+        elif self.player_race == "Halfling":
+            self.health_points = 12
+            self.level = 1
+            self.gold = 10
+            self.damage = randint(1,6)
+        elif self.player_race == "Dragonborn":
+            self.health_points = 14
+            self.level = 1
+            self.gold = 6
+            self.damage = randint(2,8)
+        elif self.player_race == "Tiefling":
+            self.health_points = 12
+            self.level = 1
+            self.gold = 5
+            self.magic_1lvl = 1
+            self.damage = randint(1,10)
+        elif self.player_race == "Gnome":
+            self.health_points = 10
+            self.level = 1
+            self.gold = 7
+            self.magic_1lvl = 2
+            self.damage = randint(1,6)
+        else:
+            print("I dont understand:( Please choose from the list.")
+            self.choose_race()
+        self.update_system_prompt()
 
-menu()
-if start:
-    choose_race()
-    choose_class()
-    print("The tavern buzzes with life, laughter, and clinking tankards. A cloaked figure enters, their boots heavy on the wooden floor, and all eyes turn to them. They approach your table, drop a sealed parchment, and say, You're needed for something...")
-while True:
-    print(gemini.send_message(input()))
+    def choose_class(self):
+        print("""Class options:
+        1. Warrior (High HP, good damage)
+        2. Mage (Low HP, high magic)
+        3. Ranger (Medium HP, ranged damage)
+        4. Rogue (Low HP, high damage)
+        5. Paladin (High HP, some magic)
+        6. Warlock (Medium HP, dark magic)
+        7. Bard (Medium HP, charm magic)
+        8. Cleric (High HP, healing magic)
+        9. Monk (Medium HP, martial arts)
+        10. Druid (Medium HP, nature magic)
+        """)
+        self.player_class = input("Choose your class: ").strip()
+        
+        if self.player_class == "Warrior":
+            self.health_points += 5
+            self.gold += 2
+            self.magic_1lvl = 0
+        elif self.player_class == "Mage":
+            self.health_points += 2
+            self.gold += 1
+            self.magic_1lvl += 3
+            self.magic_2lvl = 1
+        elif self.player_class == "Ranger":
+            self.health_points += 3
+            self.gold += 3
+            self.magic_1lvl += 1
+        elif self.player_class == "Rogue":
+            self.health_points += 2
+            self.gold += 5
+            self.damage += 2
+        elif self.player_class == "Paladin":
+            self.health_points += 4
+            self.gold += 2
+            self.magic_1lvl += 1
+        elif self.player_class == "Warlock":
+            self.health_points += 3
+            self.gold += 1
+            self.magic_1lvl += 2
+            self.magic_2lvl = 1
+        elif self.player_class == "Bard":
+            self.health_points += 3
+            self.gold += 4
+            self.magic_1lvl += 2
+        elif self.player_class == "Cleric":
+            self.health_points += 4
+            self.gold += 1
+            self.magic_1lvl += 2
+            self.magic_2lvl = 1
+        elif self.player_class == "Monk":
+            self.health_points += 3
+            self.gold += 1
+            self.damage += 1
+        elif self.player_class == "Druid":
+            self.health_points += 3
+            self.gold += 2
+            self.magic_1lvl += 2
+            self.magic_2lvl = 1
+        else:
+            print("I dont understand:( Please choose from the list.")
+            self.choose_class()
+        self.update_system_prompt()
+
+def main():
+    game = DnDGame()
+    print("Welcome to D&D Console Adventure!")
+    
+    # Выбор персонажа
+    game.choose_race()
+    game.choose_class()
+    
+    # Начало игры
+    print("\nThe tavern buzzes with life, laughter, and clinking tankards. A cloaked figure enters, their boots heavy on the wooden floor, and all eyes turn to them. They approach your table, drop a sealed parchment, and say, You're needed for something...")
+    
+    # Основной игровой цикл
+    while True:
+        user_input = input("\nYour action: ").strip()
+        if user_input.lower() == 'quit':
+            break
+        response = game.send_message(user_input)
+        print(f"\nDungeon Master: {response}")
+
+if __name__ == "__main__":
+    main()
