@@ -9,6 +9,7 @@ class DnDGame:
         # Загружаем переменные окружения
         load_dotenv()
         
+        self.language = "ru"  # Язык по умолчанию
         self.gold = 0
         self.magic_1lvl = 0
         self.magic_2lvl = 0
@@ -26,7 +27,7 @@ class DnDGame:
         
         # Изменяем системный промпт для лучшей генерации
         system_prompt = """You are a creative and engaging Dungeon Master in a D&D game.
-        Generate immersive descriptions and respond to player actions in character.
+        Generate immersive descriptions and respond to player actions in character. Always respond in Russian language only.
         Current player stats:
         Race: {race}
         Class: {class}
@@ -118,8 +119,43 @@ class DnDGame:
         opening_scene = self.send_message(start_prompt)
         return opening_scene
 
+    def choose_language(self):
+        """Позволяет игроку выбрать язык игры"""
+        print("""Available languages / Доступные языки:
+        1. Русский (Russian)
+        2. English (Английский)
+        """)
+        choice = input("Choose language / Выберите язык (1/2): ").strip()
+        
+        if choice == "1":
+            self.language = "ru"
+            print("Язык установлен на русский")
+            return "ru"
+        elif choice == "2":
+            self.language = "en"
+            print("Language set to English")
+            return "en"
+        else:
+            print("Некорректный выбор / Invalid choice")
+            return self.choose_language()
+
+    def get_text(self, ru_text, en_text):
+        """Возвращает текст на выбранном языке"""
+        return ru_text if self.language == "ru" else en_text
+
     def choose_race(self):
-        print("""Race options: 
+        race_options_ru = """Варианты рас: 
+        1. Человек (Сбалансированные характеристики, +5 HP)
+        2. Эльф (Высокий урон, низкое HP)
+        3. Дварф (Высокое HP, хорошее золото)
+        4. Орк (Наивысший урон, самое низкое HP)
+        5. Полурослик (Удачливый, бонус золота)
+        6. Драконорожденный (Огненное дыхание, средние характеристики)
+        7. Тифлинг (Темное зрение, магический бонус)
+        8. Гном (Умный, дополнительные слоты заклинаний)
+        """
+        
+        race_options_en = """Race options: 
         1. Human (Balanced stats, +5 HP)
         2. Elf (High damage, lower HP)
         3. Dwarf (High HP, good gold)
@@ -128,9 +164,35 @@ class DnDGame:
         6. Dragonborn (Fire breath, medium stats)
         7. Tiefling (Dark vision, magic bonus)
         8. Gnome (Smart, extra magic slots)
-        """)
-        self.player_race = input("Choose your race: ").strip()
+        """
         
+        # Словарь соответствия номеров и рас
+        race_map = {
+            "1": "Human",
+            "2": "Elf",
+            "3": "Dwarf",
+            "4": "Orc",
+            "5": "Halfling",
+            "6": "Dragonborn",
+            "7": "Tiefling",
+            "8": "Gnome"
+        }
+        
+        print(self.get_text(race_options_ru, race_options_en))
+        choice_prompt_ru = "Выберите номер расы (1-8): "
+        choice_prompt_en = "Choose race number (1-8): "
+        
+        while True:
+            choice = input(self.get_text(choice_prompt_ru, choice_prompt_en)).strip()
+            if choice in race_map:
+                self.player_race = race_map[choice]
+                break
+            else:
+                error_ru = "Пожалуйста, введите число от 1 до 8."
+                error_en = "Please enter a number between 1 and 8."
+                print(self.get_text(error_ru, error_en))
+
+        # Установка характеристик в зависимости от расы
         if self.player_race == "Human":
             self.health_points = 15
             self.level = 1
@@ -182,7 +244,20 @@ class DnDGame:
         print(f"\nDungeon Master: {welcome_race}\n")
 
     def choose_class(self):
-        print("""Class options:
+        class_options_ru = """Варианты классов:
+        1. Воин (Высокое HP, хороший урон)
+        2. Маг (Низкое HP, сильная магия)
+        3. Следопыт (Среднее HP, дальний бой)
+        4. Плут (Низкое HP, высокий урон)
+        5. Паладин (Высокое HP, немного магии)
+        6. Чернокнижник (Среднее HP, темная магия)
+        7. Бард (Среднее HP, магия очарования)
+        8. Жрец (Высокое HP, целебная магия)
+        9. Монах (Среднее HP, боевые искусства)
+        10. Друид (Среднее HP, природная магия)
+        """
+        
+        class_options_en = """Class options:
         1. Warrior (High HP, good damage)
         2. Mage (Low HP, high magic)
         3. Ranger (Medium HP, ranged damage)
@@ -193,9 +268,37 @@ class DnDGame:
         8. Cleric (High HP, healing magic)
         9. Monk (Medium HP, martial arts)
         10. Druid (Medium HP, nature magic)
-        """)
-        self.player_class = input("Choose your class: ").strip()
+        """
         
+        # Словарь соответствия номеров и классов
+        class_map = {
+            "1": "Warrior",
+            "2": "Mage",
+            "3": "Ranger",
+            "4": "Rogue",
+            "5": "Paladin",
+            "6": "Warlock",
+            "7": "Bard",
+            "8": "Cleric",
+            "9": "Monk",
+            "10": "Druid"
+        }
+        
+        print(self.get_text(class_options_ru, class_options_en))
+        choice_prompt_ru = "Выберите номер класса (1-10): "
+        choice_prompt_en = "Choose class number (1-10): "
+        
+        while True:
+            choice = input(self.get_text(choice_prompt_ru, choice_prompt_en)).strip()
+            if choice in class_map:
+                self.player_class = class_map[choice]
+                break
+            else:
+                error_ru = "Пожалуйста, введите число от 1 до 10."
+                error_en = "Please enter a number between 1 and 10."
+                print(self.get_text(error_ru, error_en))
+
+        # Установка характеристик в зависимости от класса
         if self.player_class == "Warrior":
             self.health_points += 5
             self.gold += 2
