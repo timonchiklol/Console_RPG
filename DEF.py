@@ -581,3 +581,132 @@ class DnDGame:
         single_en = "Single response"
         
         print(f"\n{self.get_text(style_ru, style_en)}{self.get_text(streaming_ru if self.streaming_mode else single_ru, streaming_en if self.streaming_mode else single_en)}")
+
+    def initialize_character(self):
+        """Initialize character stats based on race and class"""
+        # Initialize chat if not already initialized
+        if not hasattr(self, 'chat'):
+            self.initialize_chat()
+            
+        # Race stats
+        if self.player_race == "Human":
+            self.health_points = 15
+            self.level = 1
+            self.gold = 5
+            self.damage = randint(2,7)
+        elif self.player_race == "Elf":
+            self.health_points = 10
+            self.level = 1
+            self.gold = 5
+            self.damage = randint(1,12)
+        elif self.player_race == "Dwarf":
+            self.health_points = 18
+            self.level = 1
+            self.gold = 8
+            self.damage = randint(1,8)
+        elif self.player_race == "Orc":
+            self.health_points = 8
+            self.level = 1
+            self.gold = 3
+            self.damage = randint(3,12)
+        elif self.player_race == "Halfling":
+            self.health_points = 12
+            self.level = 1
+            self.gold = 10
+            self.damage = randint(1,6)
+        elif self.player_race == "Dragonborn":
+            self.health_points = 14
+            self.level = 1
+            self.gold = 6
+            self.damage = randint(2,8)
+        elif self.player_race == "Tiefling":
+            self.health_points = 12
+            self.level = 1
+            self.gold = 5
+            self.magic_1lvl = 1
+            self.damage = randint(1,10)
+        elif self.player_race == "Gnome":
+            self.health_points = 10
+            self.level = 1
+            self.gold = 7
+            self.magic_1lvl = 2
+            self.damage = randint(1,6)
+
+        # Class bonuses
+        if self.player_class == "Warrior":
+            self.health_points += 5
+            self.gold += 2
+            self.magic_1lvl = 0
+        elif self.player_class == "Mage":
+            self.health_points += 2
+            self.gold += 1
+            self.magic_1lvl += 3
+            self.magic_2lvl = 1
+        elif self.player_class == "Ranger":
+            self.health_points += 3
+            self.gold += 3
+            self.magic_1lvl += 1
+        elif self.player_class == "Rogue":
+            self.health_points += 2
+            self.gold += 5
+            self.damage += 2
+        elif self.player_class == "Paladin":
+            self.health_points += 4
+            self.gold += 2
+            self.magic_1lvl += 1
+        elif self.player_class == "Warlock":
+            self.health_points += 3
+            self.gold += 1
+            self.magic_1lvl += 2
+            self.magic_2lvl = 1
+        elif self.player_class == "Bard":
+            self.health_points += 3
+            self.gold += 4
+            self.magic_1lvl += 2
+        elif self.player_class == "Cleric":
+            self.health_points += 4
+            self.gold += 1
+            self.magic_1lvl += 2
+            self.magic_2lvl = 1
+        elif self.player_class == "Monk":
+            self.health_points += 3
+            self.gold += 1
+            self.damage += 1
+        elif self.player_class == "Druid":
+            self.health_points += 3
+            self.gold += 2
+            self.magic_1lvl += 2
+            self.magic_2lvl = 1
+
+        self.update_system_prompt()
+
+    def get_state_dict(self):
+        """Get current game state as a dictionary"""
+        return {
+            'started': True,
+            'character_created': bool(self.player_race and self.player_class),
+            'in_combat': self.in_combat,
+            'player_race': self.player_race,
+            'player_class': self.player_class,
+            'health_points': self.health_points,
+            'gold': self.gold,
+            'level': self.level,
+            'damage': self.damage,
+            'magic_1lvl': self.magic_1lvl,
+            'magic_2lvl': self.magic_2lvl,
+            'enemy': self.enemy
+        }
+
+    def load_state_from_dict(self, state_dict):
+        """Load game state from a dictionary"""
+        self.player_race = state_dict['player_race']
+        self.player_class = state_dict['player_class']
+        self.health_points = state_dict['health_points']
+        self.gold = state_dict['gold']
+        self.level = state_dict['level']
+        self.damage = state_dict['damage']
+        self.magic_1lvl = state_dict['magic_1lvl']
+        self.magic_2lvl = state_dict['magic_2lvl']
+        self.in_combat = state_dict['in_combat']
+        self.enemy = state_dict['enemy']
+        self.update_system_prompt()
