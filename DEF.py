@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 import json
 import sys
+from gemini_schema import GameState
 
 class DnDGame:
     def __init__(self):
@@ -22,6 +23,9 @@ class DnDGame:
         self.in_combat = False
         self.enemy = None
         self.save_folder = "saves"  # Папка для сохранений
+        self.last_dice_roll = None
+        self.dice_roll_needed = False
+        self.dice_type = None
         
         # Message generation settings
         self.streaming_mode = True  # Default to streaming
@@ -53,7 +57,8 @@ class DnDGame:
         system_prompt = """You are a creative and engaging Dungeon Master in a D&D game.
         Generate immersive descriptions and respond to player actions in character.
         Always respond in {language} language only.
-        Keep responses concise but atmospheric.""".format(language="Russian" if self.language == "ru" else "English")
+        When combat occurs or skill checks are needed, request dice rolls with specific dice (d20, d6, etc).
+        Include state updates and required actions in your responses."""
         
         # Initialize the chat with the system prompt
         self.chat = Gemini(API_KEY=api_key, system_instruction=system_prompt)
@@ -67,7 +72,8 @@ class DnDGame:
         HP: {self.health_points}
         Damage: {self.damage}
         Gold: {self.gold}
-        Language: {self.language}"""
+        Magic slots (1st/2nd level): {self.magic_1lvl}/{self.magic_2lvl}
+        """
         return self.chat.send_message(f"Remember these player stats and always respond in {self.language} language: {current_stats}")
     
     def add_to_history(self, user_message, dm_response):
@@ -76,17 +82,50 @@ class DnDGame:
         if len(self.message_history) > 3:
             self.message_history.pop(0)
     
+    def roll_dice(self, dice_type):
+        """Roll dice of specified type (e.g. "d20", "2d6")"""
+        if not dice_type:
+            return None
+            
+        try:
+            num_dice, sides = dice_type.lower().split('d')
+            num_dice = int(num_dice) if num_dice else 1
+            sides = int(sides)
+            result = sum(randint(1, sides) for _ in range(num_dice))
+            self.last_dice_roll = result
+            self.dice_roll_needed = False  # Reset the flag after rolling
+            self.dice_type = None  # Clear the dice type after rolling
+            return result
+        except Exception as e:
+            print(f"Error rolling dice: {e}")  # Debug log
+            return None
+
+    def update_state(self, state_update):
+        """Update game state from structured response"""
+        if not state_update:
+            return
+            
+        self.health_points = state_update.get('health_points', self.health_points)
+        self.gold = state_update.get('gold', self.gold)
+        self.damage = state_update.get('damage', self.damage)
+        self.in_combat = state_update.get('in_combat', self.in_combat)
+        
+        enemy_health = state_update.get('enemy_health')
+        if enemy_health is not None and self.enemy:
+            self.enemy["hp"] = enemy_health
+            
+        self.dice_roll_needed = state_update.get('dice_roll_needed', False)
+        self.dice_type = state_update.get('dice_type')
+
     def send_message(self, message):
-        """Отправляет сообщение DM с контекстом последних сообщений"""
-        # Если получена команда fight, начинаем бой
-        if message.lower() == 'fight':
-            return self.start_combat()
+        """Send message and get structured response"""
+        if self.dice_roll_needed:
+            # Handle dice roll command
+            roll_result = self.roll_dice(self.dice_type)
+            if roll_result is not None:
+                message = f"I rolled {roll_result} on {self.dice_type}"
         
-        # Если мы в бою, обрабатываем боевые действия
-        if self.in_combat:
-            return self.process_combat_action(message)
-        
-        # Если не в бою, обрабатываем обычное сообщение
+        # Get current stats for context
         current_stats = f"""Current player stats:
         Race: {self.player_race}
         Class: {self.player_class}
@@ -98,27 +137,57 @@ class DnDGame:
         """
         
         # Get limited context from message history
-        start_idx = max(0, len(self.message_history) - self.context_limit)
-        context = f"Previous messages (last {self.context_limit}):\n"
-        for msg in self.message_history[start_idx:]:
+        context = "Previous messages:\n"
+        for msg in self.message_history[-3:]:  # Only use last 3 messages for context
             context += f"Player: {msg['user']}\nDM: {msg['dm']}\n"
         
         full_message = f"{current_stats}\n{context}\nCurrent message: {message}"
         
-        if self.streaming_mode:
-            print(f"\n{self.get_text('Мастер: ', 'Dungeon Master: ')}", end="")
-            response_chunks = []
-            for chunk in self.chat.send_message_stream(full_message):
-                print(chunk.text, end="", flush=True)
-                response_chunks.append(chunk.text)
-            print()
-            response = "".join(response_chunks)
-        else:
-            response = self.chat.send_message(full_message)
-            print(f"\n{self.get_text('Мастер: ', 'Dungeon Master: ')}{response}")
+        # Get structured response
+        response = self.chat.send_structured_message(full_message)
         
-        self.add_to_history(message, response)
-        return response
+        # Extract the actual message text from the response
+        message_text = response.get('message', '')
+        if isinstance(message_text, str) and message_text.startswith('{"message":'):
+            try:
+                # Try to parse JSON if it's a JSON string
+                import json
+                parsed = json.loads(message_text)
+                message_text = parsed.get('message', message_text)
+            except:
+                pass
+        
+        # Update game state if provided
+        state_update = response.get('state_update', {})
+        if state_update:
+            self.update_state(state_update)
+        
+        # Set up next dice roll if needed
+        if response.get('required_action') == "roll_dice":
+            self.dice_roll_needed = True
+            if state_update:
+                self.dice_type = state_update.get('dice_type')
+        
+        # Handle combat results
+        if response.get('combat_result'):
+            combat_result = response['combat_result']
+            if combat_result.get('damage_dealt'):
+                if self.enemy:
+                    self.enemy["hp"] -= combat_result['damage_dealt']
+            if combat_result.get('damage_taken'):
+                self.health_points -= combat_result['damage_taken']
+        
+        # Add to history and return formatted response
+        self.add_to_history(message, message_text)
+        
+        return {
+            'message': message_text,
+            'state_update': state_update,
+            'required_action': response.get('required_action'),
+            'combat_result': response.get('combat_result'),
+            'dice_roll_needed': self.dice_roll_needed,
+            'dice_type': self.dice_type
+        }
 
     def start_game(self):
         """Генерирует начало игры на основе характеристик персонажа"""
@@ -694,7 +763,10 @@ class DnDGame:
             'damage': self.damage,
             'magic_1lvl': self.magic_1lvl,
             'magic_2lvl': self.magic_2lvl,
-            'enemy': self.enemy
+            'enemy': self.enemy,
+            'dice_roll_needed': self.dice_roll_needed,
+            'dice_type': self.dice_type,
+            'last_dice_roll': self.last_dice_roll
         }
 
     def load_state_from_dict(self, state_dict):
@@ -709,4 +781,5 @@ class DnDGame:
         self.magic_2lvl = state_dict['magic_2lvl']
         self.in_combat = state_dict['in_combat']
         self.enemy = state_dict['enemy']
+        self.initialize_chat()  # Initialize chat before updating prompt
         self.update_system_prompt()

@@ -3,6 +3,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from gemini_schema import GAME_RESPONSE_SCHEMA
+import json
 
 
 class Gemini:
@@ -39,6 +41,78 @@ class Gemini:
         except Exception as e:
             return f"Error: {str(e)}"
     
+    def send_structured_message(self, prompt):
+        """Send a message and get a structured response using the game response schema."""
+        try:
+            # First try to get a normal response if structured fails
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=self.system_instruction,
+                        temperature=self.temperature,
+                        safety_settings=self.safety_settings,
+                        response_mime_type="application/json",
+                        response_schema=GAME_RESPONSE_SCHEMA
+                    )
+                )
+                
+                if hasattr(response, 'text'):
+                    try:
+                        return json.loads(response.text)
+                    except json.JSONDecodeError:
+                        return {
+                            "message": response.text,
+                            "state_update": None,
+                            "combat_result": None,
+                            "required_action": None
+                        }
+                else:
+                    # Fallback to normal response
+                    response = self.client.models.generate_content(
+                        model=self.model,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=self.system_instruction,
+                            temperature=self.temperature,
+                            safety_settings=self.safety_settings
+                        )
+                    )
+                    return {
+                        "message": response.text,
+                        "state_update": None,
+                        "combat_result": None,
+                        "required_action": None
+                    }
+            except Exception as inner_e:
+                print(f"Inner error: {str(inner_e)}")
+                # If structured response fails, try normal response
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=self.system_instruction,
+                        temperature=self.temperature,
+                        safety_settings=self.safety_settings
+                    )
+                )
+                return {
+                    "message": response.text,
+                    "state_update": None,
+                    "combat_result": None,
+                    "required_action": None
+                }
+                
+        except Exception as e:
+            print(f"Outer error: {str(e)}")
+            return {
+                "message": f"Error: {str(e)}",
+                "state_update": None,
+                "combat_result": None,
+                "required_action": None
+            }
+
     def send_message_stream(self, prompt):
         """Send a message to the chat and return a streaming response."""
         try:

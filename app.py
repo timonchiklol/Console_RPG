@@ -117,11 +117,17 @@ def stream_message():
         game_state['language'] = 'en'
     if 'message_history' not in game_state:
         game_state['message_history'] = []
+    if 'dice_roll_needed' not in game_state:
+        game_state['dice_roll_needed'] = False
+    if 'dice_type' not in game_state:
+        game_state['dice_type'] = None
     
     game.language = game_state['language']
     game.initialize_chat()
     game.load_state_from_dict(game_state)
     game.message_history = game_state.get('message_history', [])
+    game.dice_roll_needed = game_state.get('dice_roll_needed', False)
+    game.dice_type = game_state.get('dice_type')
     game.streaming_mode = True  # Ensure streaming is enabled
     
     # Create a response queue to store the complete response
@@ -157,6 +163,8 @@ def stream_message():
         # Update session state
         new_state = game.get_state_dict()
         new_state['message_history'] = game.message_history
+        new_state['dice_roll_needed'] = game.dice_roll_needed
+        new_state['dice_type'] = game.dice_type
         with app.app_context():
             session['game_state'] = new_state
         
@@ -164,46 +172,98 @@ def stream_message():
     
     return Response(generate(), mimetype='text/event-stream')
 
-@app.route('/game_action', methods=['POST'])
-def game_action():
+@app.route('/roll_dice', methods=['POST'])
+def roll_dice():
     if 'game_state' not in session:
         return jsonify({'error': 'Game not started'}), 400
-        
-    data = request.json
-    action = data.get('action')
-    streaming = data.get('streaming', False)
     
-    if streaming:
-        return stream_message()
-        
     game = DnDGame()
-    
-    # Ensure all required fields exist in game state
     game_state = session['game_state']
-    if 'enemy' not in game_state:
-        game_state['enemy'] = None
-    if 'language' not in game_state:
-        game_state['language'] = 'en'
-    if 'message_history' not in game_state:
-        game_state['message_history'] = []
     
-    game.language = game_state['language']
-    game.initialize_chat()
+    # Load the full game state
     game.load_state_from_dict(game_state)
+    game.language = game_state.get('language', 'en')
+    game.initialize_chat()
     game.message_history = game_state.get('message_history', [])
-    game.streaming_mode = False  # Disable streaming for regular requests
     
-    response = game.send_message(action)
+    # Explicitly set dice roll flags from the game state
+    game.dice_roll_needed = game_state.get('dice_roll_needed', False)
+    game.dice_type = game_state.get('dice_type')
     
-    # Update session with new state including message history
+    if not game.dice_roll_needed or not game.dice_type:
+        print(f"Dice roll rejected - needed: {game.dice_roll_needed}, type: {game.dice_type}")  # Debug log
+        return jsonify({'error': 'No dice roll needed'}), 400
+    
+    current_dice_type = game.dice_type  # Store the current dice type before rolling
+    roll_result = game.roll_dice(game.dice_type)
+    print(f"🎲 Dice roll: {roll_result} on {current_dice_type}")  # Debug log
+    
+    if roll_result is None:
+        print("Invalid dice roll - returned None")  # Debug log
+        return jsonify({'error': 'Invalid dice type'}), 400
+    
+    # Send the roll result to get the game's response
+    response = game.send_message(f"I rolled {roll_result} on {current_dice_type}")
+    print(f"Game response after roll: {response}")  # Debug log
+    
+    # Update session state
     new_state = game.get_state_dict()
     new_state['message_history'] = game.message_history
     session['game_state'] = new_state
     
+    # Format the response for the client
     return jsonify({
-        'response': response,
-        'stats': new_state
+        'roll': roll_result,
+        'dice_type': current_dice_type,
+        'message': response.get('message', ''),
+        'stats': new_state,
+        'required_action': response.get('required_action'),
+        'dice_roll_needed': response.get('dice_roll_needed', False),
+        'new_dice_type': response.get('dice_type')
     })
+
+@app.route('/game_action', methods=['POST'])
+def game_action():
+    print("Game action called")  # Debug log
+    
+    if 'game_state' not in session:
+        print("No game state found")  # Debug log
+        return jsonify({'error': 'Game not started'})
+        
+    try:
+        data = request.get_json()
+        action = data.get('action')
+        
+        print(f"Processing action: {action}")  # Debug log
+        
+        game = DnDGame()
+        game.load_state_from_dict(session['game_state'])
+        
+        # Load message history if it exists
+        if 'message_history' in session:
+            game.message_history = session['message_history']
+        
+        response = game.send_message(action)
+        print(f"Game response: {response}")  # Debug log
+        
+        # Update both game state and message history in session
+        game_state = game.get_state_dict()
+        session['game_state'] = game_state
+        session['message_history'] = game.message_history
+        
+        return jsonify({
+            'response': response.get('message', ''),
+            'stats': game_state,
+            'dice_needed': game.dice_roll_needed,
+            'dice_type': game.dice_type,
+            'state_update': response.get('state_update'),
+            'required_action': response.get('required_action'),
+            'combat_result': response.get('combat_result')
+        })
+        
+    except Exception as e:
+        print(f"Error in game_action: {str(e)}")  # Debug log
+        return jsonify({'error': str(e)})
 
 @app.route('/combat_action', methods=['POST'])
 def combat_action():
