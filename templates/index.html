@@ -34,7 +34,7 @@
         <!-- Language Selection -->
         <div v-if="!gameStarted" class="text-center">
             <h1 class="medieval text-5xl mb-8">D&D Console Adventure</h1>
-            <div class="space-x-4">
+            <div class="space-x-4 mb-8">
                 <button @click="startGame('en')" class="bg-red-700 hover:bg-red-600 text-white px-6 py-3 rounded-lg medieval">
                     Start in English
                 </button>
@@ -42,6 +42,9 @@
                     Начать на Русском
                 </button>
             </div>
+            <button @click="showFeedback = true" class="text-gray-400 hover:text-gray-300 underline medieval">
+                Feedback
+            </button>
         </div>
 
         <!-- Character Creation -->
@@ -239,6 +242,19 @@
                 </div>
             </div>
         </div>
+
+        <!-- Feedback Dialog -->
+        <div v-if="showFeedback" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+            <div class="bg-gray-800 rounded-lg p-6 max-w-md w-full">
+                <h3 class="medieval text-2xl mb-4">Feedback</h3>
+                <p class="mb-4">If you found any bugs or errors, please email us at flappyfeedback@gmail.com</p>
+                <div class="flex justify-end">
+                    <button @click="showFeedback = false" class="px-4 py-2 rounded-lg medieval">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
     {% endraw %}
 
@@ -250,6 +266,7 @@
                 return {
                     gameStarted: false,
                     characterCreated: false,
+                    showFeedback: false,
                     races: {},
                     classes: {},
                     selectedRace: null,
