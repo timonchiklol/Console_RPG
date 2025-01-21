@@ -27,7 +27,7 @@ GAME_RESPONSE_SCHEMA = {
                 "in_combat": {"type": "BOOLEAN"},
                 "enemy_health": {"type": "INTEGER"},
                 "dice_roll_needed": {"type": "BOOLEAN"},
-                "dice_type": {"type": "STRING"}
+                "dice_type": {"type": "STRING", "description": "The type of dice to roll (e.g., 'd20', '2d6')"}
             },
             "required": ["health_points", "gold", "damage", "in_combat"]
         },
@@ -41,7 +41,16 @@ GAME_RESPONSE_SCHEMA = {
         },
         "required_action": {
             "type": "STRING",
-            "description": "The type of action required from the player"
+            "description": "The type of action required from the player",
+            "enum": ["roll_dice", "make_choice", "none"]
+        },
+        "dice_roll": {
+            "type": "OBJECT",
+            "properties": {
+                "required": {"type": "BOOLEAN"},
+                "type": {"type": "STRING", "description": "The type of dice to roll (e.g., 'd20', '2d6')"},
+                "reason": {"type": "STRING", "description": "Why the dice roll is needed"}
+            }
         }
     },
     "required": ["message"]

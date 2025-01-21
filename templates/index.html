@@ -112,18 +112,22 @@
                 <div>
                     <h3 class="medieval text-xl text-red-500">Status</h3>
                     <p>{{ combatStatus }}</p>
-                    <p class="text-sm text-gray-400">{{ streamingMode ? 'Streaming' : 'Single Response' }}</p>
                 </div>
             </div>
 
             <!-- Dice Rolling Section -->
-            <div v-if="diceNeeded" class="dice-section bg-gray-800 rounded-lg p-4 mb-4">
-                <h3 class="medieval text-lg mb-2">Dice Roll Required</h3>
-                <p class="mb-2">Roll {{ diceType }}</p>
-                <button @click="rollDice" class="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded">
-                    Roll Dice
+            <div v-if="diceNeeded || diceRollPending" class="dice-section bg-gray-800 rounded-lg p-4 mb-4 border-2 border-red-500 text-center">
+                <h3 class="medieval text-2xl mb-4 text-red-500">⚄ Dice Roll Required ⚄</h3>
+                <p class="mb-4 text-xl">The Dungeon Master requests a {{ displayDiceType }} roll</p>
+                <button @click="rollDice" 
+                        :disabled="isLoading"
+                        class="bg-red-700 hover:bg-red-600 text-white px-8 py-4 rounded-lg text-2xl medieval animate-pulse transition-all transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-500 mb-4">
+                    Roll {{ displayDiceType }}
                 </button>
-                <p v-if="lastRoll" class="mt-2">Last roll: {{ lastRoll }}</p>
+                <div v-if="lastRoll" class="mt-4 text-xl">
+                    <span class="text-gray-400">Last roll:</span>
+                    <span class="text-red-500 font-bold">{{ lastRoll }}</span>
+                </div>
             </div>
 
             <!-- Game Messages -->
@@ -132,30 +136,46 @@
                     <div v-if="message.type === 'user'" class="text-blue-400">
                         You: {{ message.text }}
                     </div>
+                    <div v-else-if="message.type === 'system'" class="text-yellow-400">
+                        System: {{ message.text }}
+                    </div>
                     <div v-else class="text-green-400">
                         DM: {{ message.text }}
                     </div>
                 </div>
-                <div v-if="currentStreamMessage" class="text-green-400">
-                    DM: {{ currentStreamMessage.text }}
+                <div v-if="isLoading" class="text-gray-400 animate-pulse flex items-center">
+                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Dungeon Master is thinking...
                 </div>
             </div>
 
             <!-- Action Buttons -->
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-                <button @click="startCombat" class="bg-red-700 hover:bg-red-600 px-4 py-2 rounded-lg medieval">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <button @click="startCombat" 
+                        :disabled="isLoading"
+                        :class="['px-4 py-2 rounded-lg medieval', 
+                                isLoading ? 'bg-gray-700 cursor-not-allowed' : 'bg-red-700 hover:bg-red-600']">
                     Fight
                 </button>
-                <button @click="showSaveDialog" class="bg-green-700 hover:bg-green-600 px-4 py-2 rounded-lg medieval">
+                <button @click="showSaveDialog" 
+                        :disabled="isLoading"
+                        :class="['px-4 py-2 rounded-lg medieval', 
+                                isLoading ? 'bg-gray-700 cursor-not-allowed' : 'bg-green-700 hover:bg-green-600']">
                     Save Game
                 </button>
-                <button @click="showLoadDialog" class="bg-blue-700 hover:bg-blue-600 px-4 py-2 rounded-lg medieval">
+                <button @click="showLoadDialog" 
+                        :disabled="isLoading"
+                        :class="['px-4 py-2 rounded-lg medieval', 
+                                isLoading ? 'bg-gray-700 cursor-not-allowed' : 'bg-blue-700 hover:bg-blue-600']">
                     Load Game
                 </button>
-                <button @click="toggleStreaming" class="bg-purple-700 hover:bg-purple-600 px-4 py-2 rounded-lg medieval">
-                    {{ streamingMode ? 'Disable' : 'Enable' }} Streaming
-                </button>
-                <button @click="quitGame" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg medieval">
+                <button @click="quitGame" 
+                        :disabled="isLoading"
+                        :class="['px-4 py-2 rounded-lg medieval', 
+                                isLoading ? 'bg-gray-700 cursor-not-allowed' : 'bg-gray-700 hover:bg-gray-600']">
                     Quit
                 </button>
             </div>
@@ -163,11 +183,16 @@
             <!-- Input Section -->
             <div class="input-section">
                 <div class="flex space-x-2">
-                    <input v-model="userInput" @keyup.enter="sendMessage" 
-                           class="flex-grow bg-gray-700 text-white px-4 py-2 rounded"
-                           placeholder="Enter your action...">
+                    <input v-model="userInput" 
+                           @keyup.enter="sendMessage" 
+                           :disabled="isLoading || diceNeeded || diceRollPending"
+                           :placeholder="inputPlaceholder"
+                           :class="['flex-grow px-4 py-2 rounded', 
+                                  isLoading || diceNeeded || diceRollPending ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-700 text-white']">
                     <button @click="sendMessage" 
-                            class="bg-red-700 hover:bg-red-600 text-white px-6 py-2 rounded">
+                            :disabled="isLoading || diceNeeded || diceRollPending || !userInput.trim()"
+                            :class="['px-6 py-2 rounded', 
+                                    (isLoading || diceNeeded || diceRollPending || !userInput.trim()) ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-red-700 hover:bg-red-600 text-white']">
                         Send
                     </button>
                 </div>
@@ -236,17 +261,26 @@
                     showingLoadDialog: false,
                     saveName: '',
                     saves: [],
-                    streamingMode: true,
-                    currentStreamMessage: null,
                     isCreatingCharacter: false,
                     diceNeeded: false,
+                    diceRollPending: false,
                     diceType: null,
-                    lastRoll: null
+                    lastRoll: null,
+                    isLoading: false,
+                    defaultDiceType: 'd20'  // Default dice type for perception checks
                 }
             },
             computed: {
                 combatStatus() {
                     return this.gameState.in_combat ? 'In Combat' : 'Exploring'
+                },
+                inputPlaceholder() {
+                    if (this.isLoading) return 'Please wait for the Dungeon Master...'
+                    if (this.diceNeeded || this.diceRollPending) return 'Please roll the dice first...'
+                    return 'Enter your action...'
+                },
+                displayDiceType() {
+                    return this.diceType || this.defaultDiceType
                 }
             },
             methods: {
@@ -312,35 +346,55 @@
                     })
                 },
                 async rollDice() {
-                    const response = await fetch('/roll_dice', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' }
-                    })
-                    const data = await response.json()
+                    if (this.isLoading || (!this.diceNeeded && !this.diceRollPending)) return
                     
-                    if (data.error) {
-                        this.addMessage(data.error, 'system')
-                        return
+                    this.isLoading = true
+                    try {
+                        const response = await fetch('/roll_dice', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                dice_type: this.displayDiceType
+                            })
+                        })
+                        const data = await response.json()
+                        
+                        if (data.error) {
+                            this.addMessage(data.error, 'system')
+                            return
+                        }
+                        
+                        this.lastRoll = data.roll
+                        this.addMessage(`You rolled ${data.roll} on ${this.displayDiceType}`, 'user')
+                        
+                        if (data.message) {
+                            this.addMessage(data.message, 'dm')
+                        }
+                        
+                        // Update game state
+                        this.gameState = data.stats
+                        this.diceNeeded = data.dice_roll_needed || false
+                        this.diceRollPending = false
+                        this.diceType = data.dice_type
+                        
+                        // Clear input if dice roll was needed
+                        if (this.diceNeeded) {
+                            this.userInput = ''
+                        }
+                    } catch (error) {
+                        this.addMessage('Error rolling dice', 'system')
+                    } finally {
+                        this.isLoading = false
                     }
-                    
-                    this.lastRoll = data.roll
-                    this.addMessage(`You rolled ${data.roll} on ${data.dice_type}`, 'user')
-                    
-                    if (data.message) {
-                        this.addMessage(data.message, 'dm')
-                    }
-                    
-                    this.diceNeeded = data.dice_roll_needed || false
-                    this.diceType = data.new_dice_type
-                    this.gameState = data.stats
                 },
                 async sendMessage() {
-                    if (!this.userInput.trim()) return
+                    if (this.isLoading || !this.userInput.trim() || this.diceNeeded || this.diceRollPending) return
                     
                     const action = this.userInput
                     this.userInput = ''
                     this.addMessage(action, 'user')
                     
+                    this.isLoading = true
                     try {
                         const response = await fetch('/game_action', {
                             method: 'POST',
@@ -348,66 +402,74 @@
                             body: JSON.stringify({ action })
                         })
                         const data = await response.json()
-                        console.log('Game response:', data)  // Debug log
                         
                         if (data.error) {
-                            console.error('Error:', data.error)  // Debug log
                             this.addMessage(`Error: ${data.error}`, 'system')
                             return
                         }
                         
                         // Update game state
                         this.gameState = data.stats
-                        this.diceNeeded = data.dice_needed
+                        this.diceNeeded = data.dice_needed || false
                         this.diceType = data.dice_type
+                        
+                        // If dice roll is needed, set pending state
+                        if (this.diceNeeded || data.required_action === 'roll_dice') {
+                            this.diceRollPending = true
+                        }
                         
                         // Add response message
                         if (data.response) {
                             this.addMessage(data.response, 'dm')
                         }
                         
-                        // Handle state updates
-                        if (data.state_update) {
-                            console.log('State update:', data.state_update)  // Debug log
-                            Object.assign(this.gameState, data.state_update)
-                        }
-                        
-                        // Handle required actions
-                        if (data.required_action) {
-                            console.log('Required action:', data.required_action)  // Debug log
-                            // Handle specific required actions here if needed
-                        }
-                        
                     } catch (error) {
-                        console.error('Send message error:', error)  // Debug log
                         this.addMessage('Error: Failed to send message', 'system')
+                    } finally {
+                        this.isLoading = false
                     }
                 },
                 async startCombat() {
-                    const response = await fetch('/combat_action', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'start' })
-                    })
-                    const data = await response.json()
-                    this.gameState = data.stats
-                    this.addMessage(data.response)
+                    if (this.isLoading) return
+                    
+                    this.isLoading = true
+                    try {
+                        const response = await fetch('/combat_action', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'start' })
+                        })
+                        const data = await response.json()
+                        this.gameState = data.stats
+                        this.addMessage(data.response)
+                    } catch (error) {
+                        this.addMessage('Error starting combat', 'system')
+                    } finally {
+                        this.isLoading = false
+                    }
                 },
                 showSaveDialog() {
                     this.showingSaveDialog = true
                     this.saveName = ''
                 },
                 async saveGame() {
-                    if (!this.saveName.trim()) return
+                    if (!this.saveName.trim() || this.isLoading) return
 
-                    const response = await fetch('/save_game', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ save_name: this.saveName })
-                    })
-                    const data = await response.json()
-                    this.addMessage(data.message, 'system')
-                    this.showingSaveDialog = false
+                    this.isLoading = true
+                    try {
+                        const response = await fetch('/save_game', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ save_name: this.saveName })
+                        })
+                        const data = await response.json()
+                        this.addMessage(data.message, 'system')
+                        this.showingSaveDialog = false
+                    } catch (error) {
+                        this.addMessage('Error saving game', 'system')
+                    } finally {
+                        this.isLoading = false
+                    }
                 },
                 async showLoadDialog() {
                     const response = await fetch('/list_saves')
@@ -416,28 +478,34 @@
                     this.showingLoadDialog = true
                 },
                 async loadGame(saveName) {
-                    const response = await fetch('/load_game', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ save_name: saveName })
-                    })
-                    const data = await response.json()
-                    if (data.status === 'success') {
-                        this.gameState = data.stats
-                        this.characterCreated = true
-                        this.addMessage(data.message, 'system')
-                    } else {
-                        this.addMessage(data.message, 'system')
+                    if (this.isLoading) return
+                    
+                    this.isLoading = true
+                    try {
+                        const response = await fetch('/load_game', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ save_name: saveName })
+                        })
+                        const data = await response.json()
+                        if (data.status === 'success') {
+                            this.gameState = data.stats
+                            this.characterCreated = true
+                            this.addMessage(data.message, 'system')
+                        } else {
+                            this.addMessage(data.message, 'system')
+                        }
+                        this.showingLoadDialog = false
+                    } catch (error) {
+                        this.addMessage('Error loading game', 'system')
+                    } finally {
+                        this.isLoading = false
                     }
-                    this.showingLoadDialog = false
                 },
                 quitGame() {
                     if (confirm('Are you sure you want to quit? Unsaved progress will be lost.')) {
                         window.location.reload()
                     }
-                },
-                toggleStreaming() {
-                    this.streamingMode = !this.streamingMode
                 }
             }
         }).mount('#app')

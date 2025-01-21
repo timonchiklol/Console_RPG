@@ -5,11 +5,15 @@ import os
 import json
 import sys
 from gemini_schema import GameState
+import logging
 
 class DnDGame:
     def __init__(self):
         # Загружаем переменные окружения
         load_dotenv()
+        
+        # Set up logging
+        self.setup_logging()
         
         self.language = "ru"  # Язык по умолчанию
         self.gold = 0
@@ -28,7 +32,6 @@ class DnDGame:
         self.dice_type = None
         
         # Message generation settings
-        self.streaming_mode = True  # Default to streaming
         self.context_limit = 50  # Number of messages to keep in context
         self.message_history = []  # Хранение последних сообщений
         
@@ -48,6 +51,18 @@ class DnDGame:
             "Giant Spider": {"hp": 10, "damage": (1,8), "xp": 100, "gold": (0,3)}
         }
 
+    def setup_logging(self):
+        """Set up logging configuration"""
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler('game.log'),
+                logging.StreamHandler()
+            ]
+        )
+        self.logger = logging.getLogger(__name__)
+
     def initialize_chat(self):
         """Initialize the chat with the selected language"""
         # Получаем API ключ из .env файла
@@ -57,7 +72,25 @@ class DnDGame:
         system_prompt = """You are a creative and engaging Dungeon Master in a D&D game.
         Generate immersive descriptions and respond to player actions in character.
         Always respond in {language} language only.
-        When combat occurs or skill checks are needed, request dice rolls with specific dice (d20, d6, etc).
+        
+        Important rules:
+        1. Health points (HP) should only change by the exact amount of damage dealt or healed
+        2. When dealing damage, subtract the exact damage amount from current HP
+        3. Always check current HP before applying changes
+        4. Never set HP directly, only modify it by adding or subtracting
+        5. Include all HP changes in the state_update and combat_result
+        
+        When requesting dice rolls:
+        1. Set dice_roll.required to true
+        2. Specify the dice type in dice_roll.type (e.g., 'd20', '2d6')
+        3. Explain why the roll is needed in dice_roll.reason
+        4. Wait for the player's roll before proceeding
+        5. Common dice rolls:
+           - Attack rolls: d20
+           - Skill checks: d20
+           - Damage rolls: varies by weapon/spell (d4, d6, d8, d10, d12)
+           - Saving throws: d20
+        
         Include state updates and required actions in your responses."""
         
         # Initialize the chat with the system prompt
@@ -77,27 +110,34 @@ class DnDGame:
         return self.chat.send_message(f"Remember these player stats and always respond in {self.language} language: {current_stats}")
     
     def add_to_history(self, user_message, dm_response):
-        """Сохраняет последние 3 сообщения"""
+        """Сохраняет последние сообщения в пределах context_limit"""
         self.message_history.append({"user": user_message, "dm": dm_response})
-        if len(self.message_history) > 3:
+        if len(self.message_history) > self.context_limit:
             self.message_history.pop(0)
     
     def roll_dice(self, dice_type):
         """Roll dice of specified type (e.g. "d20", "2d6")"""
         if not dice_type:
-            return None
+            dice_type = 'd20'  # Default to d20 if no dice type specified
+            self.logger.info("No dice type specified, defaulting to d20")
             
         try:
             num_dice, sides = dice_type.lower().split('d')
             num_dice = int(num_dice) if num_dice else 1
             sides = int(sides)
+            
+            if sides <= 0 or num_dice <= 0:
+                self.logger.error(f"Invalid dice parameters: {num_dice}d{sides}")
+                return None
+                
             result = sum(randint(1, sides) for _ in range(num_dice))
             self.last_dice_roll = result
             self.dice_roll_needed = False  # Reset the flag after rolling
             self.dice_type = None  # Clear the dice type after rolling
+            self.logger.info(f"Rolled {dice_type}: {result}")
             return result
         except Exception as e:
-            print(f"Error rolling dice: {e}")  # Debug log
+            self.logger.error(f"Error rolling dice: {e}")
             return None
 
     def update_state(self, state_update):
@@ -105,25 +145,36 @@ class DnDGame:
         if not state_update:
             return
             
-        self.health_points = state_update.get('health_points', self.health_points)
-        self.gold = state_update.get('gold', self.gold)
-        self.damage = state_update.get('damage', self.damage)
-        self.in_combat = state_update.get('in_combat', self.in_combat)
-        
+        self.logger.info(f"Updating state with: {state_update}")
+        old_hp = self.health_points
+            
+        # Update basic stats if provided
+        if 'health_points' in state_update:
+            self.health_points = state_update['health_points']
+            self.logger.info(f"Health changed from {old_hp} to {self.health_points}")
+        if 'gold' in state_update:
+            self.gold = state_update['gold']
+        if 'damage' in state_update:
+            self.damage = state_update['damage']
+        if 'in_combat' in state_update:
+            self.in_combat = state_update['in_combat']
+        if 'magic_1lvl' in state_update:
+            self.magic_1lvl = state_update['magic_1lvl']
+        if 'magic_2lvl' in state_update:
+            self.magic_2lvl = state_update['magic_2lvl']
+            
+        # Update enemy state if in combat
         enemy_health = state_update.get('enemy_health')
         if enemy_health is not None and self.enemy:
             self.enemy["hp"] = enemy_health
             
+        # Update dice roll state
         self.dice_roll_needed = state_update.get('dice_roll_needed', False)
         self.dice_type = state_update.get('dice_type')
 
     def send_message(self, message):
         """Send message and get structured response"""
-        if self.dice_roll_needed:
-            # Handle dice roll command
-            roll_result = self.roll_dice(self.dice_type)
-            if roll_result is not None:
-                message = f"I rolled {roll_result} on {self.dice_type}"
+        self.logger.info(f"\nSending message: {message}")
         
         # Get current stats for context
         current_stats = f"""Current player stats:
@@ -134,59 +185,116 @@ class DnDGame:
         Damage: {self.damage}
         Gold: {self.gold}
         Magic slots (1st/2nd level): {self.magic_1lvl}/{self.magic_2lvl}
+        In Combat: {self.in_combat}
+        Last Roll: {self.last_dice_roll if self.last_dice_roll is not None else 'None'}
         """
+        
+        if self.in_combat and self.enemy:
+            current_stats += f"Enemy: {self.enemy['name']} (HP: {self.enemy['hp']})"
+        
+        self.logger.debug(f"Current stats:\n{current_stats}")
         
         # Get limited context from message history
         context = "Previous messages:\n"
-        for msg in self.message_history[-3:]:  # Only use last 3 messages for context
+        start_idx = max(0, len(self.message_history) - self.context_limit)
+        for msg in self.message_history[start_idx:]:
             context += f"Player: {msg['user']}\nDM: {msg['dm']}\n"
         
         full_message = f"{current_stats}\n{context}\nCurrent message: {message}"
+        self.logger.debug(f"Full message to Gemini:\n{full_message}")
         
         # Get structured response
         response = self.chat.send_structured_message(full_message)
+        self.logger.info(f"Gemini response: {response}")
         
         # Extract the actual message text from the response
         message_text = response.get('message', '')
-        if isinstance(message_text, str) and message_text.startswith('{"message":'):
-            try:
-                # Try to parse JSON if it's a JSON string
-                import json
-                parsed = json.loads(message_text)
-                message_text = parsed.get('message', message_text)
-            except:
-                pass
+        if not message_text:
+            message_text = "I don't understand. Please try again."
+            self.logger.warning("Empty message from Gemini")
         
-        # Update game state if provided
-        state_update = response.get('state_update', {})
-        if state_update:
-            self.update_state(state_update)
+        # Handle dice roll requests - check both new and old format
+        dice_roll = response.get('dice_roll', {})
+        dice_roll_needed = False
+        dice_type = None
         
-        # Set up next dice roll if needed
-        if response.get('required_action') == "roll_dice":
-            self.dice_roll_needed = True
-            if state_update:
-                self.dice_type = state_update.get('dice_type')
+        if dice_roll and isinstance(dice_roll, dict):
+            if dice_roll.get('required', False):
+                dice_roll_needed = True
+                dice_type = dice_roll.get('type', 'd20')  # Default to d20 if not specified
+                reason = dice_roll.get('reason', 'A dice roll is needed')
+                message_text += f"\n\n{reason}"
+                self.logger.info(f"Dice roll required: {dice_type} - {reason}")
+        elif response.get('required_action') == "roll_dice":
+            # Fallback for old format
+            dice_roll_needed = True
+            dice_type = response.get('state_update', {}).get('dice_type', 'd20')
+            self.logger.info(f"Dice roll required (fallback): {dice_type}")
         
-        # Handle combat results
+        # Update dice roll state
+        self.dice_roll_needed = dice_roll_needed
+        self.dice_type = dice_type
+        
+        # Handle combat results first
         if response.get('combat_result'):
             combat_result = response['combat_result']
-            if combat_result.get('damage_dealt'):
-                if self.enemy:
-                    self.enemy["hp"] -= combat_result['damage_dealt']
+            self.logger.info(f"Combat result: {combat_result}")
+            
+            if combat_result.get('damage_dealt') and self.enemy:
+                old_enemy_hp = self.enemy["hp"]
+                self.enemy["hp"] -= combat_result['damage_dealt']
+                self.logger.info(f"Enemy HP changed from {old_enemy_hp} to {self.enemy['hp']}")
+                
             if combat_result.get('damage_taken'):
+                old_hp = self.health_points
                 self.health_points -= combat_result['damage_taken']
+                self.logger.info(f"Player HP changed from {old_hp} to {self.health_points}")
+            
+            # Check if combat should end
+            if self.enemy and self.enemy["hp"] <= 0:
+                self.in_combat = False
+                self.enemy = None
+                self.logger.info("Combat ended - enemy defeated")
+            elif self.health_points <= 0:
+                self.in_combat = False
+                message_text += "\nYou have been defeated! Game Over!"
+                self.logger.info("Combat ended - player defeated")
+        
+        # Update non-combat state if provided
+        state_update = response.get('state_update', {})
+        if state_update:
+            self.logger.info(f"State update received: {state_update}")
+            # Remove health updates if they were handled in combat_result
+            if response.get('combat_result'):
+                if 'health_points' in state_update:
+                    self.logger.info("Skipping health update from state_update as it was handled in combat_result")
+                    state_update.pop('health_points')
+                if 'enemy_health' in state_update:
+                    self.logger.info("Skipping enemy health update from state_update as it was handled in combat_result")
+                    state_update.pop('enemy_health')
+            
+            # Always include dice roll state in state update
+            state_update['dice_roll_needed'] = dice_roll_needed
+            state_update['dice_type'] = dice_type
+            
+            self.update_state(state_update)
+        else:
+            # If no state update, create one for dice roll state
+            state_update = {
+                'dice_roll_needed': dice_roll_needed,
+                'dice_type': dice_type
+            }
+            self.update_state(state_update)
         
         # Add to history and return formatted response
         self.add_to_history(message, message_text)
         
         return {
             'message': message_text,
+            'dice_roll_needed': dice_roll_needed,
+            'dice_type': dice_type,
             'state_update': state_update,
-            'required_action': response.get('required_action'),
-            'combat_result': response.get('combat_result'),
-            'dice_roll_needed': self.dice_roll_needed,
-            'dice_type': self.dice_type
+            'combat_result': response.get('combat_result')
         }
 
     def start_game(self):
@@ -766,7 +874,8 @@ class DnDGame:
             'enemy': self.enemy,
             'dice_roll_needed': self.dice_roll_needed,
             'dice_type': self.dice_type,
-            'last_dice_roll': self.last_dice_roll
+            'last_dice_roll': self.last_dice_roll,
+            'message_history': self.message_history  # Include message history in state
         }
 
     def load_state_from_dict(self, state_dict):
@@ -781,5 +890,9 @@ class DnDGame:
         self.magic_2lvl = state_dict['magic_2lvl']
         self.in_combat = state_dict['in_combat']
         self.enemy = state_dict['enemy']
+        self.dice_roll_needed = state_dict.get('dice_roll_needed', False)
+        self.dice_type = state_dict.get('dice_type')
+        self.last_dice_roll = state_dict.get('last_dice_roll')
+        self.message_history = state_dict.get('message_history', [])
         self.initialize_chat()  # Initialize chat before updating prompt
         self.update_system_prompt()

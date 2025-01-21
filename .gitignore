@@ -17,3 +17,6 @@ gemini_examples.py
 
 # saves
 saves/
+
+# logs
+game.log
