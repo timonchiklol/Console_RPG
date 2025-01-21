@@ -65,36 +65,65 @@ class DnDGame:
 
     def initialize_chat(self):
         """Initialize the chat with the selected language"""
-        # Получаем API ключ из .env файла
         api_key = os.getenv("GEMINI_API_KEY")
         
-        # Simplified system prompt focusing only on role and language
-        system_prompt = """You are a creative and engaging Dungeon Master in a D&D game.
-        Generate immersive descriptions and respond to player actions in character.
-        Always respond in {language} language only.
+        system_prompts = {
+            "ru": """Вы - Мастер Подземелий (DM) в игре D&D. 
+            СТРОГОЕ ПРАВИЛО: Вы ДОЛЖНЫ отвечать ТОЛЬКО на русском языке, без единого английского слова.
+            
+            Ваша роль:
+            1. Создавать захватывающие описания на русском языке
+            2. Вести повествование как настоящий русскоговорящий Мастер Подземелий
+            3. Все игровые термины использовать на русском языке
+            4. Отвечать на действия игрока только на русском
+            
+            Пример ответа:
+            "В тусклом свете таверны вы видите..."
+            "Внезапно из темноты появляется..."
+            "Бросьте кубик d20 на проверку..."
+            
+            Технические правила:
+            1. HP изменяется только при получении/лечении урона
+            2. Урон вычитается из текущего HP
+            3. Проверять HP перед изменениями
+            4. Изменения HP включать в state_update
+            
+            Броски кубиков:
+            1. dice_roll.required = true при необходимости броска
+            2. dice_roll.type = тип кубика ('d20', '2d6')
+            3. dice_roll.reason = причина броска на русском языке
+            4. Ждать броска игрока""",
+            
+            "en": """You are a creative and engaging Dungeon Master in a D&D game.
+            Generate immersive descriptions and respond to player actions in character.
+            IMPORTANT: Respond ONLY in English.
+            
+            Important rules:
+            1. Health points (HP) should only change by exact damage/healing
+            2. When dealing damage, subtract from current HP
+            3. Always check current HP before changes
+            4. Include HP changes in state_update
+            
+            When requesting dice rolls:
+            1. Set dice_roll.required to true
+            2. Specify dice_type ('d20', '2d6')
+            3. Explain roll reason
+            4. Wait for player roll"""
+        }
         
-        Important rules:
-        1. Health points (HP) should only change by the exact amount of damage dealt or healed
-        2. When dealing damage, subtract the exact damage amount from current HP
-        3. Always check current HP before applying changes
-        4. Never set HP directly, only modify it by adding or subtracting
-        5. Include all HP changes in the state_update and combat_result
+        # Выбираем промпт в зависимости от языка
+        system_prompt = system_prompts.get(self.language, system_prompts["en"])
         
-        When requesting dice rolls:
-        1. Set dice_roll.required to true
-        2. Specify the dice type in dice_roll.type (e.g., 'd20', '2d6')
-        3. Explain why the roll is needed in dice_roll.reason
-        4. Wait for the player's roll before proceeding
-        5. Common dice rolls:
-           - Attack rolls: d20
-           - Skill checks: d20
-           - Damage rolls: varies by weapon/spell (d4, d6, d8, d10, d12)
-           - Saving throws: d20
-        
-        Include state updates and required actions in your responses."""
+        # Добавляем дополнительное указание для русского языка
+        if self.language == "ru":
+            system_prompt += "\n\nВАЖНО: Все ответы должны быть ТОЛЬКО на русском языке!"
         
         # Initialize the chat with the system prompt
         self.chat = Gemini(API_KEY=api_key, system_instruction=system_prompt)
+        
+        # Отправляем первое сообщение для установки языка
+        if self.language == "ru":
+            self.chat.send_message("Пожалуйста, подтвердите, что вы будете отвечать только на русском языке.")
 
     def update_system_prompt(self):
         """Обновляет системный промпт с текущими характеристиками игрока"""
