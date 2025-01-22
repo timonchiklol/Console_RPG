@@ -123,13 +123,12 @@
                 <h3 class="medieval text-2xl mb-4 text-red-500">⚄ Dice Roll Required ⚄</h3>
                 <p class="mb-4 text-xl">The Dungeon Master requests a {{ displayDiceType }} roll</p>
                 <button @click="rollDice" 
-                        :disabled="isLoading"
+                        :disabled="isRolling"
                         class="bg-red-700 hover:bg-red-600 text-white px-8 py-4 rounded-lg text-2xl medieval animate-pulse transition-all transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-500 mb-4">
-                    Roll {{ displayDiceType }}
+                    {{ isRolling ? 'Rolling...' : 'Roll ' + displayDiceType }}
                 </button>
-                <div v-if="lastRoll" class="mt-4 text-xl">
-                    <span class="text-gray-400">Last roll:</span>
-                    <span class="text-red-500 font-bold">{{ lastRoll }}</span>
+                <div v-if="currentRoll" class="mt-4 text-xl">
+                    <span class="text-red-500 font-bold">You rolled: {{ currentRoll }}</span>
                 </div>
             </div>
 
@@ -156,13 +155,7 @@
             </div>
 
             <!-- Action Buttons -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <button @click="startCombat" 
-                        :disabled="isLoading"
-                        :class="['px-4 py-2 rounded-lg medieval', 
-                                isLoading ? 'bg-gray-700 cursor-not-allowed' : 'bg-red-700 hover:bg-red-600']">
-                    Fight
-                </button>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                 <button @click="showSaveDialog" 
                         :disabled="isLoading"
                         :class="['px-4 py-2 rounded-lg medieval', 
@@ -284,7 +277,9 @@
                     diceType: null,
                     lastRoll: null,
                     isLoading: false,
-                    defaultDiceType: 'd20'  // Default dice type for perception checks
+                    defaultDiceType: 'd20',  // Default dice type for perception checks
+                    isRolling: false,
+                    currentRoll: null,
                 }
             },
             computed: {
@@ -363,36 +358,50 @@
                     })
                 },
                 async rollDice() {
-                    if (this.isLoading || (!this.diceNeeded && !this.diceRollPending)) return
+                    if (this.isRolling || (!this.diceNeeded && !this.diceRollPending)) return
                     
-                    this.isLoading = true
+                    this.isRolling = true
                     try {
-                        const response = await fetch('/roll_dice', {
+                        // First, get the immediate dice roll
+                        const rollResponse = await fetch('/roll_dice', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 dice_type: this.displayDiceType
                             })
                         })
-                        const data = await response.json()
+                        const rollData = await rollResponse.json()
                         
-                        if (data.error) {
-                            this.addMessage(data.error, 'system')
+                        if (rollData.error) {
+                            this.addMessage(rollData.error, 'system')
                             return
                         }
                         
-                        this.lastRoll = data.roll
-                        this.addMessage(`You rolled ${data.roll} on ${this.displayDiceType}`, 'user')
+                        // Immediately show the roll result
+                        this.currentRoll = rollData.roll
+                        this.addMessage(`You rolled ${rollData.roll} on ${this.displayDiceType}`, 'user')
                         
-                        if (data.message) {
-                            this.addMessage(data.message, 'dm')
+                        // Then process the roll with Gemini
+                        this.isLoading = true
+                        const processResponse = await fetch('/process_roll', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                roll: rollData.roll,
+                                dice_type: rollData.dice_type
+                            })
+                        })
+                        const processData = await processResponse.json()
+                        
+                        if (processData.message) {
+                            this.addMessage(processData.message, 'dm')
                         }
                         
                         // Update game state
-                        this.gameState = data.stats
-                        this.diceNeeded = data.dice_roll_needed || false
+                        this.gameState = processData.stats
+                        this.diceNeeded = processData.dice_roll_needed || false
                         this.diceRollPending = false
-                        this.diceType = data.dice_type
+                        this.diceType = processData.dice_type
                         
                         // Clear input if dice roll was needed
                         if (this.diceNeeded) {
@@ -401,6 +410,7 @@
                     } catch (error) {
                         this.addMessage('Error rolling dice', 'system')
                     } finally {
+                        this.isRolling = false
                         this.isLoading = false
                     }
                 },
@@ -430,9 +440,10 @@
                         this.diceNeeded = data.dice_needed || false
                         this.diceType = data.dice_type
                         
-                        // If dice roll is needed, set pending state
+                        // If dice roll is needed, set pending state and reset currentRoll
                         if (this.diceNeeded || data.required_action === 'roll_dice') {
                             this.diceRollPending = true
+                            this.currentRoll = null  // Reset the current roll display
                         }
                         
                         // Add response message
@@ -442,25 +453,6 @@
                         
                     } catch (error) {
                         this.addMessage('Error: Failed to send message', 'system')
-                    } finally {
-                        this.isLoading = false
-                    }
-                },
-                async startCombat() {
-                    if (this.isLoading) return
-                    
-                    this.isLoading = true
-                    try {
-                        const response = await fetch('/combat_action', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ action: 'start' })
-                        })
-                        const data = await response.json()
-                        this.gameState = data.stats
-                        this.addMessage(data.response)
-                    } catch (error) {
-                        this.addMessage('Error starting combat', 'system')
                     } finally {
                         this.isLoading = false
                     }

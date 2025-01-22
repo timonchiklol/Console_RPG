@@ -199,16 +199,39 @@ def roll_dice():
     if roll_result is None:
         return jsonify({'error': 'Invalid dice type'}), 400
     
+    # Return the immediate roll result
+    return jsonify({
+        'roll': roll_result,
+        'dice_type': dice_type,
+        'stats': game_state  # Return current state without updating yet
+    })
+
+@app.route('/process_roll', methods=['POST'])
+def process_roll():
+    """Process the roll result with Gemini"""
+    if 'game_state' not in session:
+        return jsonify({'error': 'Game not started'}), 400
+    
+    game = DnDGame()
+    game_state = session['game_state']
+    game.load_state_from_dict(game_state)
+    
+    data = request.get_json()
+    roll_value = data.get('roll')
+    dice_type = data.get('dice_type')
+    
     # Send the roll result to get the game's response
-    response = game.send_message(f"I rolled {roll_result} on {dice_type}")
+    response = game.send_message(f"I rolled {roll_value} on {dice_type}")
+    
+    # If a new roll is requested, reset the last_dice_roll
+    if response.get('dice_roll_needed', False):
+        game.last_dice_roll = None
     
     # Update session state
     session['game_state'] = game.get_state_dict()
     
     # Format response
     return jsonify({
-        'roll': roll_result,
-        'dice_type': dice_type,
         'message': response.get('message', ''),
         'stats': session['game_state'],
         'dice_roll_needed': response.get('dice_roll_needed', False),
