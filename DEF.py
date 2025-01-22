@@ -77,6 +77,17 @@ class DnDGame:
             3. Все игровые термины использовать на русском языке
             4. Отвечать на действия игрока только на русском
             
+            ВАЖНО - Инициация боя:
+            1. Автоматически начинайте бой, если:
+               - Игрок проявляет агрессию к NPC
+               - Игрок встречает враждебное существо
+               - Провал проверки харизмы/дипломатии с агрессивным NPC
+               - Игрок попадает в засаду или ловушку
+            2. При начале боя:
+               - Опишите причину начала боя
+               - Укажите противника
+               - Предложите игроку сделать первый ход
+            
             Пример ответа:
             "В тусклом свете таверны вы видите..."
             "Внезапно из темноты появляется..."
@@ -97,6 +108,17 @@ class DnDGame:
             "en": """You are a creative and engaging Dungeon Master in a D&D game.
             Generate immersive descriptions and respond to player actions in character.
             IMPORTANT: Respond ONLY in English.
+            
+            IMPORTANT - Combat Initiation:
+            1. Automatically initiate combat when:
+               - Player shows aggression towards NPCs
+               - Player encounters hostile creatures
+               - Failed charisma/diplomacy checks with aggressive NPCs
+               - Player walks into ambushes or traps
+            2. When starting combat:
+               - Describe the reason for combat
+               - Specify the opponent
+               - Prompt player for their first action
             
             Important rules:
             1. Health points (HP) should only change by exact damage/healing
@@ -217,6 +239,18 @@ class DnDGame:
         In Combat: {self.in_combat}
         Last Roll: {self.last_dice_roll if self.last_dice_roll is not None else 'None'}
         """
+        
+        # Добавляем информацию о последнем броске в контекст
+        if "rolled" in message.lower():
+            try:
+                roll_value = int(message.split()[2])
+                current_stats += f"\nLast roll result: {roll_value}"
+                if roll_value == 1:
+                    current_stats += " (Critical failure)"
+                elif roll_value == 20:
+                    current_stats += " (Critical success)"
+            except:
+                pass
         
         if self.in_combat and self.enemy:
             current_stats += f"Enemy: {self.enemy['name']} (HP: {self.enemy['hp']})"
