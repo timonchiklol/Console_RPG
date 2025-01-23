@@ -444,14 +444,18 @@ class DnDGame:
             
         # Get base stats from race
         race_stats = get_race_stats(self.player_race)
-        for stat, value in race_stats.items():
-            setattr(self, stat, value)
+        self.health_points = race_stats['hp']
+        self.gold = race_stats['gold']
+        # Parse damage range from string (e.g., "2-7")
+        damage_range = race_stats['damage'].split('-')
+        self.damage = int(damage_range[1])  # Use the max damage as base damage
             
         # Apply class bonuses
         class_bonuses = get_class_bonuses(self.player_class)
-        for stat, bonus in class_bonuses.items():
-            current_value = getattr(self, stat)
-            setattr(self, stat, current_value + bonus)
+        self.health_points += class_bonuses['hp_bonus']
+        self.gold += class_bonuses['gold_bonus']
+        self.magic_1lvl = class_bonuses['magic']  # Base magic slots from class
+        self.magic_2lvl = max(0, class_bonuses['magic'] - 1)  # One less 2nd level slot than 1st level
         
         self.level = 1
         self.update_system_prompt()
