@@ -12,9 +12,9 @@ def index():
 
 @app.route('/start_game', methods=['POST'])
 def start_game():
-    game = DnDGame()
-    session['language'] = request.json.get('language', 'en')
-    game.language = session['language']
+    language = request.json.get('language', 'en')  # Retrieve language from request
+    game = DnDGame(language=language)  # Pass language to DnDGame
+    session['language'] = language
     game.initialize_chat()
     session['game_state'] = {
         'started': True,
@@ -64,8 +64,7 @@ def get_classes():
 @app.route('/choose_character', methods=['POST'])
 def choose_character():
     data = request.json
-    game = DnDGame()
-    game.language = session.get('language', 'en')
+    game = DnDGame(language=session.get('language', 'en'))  # Pass language from session
     game.initialize_chat()  # Initialize chat first
     game.player_race = data['race']
     game.player_class = data['class']
@@ -96,7 +95,7 @@ def game_action():
         data = request.get_json()
         action = data.get('action')
         
-        game = DnDGame()
+        game = DnDGame(language=session.get('language', 'en'))  # Pass language from session
         game.load_state_from_dict(session['game_state'])
         
         response = game.send_message(action)
@@ -123,7 +122,7 @@ def combat_action():
         
     data = request.json
     action = data.get('action')
-    game = DnDGame()
+    game = DnDGame(language=session.get('language', 'en'))  # Pass language from session
     game.load_state_from_dict(session['game_state'])
     
     if action == 'start':
@@ -146,7 +145,7 @@ def save_game():
         
     data = request.json
     save_name = data.get('save_name', 'quicksave')
-    game = DnDGame()
+    game = DnDGame(language=session.get('language', 'en'))  # Pass language from session
     game.load_state_from_dict(session['game_state'])
     response = game.save_game(save_name)
     
@@ -156,11 +155,13 @@ def save_game():
 def load_game():
     data = request.json
     save_name = data.get('save_name', 'quicksave')
-    game = DnDGame()
+    game = DnDGame(language=session.get('language', 'en'))  # Pass language from session
     response = game.load_game(save_name)
     
     if 'successfully' in response.lower():
         session['game_state'] = game.get_state_dict()
+        # Ensure the language is updated based on loaded game state
+        session['language'] = game.language
         return jsonify({
             'status': 'success',
             'message': response,
@@ -183,7 +184,7 @@ def roll_dice():
     if 'game_state' not in session:
         return jsonify({'error': 'Game not started'}), 400
     
-    game = DnDGame()
+    game = DnDGame(language=session.get('language', 'en'))  # Pass language from session
     game_state = session['game_state']
     
     # Load the full game state
@@ -212,7 +213,7 @@ def process_roll():
     if 'game_state' not in session:
         return jsonify({'error': 'Game not started'}), 400
     
-    game = DnDGame()
+    game = DnDGame(language=session.get('language', 'en'))  # Pass language from session
     game_state = session['game_state']
     game.load_state_from_dict(game_state)
     
