@@ -5,17 +5,23 @@ from google import genai
 from google.genai import types
 from gemini_schema import GAME_RESPONSE_SCHEMA
 import json
+import time
+import logging
 
 
 class Gemini:
-    def __init__(self, API_KEY, system_instruction=None, temperature=1):
-        self.client = genai.Client(api_key=API_KEY)
-
+    def __init__(self, API_KEY=None, system_instruction=None, temperature=1):
+        self.logger = logging.getLogger(__name__)
+        self.api_keys = self._load_api_keys(API_KEY)
+        self.current_key_index = 0
+        self.retry_delay = 20  # seconds to wait before retry
+        self.max_retries = len(self.api_keys) + 1  # one retry per key + one final retry
+        
         # Initialize model and settings
         self.model = "gemini-2.0-flash-exp"
         self.temperature = temperature
         self.system_instruction = system_instruction or "You are a helpful AI assistant."
-
+        
         # Configure safety settings
         self.safety_settings = [
             types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
@@ -23,51 +29,49 @@ class Gemini:
             types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
             types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
         ]
+        
+        self._initialize_client()
 
+    def _load_api_keys(self, provided_key=None):
+        """Load API keys from environment variables"""
+        keys = []
+        if provided_key:
+            keys.append(provided_key)
+        
+        # Load all GEMINI_API_KEY_* variables from .env
+        for key, value in os.environ.items():
+            if key.startswith('GEMINI_API_KEY') and value not in keys:
+                keys.append(value)
+        
+        if not keys:
+            raise ValueError("No Gemini API keys found")
+        
+        return keys
+
+    def _initialize_client(self):
+        """Initialize Gemini client with current API key"""
+        self.client = genai.Client(api_key=self.api_keys[self.current_key_index])
+
+    def _rotate_key(self):
+        """Rotate to next available API key"""
+        self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
+        self._initialize_client()
+        self.logger.info(f"Rotated to API key {self.current_key_index + 1}/{len(self.api_keys)}")
+
+    def _handle_rate_limit(self, retries):
+        """Handle rate limit error by rotating keys or waiting"""
+        if retries < len(self.api_keys):
+            self._rotate_key()
+            return 0  # No need to wait when switching keys
+        else:
+            self.logger.warning(f"All API keys exhausted. Waiting {self.retry_delay} seconds before retry.")
+            return self.retry_delay
 
     def send_message(self, prompt):
         """Send a message to the chat and return the response."""
-        try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=self.system_instruction,
-                    temperature=self.temperature,
-                    safety_settings=self.safety_settings
-                )
-            )
-            return response.text
-        except Exception as e:
-            return f"Error: {str(e)}"
-    
-    def send_structured_message(self, prompt):
-        """Send a message and get a structured response using the game response schema."""
-        try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=self.system_instruction,
-                    temperature=self.temperature,
-                    safety_settings=self.safety_settings,
-                    response_mime_type="application/json",
-                    response_schema=GAME_RESPONSE_SCHEMA
-                )
-            )
-            
-            if hasattr(response, 'text'):
-                try:
-                    return json.loads(response.text)
-                except json.JSONDecodeError:
-                    return {
-                        "message": response.text,
-                        "state_update": None,
-                        "combat_result": None,
-                        "required_action": None
-                    }
-            else:
-                # Fallback to normal response
+        retries = 0
+        while retries < self.max_retries:
+            try:
                 response = self.client.models.generate_content(
                     model=self.model,
                     contents=prompt,
@@ -77,21 +81,75 @@ class Gemini:
                         safety_settings=self.safety_settings
                     )
                 )
+                return response.text
+            except Exception as e:
+                if "429" in str(e) and retries < self.max_retries - 1:
+                    wait_time = self._handle_rate_limit(retries)
+                    if wait_time > 0:
+                        time.sleep(wait_time)
+                    retries += 1
+                    continue
+                return f"Error: {str(e)}"
+    
+    def send_structured_message(self, prompt):
+        """Send a message and get a structured response using the game response schema."""
+        retries = 0
+        while retries < self.max_retries:
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=self.system_instruction,
+                        temperature=self.temperature,
+                        safety_settings=self.safety_settings,
+                        response_mime_type="application/json",
+                        response_schema=GAME_RESPONSE_SCHEMA
+                    )
+                )
+                
+                if hasattr(response, 'text'):
+                    try:
+                        return json.loads(response.text)
+                    except json.JSONDecodeError:
+                        return {
+                            "message": response.text,
+                            "state_update": None,
+                            "combat_result": None,
+                            "required_action": None
+                        }
+                else:
+                    # Fallback to normal response
+                    response = self.client.models.generate_content(
+                        model=self.model,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=self.system_instruction,
+                            temperature=self.temperature,
+                            safety_settings=self.safety_settings
+                        )
+                    )
+                    return {
+                        "message": response.text,
+                        "state_update": None,
+                        "combat_result": None,
+                        "required_action": None
+                    }
+                    
+            except Exception as e:
+                if "429" in str(e) and retries < self.max_retries - 1:
+                    wait_time = self._handle_rate_limit(retries)
+                    if wait_time > 0:
+                        time.sleep(wait_time)
+                    retries += 1
+                    continue
+                self.logger.error(f"Error: {str(e)}")
                 return {
-                    "message": response.text,
+                    "message": f"Error: {str(e)}",
                     "state_update": None,
                     "combat_result": None,
                     "required_action": None
                 }
-                
-        except Exception as e:
-            print(f"Error: {str(e)}")
-            return {
-                "message": f"Error: {str(e)}",
-                "state_update": None,
-                "combat_result": None,
-                "required_action": None
-            }
 
     def create_chat(self):
         """Create and return a new chat session."""
