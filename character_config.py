@@ -125,34 +125,107 @@ ENEMIES = {
     "Giant Spider": {"hp": 10, "damage": (1,8), "xp": 100, "gold": (0,3)}
 }
 
-def get_race_stats(race):
-    """Get base stats for a race"""
-    if race not in RACE_CONFIGS:
-        raise ValueError(f"Invalid race: {race}")
-    config = RACE_CONFIGS[race]
-    return {
-        "health_points": config["base_hp"],
-        "gold": config["base_gold"],
-        "damage": randint(*config["damage_roll"]),
-        "magic_1lvl": config["magic_slots"]["1st"],
-        "magic_2lvl": config["magic_slots"]["2nd"]
+RACE_TRANSLATIONS = {
+    'en': {
+        'Human': 'Human',
+        'Elf': 'Elf',
+        'Dwarf': 'Dwarf',
+        'Orc': 'Orc',
+        'Halfling': 'Halfling',
+        'Dragonborn': 'Dragonborn',
+        'Tiefling': 'Tiefling',
+        'Gnome': 'Gnome'
+    },
+    'ru': {
+        'Human': 'Человек',
+        'Elf': 'Эльф',
+        'Dwarf': 'Гном',
+        'Orc': 'Орк',
+        'Halfling': 'Полурослик',
+        'Dragonborn': 'Драконорожденный',
+        'Tiefling': 'Тифлинг',
+        'Gnome': 'Гном'
     }
+}
 
-def get_class_bonuses(char_class):
-    """Get bonus stats for a class"""
-    if char_class not in CLASS_CONFIGS:
-        raise ValueError(f"Invalid class: {char_class}")
-    config = CLASS_CONFIGS[char_class]
-    return {
-        "health_points": config["hp_bonus"],
-        "gold": config["gold_bonus"],
-        "damage": config["damage_bonus"],
-        "magic_1lvl": config["magic_slots_bonus"]["1st"],
-        "magic_2lvl": config["magic_slots_bonus"]["2nd"]
+CLASS_TRANSLATIONS = {
+    'en': {
+        'Warrior': 'Warrior',
+        'Mage': 'Mage',
+        'Ranger': 'Ranger',
+        'Rogue': 'Rogue',
+        'Paladin': 'Paladin',
+        'Warlock': 'Warlock',
+        'Bard': 'Bard',
+        'Cleric': 'Cleric',
+        'Monk': 'Monk',
+        'Druid': 'Druid'
+    },
+    'ru': {
+        'Warrior': 'Воин',
+        'Mage': 'Маг',
+        'Ranger': 'Следопыт',
+        'Rogue': 'Плут',
+        'Paladin': 'Паладин',
+        'Warlock': 'Колдун',
+        'Bard': 'Бард',
+        'Cleric': 'Жрец',
+        'Monk': 'Монах',
+        'Druid': 'Друид'
     }
+}
+
+RACE_STATS = {
+    'Human': {'hp': 15, 'damage': '2-7', 'gold': 5},
+    'Elf': {'hp': 10, 'damage': '1-12', 'gold': 5},
+    'Dwarf': {'hp': 18, 'damage': '1-8', 'gold': 8},
+    'Orc': {'hp': 8, 'damage': '3-12', 'gold': 3},
+    'Halfling': {'hp': 12, 'damage': '1-6', 'gold': 10},
+    'Dragonborn': {'hp': 14, 'damage': '2-8', 'gold': 6},
+    'Tiefling': {'hp': 12, 'damage': '1-10', 'gold': 5},
+    'Gnome': {'hp': 10, 'damage': '1-6', 'gold': 7}
+}
+
+CLASS_BONUSES = {
+    'Warrior': {'hp_bonus': 5, 'gold_bonus': 2, 'magic': 0},
+    'Mage': {'hp_bonus': 2, 'gold_bonus': 1, 'magic': 3},
+    'Ranger': {'hp_bonus': 3, 'gold_bonus': 3, 'magic': 1},
+    'Rogue': {'hp_bonus': 2, 'gold_bonus': 5, 'magic': 0},
+    'Paladin': {'hp_bonus': 4, 'gold_bonus': 2, 'magic': 1},
+    'Warlock': {'hp_bonus': 3, 'gold_bonus': 1, 'magic': 2},
+    'Bard': {'hp_bonus': 3, 'gold_bonus': 4, 'magic': 2},
+    'Cleric': {'hp_bonus': 4, 'gold_bonus': 1, 'magic': 2},
+    'Monk': {'hp_bonus': 3, 'gold_bonus': 1, 'magic': 0},
+    'Druid': {'hp_bonus': 3, 'gold_bonus': 2, 'magic': 2}
+}
+
+ENEMIES = {
+    'Goblin': {'hp': 10, 'damage': (1, 6), 'gold': (1, 4), 'xp': 50},
+    'Orc': {'hp': 15, 'damage': (2, 8), 'gold': (2, 6), 'xp': 100},
+    'Troll': {'hp': 30, 'damage': (3, 10), 'gold': (4, 10), 'xp': 200},
+    'Dragon': {'hp': 50, 'damage': (4, 12), 'gold': (10, 20), 'xp': 500}
+}
+
+def get_race_stats(race_name):
+    """Get race stats, handling translations"""
+    # Convert localized name to English if needed
+    for lang in RACE_TRANSLATIONS.values():
+        for eng_name, local_name in lang.items():
+            if local_name == race_name:
+                race_name = eng_name
+                break
+    return RACE_STATS.get(race_name, RACE_STATS['Human'])
+
+def get_class_bonuses(class_name):
+    """Get class bonuses, handling translations"""
+    # Convert localized name to English if needed
+    for lang in CLASS_TRANSLATIONS.values():
+        for eng_name, local_name in lang.items():
+            if local_name == class_name:
+                class_name = eng_name
+                break
+    return CLASS_BONUSES.get(class_name, CLASS_BONUSES['Warrior'])
 
 def get_enemy(enemy_type):
-    """Get enemy stats"""
-    if enemy_type not in ENEMIES:
-        raise ValueError(f"Invalid enemy type: {enemy_type}")
-    return ENEMIES[enemy_type].copy() 
+    """Get a copy of enemy stats"""
+    return ENEMIES.get(enemy_type, ENEMIES['Goblin']).copy() 

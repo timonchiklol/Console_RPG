@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, jsonify, session, Response
 from DEF import DnDGame
+from character_config import RACE_STATS, CLASS_BONUSES, RACE_TRANSLATIONS, CLASS_TRANSLATIONS
 import os
 import json
 
@@ -33,32 +34,26 @@ def start_game():
 
 @app.route('/get_races')
 def get_races():
-    races = {
-        'Human': {'hp': 15, 'damage': '2-7', 'gold': 5},
-        'Elf': {'hp': 10, 'damage': '1-12', 'gold': 5},
-        'Dwarf': {'hp': 18, 'damage': '1-8', 'gold': 8},
-        'Orc': {'hp': 8, 'damage': '3-12', 'gold': 3},
-        'Halfling': {'hp': 12, 'damage': '1-6', 'gold': 10},
-        'Dragonborn': {'hp': 14, 'damage': '2-8', 'gold': 6},
-        'Tiefling': {'hp': 12, 'damage': '1-10', 'gold': 5},
-        'Gnome': {'hp': 10, 'damage': '1-6', 'gold': 7}
-    }
+    language = session.get('language', 'en')
+    races = {}
+    translations = RACE_TRANSLATIONS[language]
+    
+    for eng_name, stats in RACE_STATS.items():
+        local_name = translations[eng_name]
+        races[local_name] = stats
+    
     return jsonify(races)
 
 @app.route('/get_classes')
 def get_classes():
-    classes = {
-        'Warrior': {'hp_bonus': 5, 'gold_bonus': 2, 'magic': 0},
-        'Mage': {'hp_bonus': 2, 'gold_bonus': 1, 'magic': 3},
-        'Ranger': {'hp_bonus': 3, 'gold_bonus': 3, 'magic': 1},
-        'Rogue': {'hp_bonus': 2, 'gold_bonus': 5, 'magic': 0},
-        'Paladin': {'hp_bonus': 4, 'gold_bonus': 2, 'magic': 1},
-        'Warlock': {'hp_bonus': 3, 'gold_bonus': 1, 'magic': 2},
-        'Bard': {'hp_bonus': 3, 'gold_bonus': 4, 'magic': 2},
-        'Cleric': {'hp_bonus': 4, 'gold_bonus': 1, 'magic': 2},
-        'Monk': {'hp_bonus': 3, 'gold_bonus': 1, 'magic': 0},
-        'Druid': {'hp_bonus': 3, 'gold_bonus': 2, 'magic': 2}
-    }
+    language = session.get('language', 'en')
+    classes = {}
+    translations = CLASS_TRANSLATIONS[language]
+    
+    for eng_name, stats in CLASS_BONUSES.items():
+        local_name = translations[eng_name]
+        classes[local_name] = stats
+    
     return jsonify(classes)
 
 @app.route('/choose_character', methods=['POST'])
