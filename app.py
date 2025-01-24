@@ -9,6 +9,7 @@ import logging
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from datetime import datetime
+from threading import Lock
 
 # Create a custom filter to exclude get_room_state messages
 class GetRoomStateFilter(logging.Filter):
@@ -65,6 +66,13 @@ setup_logging()
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # For session management
 room_manager = RoomManager()
+room_locks = {}  # Dictionary to store room locks
+
+def get_room_lock(room_id):
+    """Get or create a lock for a room"""
+    if room_id not in room_locks:
+        room_locks[room_id] = Lock()
+    return room_locks[room_id]
 
 # Store messages for each room
 room_messages = {}
@@ -192,21 +200,22 @@ def leave_room():
     
     return jsonify({'status': 'error', 'message': 'Failed to leave room'}), 400
 
+
 @app.route('/get_room_state', methods=['GET'])
 def get_room_state():
     if 'room_id' not in session:
         logging.error("Session missing room_id")
         return jsonify({'status': 'error', 'message': 'Not in a room'}), 400
-    
+
     room = room_manager.get_room(session['room_id'])
     if not room:
         logging.error(f"Room {session['room_id']} not found")
         return jsonify({'status': 'error', 'message': 'Room not found'}), 404
-    
+
     # Get messages since last_message_id if provided
     last_message_id = request.args.get('last_message_id')
     messages = []
-    
+
     if session['room_id'] in room_messages:
         if last_message_id is None:
             # First time getting messages, only get the last few
@@ -215,12 +224,12 @@ def get_room_state():
             # Get only new messages since last_message_id
             try:
                 last_id = int(last_message_id)
-                messages = [msg for msg in room_messages[session['room_id']] 
+                messages = [msg for msg in room_messages[session['room_id']]
                           if msg.get('id', 0) > last_id]
             except ValueError:
                 logging.error(f"Invalid last_message_id: {last_message_id}")
                 messages = room_messages[session['room_id']][-5:]
-    
+
     # Convert player states to dict with proper translation
     players_dict = {}
     for pid, p in room.players.items():
@@ -230,11 +239,11 @@ def get_room_state():
             player_data['race'] = RACE_TRANSLATIONS[room.language].get(p.race, p.race)
             player_data['class_name'] = CLASS_TRANSLATIONS[room.language].get(p.class_name, p.class_name)
         players_dict[pid] = player_data
-    
+
     # Convert room state with translated player data
     room_data = room.model_dump()  # Use model_dump instead of dict
     room_data['players'] = players_dict
-    
+
     response_data = {
         'status': 'success',
         'room': room_data,
@@ -242,9 +251,9 @@ def get_room_state():
         'messages': messages,
         'last_message_id': messages[-1].get('id') if messages else None
     }
-    
+
     logging.debug(f"Room state response - Players: {list(players_dict.keys())}")
-    
+
     return jsonify(response_data)
 
 @app.route('/get_races')
@@ -274,73 +283,54 @@ def get_classes():
 @app.route('/choose_character', methods=['POST'])
 def choose_character():
     if 'room_id' not in session or 'player_id' not in session:
-        logging.error("Session missing room_id or player_id")
         return jsonify({'error': 'Not in a room'}), 400
     
-    data = request.json
-    player_id = session['player_id']
     room_id = session['room_id']
-    
-    logging.info(f"Received character creation request - Room: {room_id}, Player: {player_id}, Data: {data}")
+    player_id = session['player_id']
     
     room = room_manager.get_room(room_id)
     if not room:
-        logging.error(f"Room {room_id} not found")
         return jsonify({'error': 'Room not found'}), 404
     
     player = room.players.get(player_id)
     if not player:
-        logging.error(f"Player {player_id} not found in room {room_id}")
         return jsonify({'error': 'Player not found'}), 404
     
-    # Check if player already has a character
-    if player.race and player.class_name:
-        logging.error(f"Player {player.name} ({player_id}) already has a character")
-        return jsonify({
-            'status': 'error',
-            'error': 'Character already created'
-        }), 400
-    
     try:
-        # Convert translated names back to English
+        data = request.get_json()
+        race = data.get('race')
+        class_name = data.get('class')
+        
+        logging.info(f"Received character creation request - Room: {room_id}, Player: {player_id}, Data: {data}")
+        
+        # Convert race and class names if needed
         language = room.language
-        race_translations = RACE_TRANSLATIONS[language]
-        class_translations = CLASS_TRANSLATIONS[language]
+        logging.info(f"Converting from {language}. Race: {race}, Class: {class_name}")
         
-        logging.info(f"Converting from {language}. Race: {data['race']}, Class: {data['class']}")
-        
-        # Find English names by matching translated names
-        selected_race = None
-        selected_class = None
-        
-        for eng_name, translated_name in race_translations.items():
-            if translated_name == data['race']:
-                selected_race = eng_name
+        # Convert localized names to English if needed
+        for eng_name, local_name in RACE_TRANSLATIONS[language].items():
+            if local_name == race:
+                race = eng_name
                 break
         
-        for eng_name, translated_name in class_translations.items():
-            if translated_name == data['class']:
-                selected_class = eng_name
+        for eng_name, local_name in CLASS_TRANSLATIONS[language].items():
+            if local_name == class_name:
+                class_name = eng_name
                 break
         
-        if not selected_race or not selected_class:
-            logging.error(f"Invalid race/class selection. Race: {data['race']}, Class: {data['class']}")
-            return jsonify({
-                'status': 'error',
-                'error': 'Invalid race or class selection'
-            }), 400
+        logging.info(f"Converted names - Race: {race}, Class: {class_name}")
         
-        logging.info(f"Converted names - Race: {selected_race}, Class: {selected_class}")
+        # Update player state
+        player.race = race
+        player.class_name = class_name
         
-        # Initialize character with English names
+        # Initialize character stats
         game = DnDGame(language=room.language)
-        game.player_race = selected_race
-        game.player_class = selected_class
+        game.player_race = race
+        game.player_class = class_name
         game.initialize_character()
         
-        # Store English names in player state
-        player.race = selected_race
-        player.class_name = selected_class
+        # Copy stats to player state
         player.health_points = game.health_points
         player.gold = game.gold
         player.damage = game.damage
@@ -348,221 +338,278 @@ def choose_character():
         player.magic_1lvl = game.magic_1lvl
         player.magic_2lvl = game.magic_2lvl
         
+        # Generate opening scene
+        response = game.start_game()
+        
+        # Add opening scene to room messages
+        add_room_message(room_id, "start_game", "system")
+        if response.get('message'):
+            add_room_message(room_id, response['message'], 'dm')
+        
+        # Update room state
         room_manager.update_room(room)
-        
-        # Use translated names in the message
-        add_room_message(
-            room_id,
-            f"{player.name} created a {data['race']} {data['class']}",
-            'system'
-        )
-        
-        # Get or generate opening scene
-        opening_scene_text = None
-        room_messages_list = room_messages.get(room_id, [])
-        for msg in room_messages_list:
-            if msg['type'] == 'dm' and 'tavern' in msg['message'].lower():
-                opening_scene_text = msg['message']
-                break
-        
-        # Generate opening scene only if this is the host and no opening scene exists
-        if not opening_scene_text and player_id == room.host_id:
-            opening_scene_response = game.start_game()
-            opening_scene_text = opening_scene_response.get('message', 'Welcome to your adventure!')
-            add_room_message(room_id, opening_scene_text, 'dm')
-        elif not opening_scene_text:
-            opening_scene_text = 'Welcome to your adventure!'
         
         logging.info(f"Character created successfully - Player: {player.name} ({player_id})")
         
         return jsonify({
             'status': 'success',
-            'player': player.model_dump(),
-            'opening_scene': opening_scene_text
+            'player': player.dict(),
+            'room': room.dict(),
+            'message': response.get('message', '')
         })
+        
     except Exception as e:
-        logging.error(f"Error in choose_character: {str(e)}", exc_info=True)
-        return jsonify({
-            'status': 'error',
-            'error': str(e)
-        }), 400
+        logging.error(f"Error creating character: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/game_action', methods=['POST'])
 def game_action():
     if 'room_id' not in session or 'player_id' not in session:
         return jsonify({'error': 'Not in a room'}), 400
     
-    room = room_manager.get_room(session['room_id'])
-    if not room:
-        return jsonify({'error': 'Room not found'}), 404
+    room_id = session['room_id']
+    player_id = session['player_id']
     
-    player = room.players.get(session['player_id'])
-    if not player:
-        return jsonify({'error': 'Player not found'}), 404
+    # Get room lock
+    room_lock = get_room_lock(room_id)
     
-    try:
-        data = request.get_json()
-        action = data.get('action')
+    with room_lock:
+        room = room_manager.get_room(room_id)
+        if not room:
+            return jsonify({'error': 'Room not found'}), 404
         
-        game = DnDGame(language=room.language)  # Use room's language
-        # Set game state from player state
-        game.player_race = player.race
-        game.player_class = player.class_name
-        game.health_points = player.health_points
-        game.gold = player.gold
-        game.damage = player.damage
-        game.level = player.level
-        game.magic_1lvl = player.magic_1lvl
-        game.magic_2lvl = player.magic_2lvl
-        game.in_combat = room.in_combat
-        if room.in_combat:
-            game.enemy = {"name": room.enemy_name, "hp": room.enemy_health} if room.enemy_name else None
+        player = room.players.get(player_id)
+        if not player:
+            return jsonify({'error': 'Player not found'}), 404
         
-        response = game.send_message(action)
-        
-        # Add player's action to room messages
-        add_room_message(session['room_id'], action, 'player', player.name)
-        if response.get('message'):
-            add_room_message(session['room_id'], response['message'], 'dm')
-        
-        # Update player state
-        player.health_points = game.health_points
-        player.gold = game.gold
-        player.damage = game.damage
-        player.level = game.level
-        player.magic_1lvl = game.magic_1lvl
-        player.magic_2lvl = game.magic_2lvl
-        
-        # Update room state
-        room.in_combat = game.in_combat
-        if game.enemy:
-            room.enemy_name = game.enemy["name"]
-            room.enemy_health = game.enemy["hp"]
-        else:
-            room.enemy_name = None
-            room.enemy_health = None
-        
-        room_manager.update_room(room)
-        
-        return jsonify({
-            'response': response.get('message', ''),
-            'player': player.dict(),
-            'room': room.dict(),
-            'dice_needed': response.get('dice_roll_needed', False),
-            'dice_type': response.get('dice_type', None),
-            'required_action': response.get('required_action', None),
-            'combat_result': response.get('combat_result', None)
-        })
-        
-    except Exception as e:
-        return jsonify({'error': str(e)})
+        try:
+            data = request.get_json()
+            action = data.get('action')
+            
+            game = DnDGame(language=room.language)
+            # Set game state from room state
+            game.in_combat = room.in_combat
+            if room.in_combat:
+                game.enemy = {"name": room.enemy_name, "hp": room.enemy_health} if room.enemy_name else None
+            
+            # Convert room messages to RoomMessage objects if not already
+            if not hasattr(room, 'message_history'):
+                room.message_history = []
+                for msg in room_messages.get(room_id, []):
+                    room.message_history.append({
+                        'type': msg.get('type', 'system'),
+                        'user_message': msg.get('message', ''),
+                        'dm_response': msg.get('dm_response', ''),
+                        'player_name': msg.get('player_name'),
+                        'timestamp': msg.get('timestamp', datetime.now())
+                    })
+            
+            # Send message with room state context
+            response = game.send_message(action, player_id=player_id, room_state=room)
+            
+            # Add player's action to room messages
+            add_room_message(room_id, action, 'player', player.name)
+            if response.get('message'):
+                add_room_message(room_id, response['message'], 'dm')
+            
+            # Update player states based on players_update
+            for player_update in response.get('players_update', []):
+                target_pid = player_update.get('player_id')
+                if not target_pid or target_pid not in room.players:
+                    continue
+
+                target_player = room.players[target_pid]
+
+                # Update player stats if provided
+                if 'health_points' in player_update:
+                    target_player.health_points = player_update['health_points']
+                if 'gold' in player_update:
+                    target_player.gold = player_update['gold']
+                if 'damage' in player_update:
+                    target_player.damage = player_update['damage']
+                if 'level' in player_update:
+                    target_player.level = player_update['level']
+                if 'magic_1lvl' in player_update:
+                    target_player.magic_1lvl = player_update['magic_1lvl']
+                if 'magic_2lvl' in player_update:
+                    target_player.magic_2lvl = player_update['magic_2lvl']
+                if 'dice_roll_needed' in player_update:
+                    target_player.dice_roll_needed = player_update['dice_roll_needed']
+                if 'dice_type' in player_update:
+                    target_player.dice_type = player_update['dice_type']
+            
+            # Update room combat state if needed
+            combat_result = response.get('combat_result', {})
+            if combat_result:
+                if combat_result.get('damage_dealt') and room.enemy_health:
+                    room.enemy_health -= combat_result['damage_dealt']
+                    if room.enemy_health <= 0:
+                        room.in_combat = False
+                        room.enemy_name = None
+                        room.enemy_health = None
+            
+            # Update room state
+            room_manager.update_room(room)
+            
+            # Get dice roll info
+            dice_roll = response.get('dice_roll', {})
+            dice_roll_needed = dice_roll.get('required', False)
+            dice_type = dice_roll.get('type')
+            
+            return jsonify({
+                'response': response.get('message', ''),
+                'player': player.dict(),
+                'room': room.dict(),
+                'dice_needed': dice_roll_needed,
+                'dice_type': dice_type,
+                'combat_result': combat_result
+            })
+            
+        except Exception as e:
+            logging.error(f"Error in game_action: {str(e)}", exc_info=True)
+            return jsonify({'error': str(e)})
 
 @app.route('/roll_dice', methods=['POST'])
 def roll_dice():
     if 'room_id' not in session or 'player_id' not in session:
         return jsonify({'error': 'Not in a room'}), 400
     
-    room = room_manager.get_room(session['room_id'])
-    if not room:
-        return jsonify({'error': 'Room not found'}), 404
+    room_id = session['room_id']
+    player_id = session['player_id']
     
-    player = room.players.get(session['player_id'])
-    if not player:
-        return jsonify({'error': 'Player not found'}), 404
+    # Get room lock
+    room_lock = get_room_lock(room_id)
     
-    game = DnDGame(language=room.language)
-    
-    data = request.get_json()
-    dice_type = data.get('dice_type', 'd20')
-    
-    roll_result = game.roll_dice(dice_type)
-    
-    if roll_result is None:
-        return jsonify({'error': 'Invalid dice type'}), 400
-    
-    # Add dice roll to room messages
-    add_room_message(
-        session['room_id'],
-        f"rolled {roll_result} on {dice_type}",
-        'player',
-        player.name
-    )
-    
-    # Update player's last roll
-    player.last_dice_roll = roll_result
-    room_manager.update_room(room)
-    
-    return jsonify({
-        'roll': roll_result,
-        'dice_type': dice_type,
-        'player': player.dict()
-    })
+    with room_lock:
+        room = room_manager.get_room(room_id)
+        if not room:
+            return jsonify({'error': 'Room not found'}), 404
+        
+        player = room.players.get(player_id)
+        if not player:
+            return jsonify({'error': 'Player not found'}), 404
+        
+        game = DnDGame(language=room.language)
+        
+        data = request.get_json()
+        dice_type = data.get('dice_type', 'd20')
+        
+        roll_result = game.roll_dice(dice_type)
+        
+        if roll_result is None:
+            return jsonify({'error': 'Invalid dice type'}), 400
+        
+        # Add dice roll to room messages
+        add_room_message(
+            room_id,
+            f"rolled {roll_result} on {dice_type}",
+            'player',
+            player.name
+        )
+        
+        # Update player's last roll
+        player.last_dice_roll = roll_result
+        player.dice_roll_needed = False
+        player.dice_type = None
+        room_manager.update_room(room)
+        
+        return jsonify({
+            'roll': roll_result,
+            'dice_type': dice_type,
+            'player': player.dict()
+        })
 
 @app.route('/process_roll', methods=['POST'])
 def process_roll():
     if 'room_id' not in session or 'player_id' not in session:
         return jsonify({'error': 'Not in a room'}), 400
     
-    room = room_manager.get_room(session['room_id'])
-    if not room:
-        return jsonify({'error': 'Room not found'}), 404
+    room_id = session['room_id']
+    player_id = session['player_id']
     
-    player = room.players.get(session['player_id'])
-    if not player:
-        return jsonify({'error': 'Player not found'}), 404
+    # Get room lock
+    room_lock = get_room_lock(room_id)
     
-    data = request.get_json()
-    roll_value = data.get('roll')
-    dice_type = data.get('dice_type')
-    
-    game = DnDGame(language=room.language)
-    # Set game state from player state
-    game.player_race = player.race
-    game.player_class = player.class_name
-    game.health_points = player.health_points
-    game.gold = player.gold
-    game.damage = player.damage
-    game.level = player.level
-    game.magic_1lvl = player.magic_1lvl
-    game.magic_2lvl = player.magic_2lvl
-    game.in_combat = room.in_combat
-    if room.in_combat:
-        game.enemy = {"name": room.enemy_name, "hp": room.enemy_health} if room.enemy_name else None
-    
-    response = game.send_message(f"I rolled {roll_value} on {dice_type}")
-    
-    if response.get('message'):
-        add_room_message(session['room_id'], response['message'], 'dm')
-    
-    # Update player state
-    player.health_points = game.health_points
-    player.gold = game.gold
-    player.damage = game.damage
-    player.level = game.level
-    player.magic_1lvl = game.magic_1lvl
-    player.magic_2lvl = game.magic_2lvl
-    player.last_dice_roll = None  # Reset last roll
-    
-    # Update room state
-    room.in_combat = game.in_combat
-    if game.enemy:
-        room.enemy_name = game.enemy["name"]
-        room.enemy_health = game.enemy["hp"]
-    else:
-        room.enemy_name = None
-        room.enemy_health = None
-    
-    room_manager.update_room(room)
-    
-    return jsonify({
-        'message': response.get('message', ''),
-        'player': player.dict(),
-        'room': room.dict(),
-        'dice_roll_needed': response.get('dice_roll_needed', False),
-        'dice_type': response.get('dice_type', dice_type),
-        'combat_result': response.get('combat_result'),
-        'state_update': response.get('state_update')
-    })
+    with room_lock:
+        room = room_manager.get_room(room_id)
+        if not room:
+            return jsonify({'error': 'Room not found'}), 404
+        
+        player = room.players.get(player_id)
+        if not player:
+            return jsonify({'error': 'Player not found'}), 404
+        
+        data = request.get_json()
+        roll_value = data.get('roll')
+        dice_type = data.get('dice_type')
+        
+        game = DnDGame(language=room.language)
+        
+        # Send message with room state context
+        response = game.send_message(
+            f"I rolled {roll_value} on {dice_type}",
+            player_id=player_id,
+            room_state=room
+        )
+        
+        if response.get('message'):
+            add_room_message(room_id, response['message'], 'dm')
+        
+        # Update player states based on players_update
+        for player_update in response.get('players_update', []):
+            target_pid = player_update.get('player_id')
+            if not target_pid or target_pid not in room.players:
+                continue
+            
+            target_player = room.players[target_pid]
+            
+            # Update player stats if provided
+            if 'health_points' in player_update:
+                target_player.health_points = player_update['health_points']
+            if 'gold' in player_update:
+                target_player.gold = player_update['gold']
+            if 'damage' in player_update:
+                target_player.damage = player_update['damage']
+            if 'level' in player_update:
+                target_player.level = player_update['level']
+            if 'magic_1lvl' in player_update:
+                target_player.magic_1lvl = player_update['magic_1lvl']
+            if 'magic_2lvl' in player_update:
+                target_player.magic_2lvl = player_update['magic_2lvl']
+            if 'dice_roll_needed' in player_update:
+                target_player.dice_roll_needed = player_update['dice_roll_needed']
+            if 'dice_type' in player_update:
+                target_player.dice_type = player_update['dice_type']
+        
+        # Update room combat state if needed
+        combat_result = response.get('combat_result', {})
+        if combat_result:
+            if combat_result.get('damage_dealt') and room.enemy_health:
+                room.enemy_health -= combat_result['damage_dealt']
+                if room.enemy_health <= 0:
+                    room.in_combat = False
+                    room.enemy_name = None
+                    room.enemy_health = None
+        
+        # Reset last roll after processing
+        player.last_dice_roll = None
+        
+        # Update room state
+        room_manager.update_room(room)
+        
+        # Get dice roll info for next action
+        dice_roll = response.get('dice_roll', {})
+        dice_roll_needed = dice_roll.get('required', False)
+        dice_type = dice_roll.get('type')
+        
+        return jsonify({
+            'message': response.get('message', ''),
+            'player': player.dict(),
+            'room': room.dict(),
+            'dice_needed': dice_roll_needed,
+            'dice_type': dice_type,
+            'combat_result': combat_result
+        })
 
 @app.route('/save_game', methods=['POST'])
 def save_game():
@@ -605,26 +652,61 @@ def add_room_message(room_id: str, message: str, message_type: str = 'system', p
     """Add a message to the room's message history with an ID"""
     if room_id not in room_messages:
         room_messages[room_id] = []
-    
+
     # Get the next message ID
     next_id = len(room_messages[room_id]) + 1
-    
+
+    # Create message data based on type
+    if message_type == 'player':
+        user_message = message
+        dm_response = ""  # Will be filled by DM's response
+    elif message_type == 'dm':
+        # Find the last player message and update its dm_response
+        if room_messages[room_id]:
+            last_msg = room_messages[room_id][-1]
+            if last_msg['type'] == 'player':
+                last_msg['dm_response'] = message
+                return  # Don't add a new message
+        # If no player message found, create a new DM message
+        user_message = ""
+        dm_response = message
+    else:  # system message
+        user_message = message
+        dm_response = message
+
     message_data = {
         'id': next_id,
         'message': message,
         'type': message_type,
-        'timestamp': datetime.now().isoformat()
+        'timestamp': datetime.now().isoformat(),
+        'user_message': user_message,
+        'dm_response': dm_response,
+        'player_name': player_name if message_type == 'player' else None
     }
-    
-    # Add player name if provided and message type is 'player'
-    if message_type == 'player' and player_name:
-        message_data['player_name'] = player_name
-    
+
     room_messages[room_id].append(message_data)
-    
+
     # Keep only the last 100 messages
     if len(room_messages[room_id]) > 100:
         room_messages[room_id] = room_messages[room_id][-100:]
+
+    # Also update room's message history
+    room = room_manager.get_room(room_id)
+    if room:
+        if not hasattr(room, 'message_history'):
+            room.message_history = []
+        room.message_history.append({
+            'type': message_type,
+            'user_message': user_message,
+            'dm_response': dm_response,
+            'player_name': player_name,
+            'timestamp': datetime.now()
+        })
+        # Keep only last 100 messages
+        if len(room.message_history) > 100:
+            room.message_history = room.message_history[-100:]
+        room_manager.update_room(room)
+
 
 def get_new_messages(room_id: str, last_message_id: str = None):
     """Get messages newer than last_message_id"""
