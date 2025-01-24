@@ -4,10 +4,12 @@ from dotenv import load_dotenv
 import os
 import json
 import sys
-from gemini_schema import GameState
+from gemini_schema import PlayerState, RoomState
 import logging
 from prompts import SYSTEM_PROMPTS, GAME_START_PROMPTS
 from character_config import get_race_stats, get_class_bonuses, get_enemy, ENEMIES
+from pathlib import Path
+from logging.handlers import TimedRotatingFileHandler
 
 class DnDGame:
     def __init__(self, language="en"):
@@ -39,24 +41,64 @@ class DnDGame:
         # Save directory setup
         self.save_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saves")
         os.makedirs(self.save_folder, exist_ok=True)
+        
+        # Initialize chat immediately
+        self.initialize_chat()
 
     def setup_logging(self):
         """Set up logging configuration"""
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler('game.log'),
-                logging.StreamHandler()
-            ]
-        )
+        # Get the root logger that was configured in app.py
+        root_logger = logging.getLogger()
+        
+        # Create a child logger for this class
         self.logger = logging.getLogger(__name__)
+        
+        # If root logger has no handlers (app.py logging not initialized),
+        # set up basic logging
+        if not root_logger.handlers:
+            # Create logs directory if it doesn't exist
+            logs_dir = Path("logs")
+            logs_dir.mkdir(exist_ok=True)
+            
+            # Create formatters
+            detailed_formatter = logging.Formatter(
+                '%(asctime)s - %(levelname)s - %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            )
+            
+            # Create file handler with daily rotation
+            log_file = logs_dir / "game.log"
+            file_handler = TimedRotatingFileHandler(
+                log_file,
+                when="midnight",
+                interval=1,
+                backupCount=30  # Keep 30 days of logs
+            )
+            file_handler.setLevel(logging.INFO)
+            file_handler.setFormatter(detailed_formatter)
+            file_handler.addFilter(GetRoomStateFilter())
+            
+            # Create console handler
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(logging.DEBUG)
+            console_handler.setFormatter(detailed_formatter)
+            console_handler.addFilter(GetRoomStateFilter())
+            
+            # Configure root logger
+            root_logger.setLevel(logging.DEBUG)
+            root_logger.addHandler(file_handler)
+            root_logger.addHandler(console_handler)
 
     def initialize_chat(self):
         """Initialize chat with language-specific system prompt"""
         api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            self.logger.error("GEMINI_API_KEY not found in environment variables")
+            raise ValueError("GEMINI_API_KEY not found in environment variables")
+            
         system_prompt = SYSTEM_PROMPTS.get(self.language, SYSTEM_PROMPTS["en"])
         self.chat = Gemini(API_KEY=api_key, system_instruction=system_prompt)
+        self.logger.info(f"Chat initialized with language: {self.language}")
 
     def update_system_prompt(self):
         """Update system prompt with current character stats"""
@@ -72,7 +114,7 @@ class DnDGame:
         return self.chat.send_message(f"Remember these player stats and always respond in {self.language} language: {current_stats}")
     
     def add_to_history(self, user_message, dm_response):
-        """Сохраняет последние сообщения в пределах context_limit"""
+        """Save last messages within context_limit"""
         self.message_history.append({"user": user_message, "dm": dm_response})
         if len(self.message_history) > self.context_limit:
             self.message_history.pop(0)
@@ -151,7 +193,7 @@ class DnDGame:
         Last Roll: {self.last_dice_roll if self.last_dice_roll is not None else 'None'}
         """
         
-        # Добавляем информацию о последнем броске в контекст
+        # Add last roll information to context
         if "rolled" in message.lower():
             try:
                 roll_value = int(message.split()[2])
@@ -439,8 +481,9 @@ class DnDGame:
 
     def initialize_character(self):
         """Initialize character stats based on race and class"""
-        if not hasattr(self, 'chat'):
-            self.initialize_chat()
+        if not self.player_race or not self.player_class:
+            self.logger.error("Cannot initialize character without race and class")
+            raise ValueError("Race and class must be set before initializing character")
             
         # Get base stats from race
         race_stats = get_race_stats(self.player_race)
@@ -458,6 +501,7 @@ class DnDGame:
         self.magic_2lvl = max(0, class_bonuses['magic'] - 1)  # One less 2nd level slot than 1st level
         
         self.level = 1
+        self.logger.info(f"Character initialized: {self.player_race} {self.player_class}")
         self.update_system_prompt()
 
     def get_state_dict(self):

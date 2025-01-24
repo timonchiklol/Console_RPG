@@ -20,4 +20,5 @@ saves/
 *.json
 
 # logs
-game.log
+logs/
+*.log
