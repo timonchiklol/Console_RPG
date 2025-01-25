@@ -8,6 +8,25 @@
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap" rel="stylesheet">
     <style>
+        * {
+            font-family: Arial, sans-serif !important;
+            font-style: normal !important;
+        }
+        
+        h1, h2, h3, h4, h5, h6,
+        .character-creation,
+        .race-selection,
+        .class-selection,
+        .game-text,
+        .message-text,
+        .button-text,
+        .stats-text,
+        .dialog-text {
+            font-family: Arial, sans-serif !important;
+            font-style: normal !important;
+            font-weight: normal !important;
+        }
+        
         .medieval {
             font-family: 'MedievalSharp', cursive;
         }
@@ -28,6 +47,41 @@
         }
         html[lang="ru"] {
             font-family: 'MedievalSharp', cursive, Arial, sans-serif;
+        }
+        /* Стили для мобильных устройств */
+        @media screen and (max-width: 768px) {
+            /* Контейнер для кнопок */
+            .button-container {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                width: 100%;
+                padding: 10px;
+            }
+            
+            /* Стили для кнопок */
+            button, .button {
+                width: 100% !important;
+                margin: 5px 0 !important;
+                padding: 12px !important;
+                font-size: 16px !important;
+                text-align: center !important;
+                border-radius: 8px !important;
+            }
+            
+            /* Контейнер для выбора расы/класса */
+            .selection-container {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 10px;
+                padding: 10px;
+            }
+            
+            /* Каждая опция выбора */
+            .selection-option {
+                width: 100%;
+                margin: 0;
+            }
         }
     </style>
 </head>
