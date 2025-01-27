@@ -4,10 +4,18 @@ from dotenv import load_dotenv
 import os
 import json
 import sys
-from gemini_schema import GameState
+from gemini_schema import PlayerState, RoomState
 import logging
 from prompts import SYSTEM_PROMPTS, GAME_START_PROMPTS
 from character_config import get_race_stats, get_class_bonuses, get_enemy, ENEMIES
+from pathlib import Path
+from logging.handlers import TimedRotatingFileHandler
+from datetime import datetime
+
+# Add this at the top of the file, before the DnDGame class
+class GetRoomStateFilter(logging.Filter):
+    def filter(self, record):
+        return "GET /get_room_state" not in record.getMessage()
 
 class DnDGame:
     def __init__(self, language="en"):
@@ -39,24 +47,64 @@ class DnDGame:
         # Save directory setup
         self.save_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saves")
         os.makedirs(self.save_folder, exist_ok=True)
+        
+        # Initialize chat immediately
+        self.initialize_chat()
 
     def setup_logging(self):
         """Set up logging configuration"""
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler('game.log'),
-                logging.StreamHandler()
-            ]
-        )
+        # Get the root logger that was configured in app.py
+        root_logger = logging.getLogger()
+        
+        # Create a child logger for this class
         self.logger = logging.getLogger(__name__)
+        
+        # If root logger has no handlers (app.py logging not initialized),
+        # set up basic logging
+        if not root_logger.handlers:
+            # Create logs directory if it doesn't exist
+            logs_dir = Path("logs")
+            logs_dir.mkdir(exist_ok=True)
+            
+            # Create formatters
+            detailed_formatter = logging.Formatter(
+                '%(asctime)s - %(levelname)s - %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            )
+            
+            # Create file handler with daily rotation
+            log_file = logs_dir / "game.log"
+            file_handler = TimedRotatingFileHandler(
+                log_file,
+                when="midnight",
+                interval=1,
+                backupCount=30  # Keep 30 days of logs
+            )
+            file_handler.setLevel(logging.INFO)
+            file_handler.setFormatter(detailed_formatter)
+            file_handler.addFilter(GetRoomStateFilter())
+            
+            # Create console handler
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(logging.DEBUG)
+            console_handler.setFormatter(detailed_formatter)
+            console_handler.addFilter(GetRoomStateFilter())
+            
+            # Configure root logger
+            root_logger.setLevel(logging.DEBUG)
+            root_logger.addHandler(file_handler)
+            root_logger.addHandler(console_handler)
 
     def initialize_chat(self):
         """Initialize chat with language-specific system prompt"""
         api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            self.logger.error("GEMINI_API_KEY not found in environment variables")
+            raise ValueError("GEMINI_API_KEY not found in environment variables")
+            
         system_prompt = SYSTEM_PROMPTS.get(self.language, SYSTEM_PROMPTS["en"])
         self.chat = Gemini(API_KEY=api_key, system_instruction=system_prompt)
+        self.logger.info(f"Chat initialized with language: {self.language}")
 
     def update_system_prompt(self):
         """Update system prompt with current character stats"""
@@ -72,7 +120,7 @@ class DnDGame:
         return self.chat.send_message(f"Remember these player stats and always respond in {self.language} language: {current_stats}")
     
     def add_to_history(self, user_message, dm_response):
-        """Сохраняет последние сообщения в пределах context_limit"""
+        """Save last messages within context_limit"""
         self.message_history.append({"user": user_message, "dm": dm_response})
         if len(self.message_history) > self.context_limit:
             self.message_history.pop(0)
@@ -134,25 +182,35 @@ class DnDGame:
         self.dice_roll_needed = state_update.get('dice_roll_needed', False)
         self.dice_type = state_update.get('dice_type')
 
-    def send_message(self, message):
+    def send_message(self, message, player_id=None, room_state=None):
         """Send message and get structured response"""
         self.logger.info(f"\nSending message: {message}")
         
-        # Get current stats for context
-        current_stats = f"""Current player stats:
-        Race: {self.player_race}
-        Class: {self.player_class}
-        Level: {self.level}
-        HP: {self.health_points}
-        Damage: {self.damage}
-        Gold: {self.gold}
-        Magic slots (1st/2nd level): {self.magic_1lvl}/{self.magic_2lvl}
-        In Combat: {self.in_combat}
-        Last Roll: {self.last_dice_roll if self.last_dice_roll is not None else 'None'}
-        """
+        # Build context with all players' stats if room_state is provided
+        current_stats = "Current player stats:\n"
+        if room_state:
+            for pid, player in room_state.players.items():
+                current_stats += f"\nPlayer {player.name} ({pid}):\n"
+                current_stats += f"Race: {player.race}\n"
+                current_stats += f"Class: {player.class_name}\n"
+                current_stats += f"Level: {player.level}\n"
+                current_stats += f"HP: {player.health_points}\n"
+                current_stats += f"Damage: {player.damage}\n"
+                current_stats += f"Gold: {player.gold}\n"
+                current_stats += f"Magic slots (1st/2nd level): {player.magic_1lvl}/{player.magic_2lvl}\n"
+                if pid == player_id:
+                    current_stats += f"Last Roll: {player.last_dice_roll if player.last_dice_roll is not None else 'None'}\n"
+        else:
+            self.logger.error("No room_state provided to send_message")
+            return {
+                'message': 'Error: Game state not found',
+                'players_update': [],
+                'combat_result': None,
+                'dice_roll': None
+            }
         
-        # Добавляем информацию о последнем броске в контекст
-        if "rolled" in message.lower():
+        # Add last roll information to context
+        if "rolled" in message.lower() and player_id and room_state:
             try:
                 roll_value = int(message.split()[2])
                 current_stats += f"\nLast roll result: {roll_value}"
@@ -163,16 +221,40 @@ class DnDGame:
             except:
                 pass
         
-        if self.in_combat and self.enemy:
-            current_stats += f"Enemy: {self.enemy['name']} (HP: {self.enemy['hp']})"
+        if room_state and room_state.in_combat:
+            current_stats += f"\nRoom Combat State:"
+            current_stats += f"\nEnemy: {room_state.enemy_name} (HP: {room_state.enemy_health})"
+        elif self.in_combat and self.enemy:
+            current_stats += f"\nEnemy: {self.enemy['name']} (HP: {self.enemy['hp']})"
         
         self.logger.debug(f"Current stats:\n{current_stats}")
         
-        # Get limited context from message history
+        # Get context from room's message history
         context = "Previous messages:\n"
-        start_idx = max(0, len(self.message_history) - self.context_limit)
-        for msg in self.message_history[start_idx:]:
-            context += f"Player: {msg['user']}\nDM: {msg['dm']}\n"
+        if room_state and hasattr(room_state, 'message_history'):
+            # Get last 10 messages from room history
+            for msg in room_state.message_history[-10:]:
+                if isinstance(msg, dict):
+                    # Handle dictionary format
+                    if msg.get('type') == 'player':
+                        context += f"{msg.get('player_name', 'Player')}: {msg.get('user_message', '')}\n"
+                        if msg.get('dm_response'):
+                            context += f"DM: {msg.get('dm_response')}\n"
+                    elif msg.get('type') == 'dm':
+                        context += f"DM: {msg.get('message', '')}\n"
+                    elif msg.get('type') == 'system':
+                        context += f"System: {msg.get('message', '')}\n"
+                else:
+                    # Handle RoomMessage objects
+                    if msg.player_name:
+                        context += f"{msg.player_name}: {msg.user_message}\n"
+                    else:
+                        context += f"Player: {msg.user_message}\n"
+                    if msg.dm_response:
+                        context += f"DM: {msg.dm_response}\n"
+        else:
+            self.logger.warning("No message history found in room_state")
+            context += "No previous messages available.\n"
         
         full_message = f"{current_stats}\n{context}\nCurrent message: {message}"
         self.logger.debug(f"Full message to Gemini:\n{full_message}")
@@ -187,7 +269,7 @@ class DnDGame:
             message_text = "I don't understand. Please try again."
             self.logger.warning("Empty message from Gemini")
         
-        # Handle dice roll requests - check both new and old format
+        # Handle dice roll requests
         dice_roll = response.get('dice_roll', {})
         dice_roll_needed = False
         dice_type = None
@@ -199,76 +281,60 @@ class DnDGame:
                 reason = dice_roll.get('reason', 'A dice roll is needed')
                 message_text += f"\n\n{reason}"
                 self.logger.info(f"Dice roll required: {dice_type} - {reason}")
-        elif response.get('required_action') == "roll_dice":
-            # Fallback for old format
-            dice_roll_needed = True
-            dice_type = response.get('state_update', {}).get('dice_type', 'd20')
-            self.logger.info(f"Dice roll required (fallback): {dice_type}")
         
-        # Update dice roll state
-        self.dice_roll_needed = dice_roll_needed
-        self.dice_type = dice_type
-        
-        # Handle combat results first
-        if response.get('combat_result'):
-            combat_result = response['combat_result']
+        # Handle combat results
+        combat_result = response.get('combat_result', {})
+        if combat_result:
             self.logger.info(f"Combat result: {combat_result}")
             
-            if combat_result.get('damage_dealt') and self.enemy:
+            if room_state:
+                if combat_result.get('damage_dealt') and room_state.enemy_health is not None:
+                    old_enemy_hp = room_state.enemy_health
+                    room_state.enemy_health -= combat_result['damage_dealt']
+                    self.logger.info(f"Enemy HP changed from {old_enemy_hp} to {room_state.enemy_health}")
+            elif self.enemy and combat_result.get('damage_dealt'):
                 old_enemy_hp = self.enemy["hp"]
                 self.enemy["hp"] -= combat_result['damage_dealt']
                 self.logger.info(f"Enemy HP changed from {old_enemy_hp} to {self.enemy['hp']}")
-                
-            if combat_result.get('damage_taken'):
-                old_hp = self.health_points
-                self.health_points -= combat_result['damage_taken']
-                self.logger.info(f"Player HP changed from {old_hp} to {self.health_points}")
-            
-            # Check if combat should end
-            if self.enemy and self.enemy["hp"] <= 0:
-                self.in_combat = False
-                self.enemy = None
-                self.logger.info("Combat ended - enemy defeated")
-            elif self.health_points <= 0:
-                self.in_combat = False
-                message_text += "\nYou have been defeated! Game Over!"
-                self.logger.info("Combat ended - player defeated")
         
-        # Update non-combat state if provided
-        state_update = response.get('state_update', {})
-        if state_update:
-            self.logger.info(f"State update received: {state_update}")
-            # Remove health updates if they were handled in combat_result
-            if response.get('combat_result'):
-                if 'health_points' in state_update:
-                    self.logger.info("Skipping health update from state_update as it was handled in combat_result")
-                    state_update.pop('health_points')
-                if 'enemy_health' in state_update:
-                    self.logger.info("Skipping enemy health update from state_update as it was handled in combat_result")
-                    state_update.pop('enemy_health')
-            
-            # Always include dice roll state in state update
-            state_update['dice_roll_needed'] = dice_roll_needed
-            state_update['dice_type'] = dice_type
-            
-            self.update_state(state_update)
-        else:
-            # If no state update, create one for dice roll state
-            state_update = {
+        # Handle player updates
+        players_update = response.get('players_update', [])
+        if not players_update and player_id:
+            # Create a single player update for backward compatibility
+            players_update = [{
+                'player_id': player_id,
+                'health_points': self.health_points,
+                'gold': self.gold,
+                'damage': self.damage,
+                'level': self.level,
+                'magic_1lvl': self.magic_1lvl,
+                'magic_2lvl': self.magic_2lvl,
+                'in_combat': self.in_combat,
                 'dice_roll_needed': dice_roll_needed,
                 'dice_type': dice_type
-            }
-            self.update_state(state_update)
+            }]
         
-        # Add to history and return formatted response
-        self.add_to_history(message, message_text)
+        # Add to room's message history if available
+        if room_state and hasattr(room_state, 'message_history'):
+            player_name = room_state.players[player_id].name if player_id in room_state.players else None
+            room_state.message_history.append({
+                'type': 'player',
+                'user_message': message,
+                'dm_response': message_text,
+                'player_name': player_name,
+                'timestamp': datetime.now()
+            })
+            # Keep only last 100 messages
+            if len(room_state.message_history) > 100:
+                room_state.message_history = room_state.message_history[-100:]
+        else:
+            self.logger.warning("No message history found in room_state")
         
         return {
             'message': message_text,
-            'dice_roll_needed': dice_roll_needed,
-            'dice_type': dice_type,
-            'state_update': state_update,
-            'combat_result': response.get('combat_result')
+            'players_update': players_update,
+            'combat_result': combat_result,
+            'dice_roll': dice_roll
         }
 
     def start_game(self):
@@ -277,7 +343,7 @@ class DnDGame:
             race=self.player_race,
             class_name=self.player_class
         )
-        return self.send_message(start_prompt)
+        return self.send_message(start_prompt, player_id=self.player_id, room_state=self.room_state)
 
     def start_combat(self, enemy_type=None):
         """Start combat with a random or specific enemy"""
@@ -439,8 +505,9 @@ class DnDGame:
 
     def initialize_character(self):
         """Initialize character stats based on race and class"""
-        if not hasattr(self, 'chat'):
-            self.initialize_chat()
+        if not self.player_race or not self.player_class:
+            self.logger.error("Cannot initialize character without race and class")
+            raise ValueError("Race and class must be set before initializing character")
             
         # Get base stats from race
         race_stats = get_race_stats(self.player_race)
@@ -458,6 +525,7 @@ class DnDGame:
         self.magic_2lvl = max(0, class_bonuses['magic'] - 1)  # One less 2nd level slot than 1st level
         
         self.level = 1
+        self.logger.info(f"Character initialized: {self.player_race} {self.player_class}")
         self.update_system_prompt()
 
     def get_state_dict(self):

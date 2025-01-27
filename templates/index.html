@@ -8,6 +8,25 @@
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap" rel="stylesheet">
     <style>
+        * {
+            font-family: Arial, sans-serif !important;
+            font-style: normal !important;
+        }
+        
+        h1, h2, h3, h4, h5, h6,
+        .character-creation,
+        .race-selection,
+        .class-selection,
+        .game-text,
+        .message-text,
+        .button-text,
+        .stats-text,
+        .dialog-text {
+            font-family: Arial, sans-serif !important;
+            font-style: normal !important;
+            font-weight: normal !important;
+        }
+        
         .medieval {
             font-family: 'MedievalSharp', cursive;
         }
@@ -29,29 +48,128 @@
         html[lang="ru"] {
             font-family: 'MedievalSharp', cursive, Arial, sans-serif;
         }
+        /* Стили для мобильных устройств */
+        @media screen and (max-width: 768px) {
+            /* Контейнер для кнопок */
+            .button-container {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                width: 100%;
+                padding: 10px;
+            }
+            
+            /* Стили для кнопок */
+            button, .button {
+                width: 100% !important;
+                margin: 5px 0 !important;
+                padding: 12px !important;
+                font-size: 16px !important;
+                text-align: center !important;
+                border-radius: 8px !important;
+            }
+            
+            /* Контейнер для выбора расы/класса */
+            .selection-container {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 10px;
+                padding: 10px;
+            }
+            
+            /* Каждая опция выбора */
+            .selection-option {
+                width: 100%;
+                margin: 0;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen">
     {% raw %}
     <div id="app" class="container mx-auto px-4 py-8" v-cloak :lang="currentLanguage">
         <!-- Language Selection -->
-        <div v-if="!gameStarted" class="text-center">
+        <div v-if="!gameStarted && !roomJoined" class="text-center">
             <h1 class="medieval text-5xl mb-8">{{ t('title') }}</h1>
             <div class="space-x-4 mb-8">
-                <button @click="startGame('en')" class="bg-red-700 hover:bg-red-600 text-white px-6 py-3 rounded-lg medieval">
+                <button @click="selectLanguage('en')" class="bg-red-700 hover:bg-red-600 text-white px-6 py-3 rounded-lg medieval">
                     Start in English
                 </button>
-                <button @click="startGame('ru')" class="bg-red-700 hover:bg-red-600 text-white px-6 py-3 rounded-lg medieval">
+                <button @click="selectLanguage('ru')" class="bg-red-700 hover:bg-red-600 text-white px-6 py-3 rounded-lg medieval">
                     Начать на Русском
                 </button>
             </div>
-            <button @click="showFeedback = true" class="text-gray-400 hover:text-gray-300 underline medieval">
-                {{ t('feedback') }}
-            </button>
+        </div>
+
+        <!-- Room Management -->
+        <div v-if="languageSelected && !roomJoined" class="text-center">
+            <h2 class="medieval text-3xl mb-6">{{ t('roomManagement') }}</h2>
+            <!-- Player Name Input -->
+            <div class="mb-4">
+                <input v-model="playerName" 
+                       :placeholder="t('enterPlayerName')" 
+                       class="px-4 py-2 rounded-lg medieval bg-gray-700 text-white border border-gray-600 focus:border-red-500 focus:outline-none">
+            </div>
+            <div class="space-x-4 mb-8">
+                <button @click="createRoom" 
+                        :disabled="!playerName.trim()"
+                        :class="['bg-green-700 hover:bg-green-600 text-white px-6 py-3 rounded-lg medieval',
+                                !playerName.trim() ? 'opacity-50 cursor-not-allowed' : '']">
+                    {{ t('createRoom') }}
+                </button>
+                <input v-model="joinRoomId" 
+                       :placeholder="t('enterRoomCode')" 
+                       class="px-4 py-2 rounded-lg medieval bg-gray-700 text-white border border-gray-600 focus:border-red-500 focus:outline-none">
+                <button @click="joinRoom" 
+                        :disabled="!playerName.trim() || !joinRoomId.trim()"
+                        :class="['bg-blue-700 hover:bg-blue-600 text-white px-6 py-3 rounded-lg medieval',
+                                (!playerName.trim() || !joinRoomId.trim()) ? 'opacity-50 cursor-not-allowed' : '']">
+                    {{ t('joinRoom') }}
+                </button>
+            </div>
+        </div>
+
+        <!-- Room Info (after joining) -->
+        <div v-if="roomJoined" class="bg-gray-800 rounded-lg p-4 mb-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h3 class="medieval text-xl text-red-500">{{ t('roomInfo') }}</h3>
+                    <p>{{ t('roomCode') }}: <span class="font-mono">{{ roomId }}</span>
+                        <button @click="copyRoomCode" class="ml-2 text-sm text-blue-400 hover:text-blue-300">
+                            {{ t('copyRoomCode') }}
+                        </button>
+                    </p>
+                </div>
+                <button @click="leaveRoom" class="bg-red-700 hover:bg-red-600 px-4 py-2 rounded-lg medieval">
+                    {{ t('leaveRoom') }}
+                </button>
+            </div>
+            
+            <!-- Players List -->
+            <div class="mt-4">
+                <h4 class="medieval text-lg text-red-500 mb-2">{{ t('players') }}</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div v-for="(player, id) in roomPlayers" 
+                         :key="id" 
+                         class="bg-gray-700 rounded-lg p-2">
+                        <div class="flex items-center justify-between">
+                            <span class="medieval">{{ player.name }}</span>
+                            <span v-if="id === hostId" class="text-yellow-500 text-sm">{{ t('host') }}</span>
+                        </div>
+                        <div v-if="player.race && player.class_name" class="text-sm text-gray-400">
+                            {{ player.race }} {{ player.class_name }}
+                            <div>{{ t('level') }} {{ player.level }} | {{ t('hp') }}: {{ player.health_points }}</div>
+                        </div>
+                        <div v-else class="text-sm text-gray-400">
+                            {{ t('creatingCharacter') }}
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Character Creation -->
-        <div v-else-if="!characterCreated" class="max-w-4xl mx-auto">
+        <div v-if="roomJoined && !characterCreated" class="max-w-4xl mx-auto mt-4">
             <h2 class="medieval text-3xl mb-6">{{ t('createCharacter') }}</h2>
             
             <!-- Race Selection -->
@@ -97,7 +215,7 @@
         </div>
 
         <!-- Game Interface -->
-        <div v-else class="max-w-6xl mx-auto game-bg rounded-lg p-6">
+        <div v-if="characterCreated" class="max-w-6xl mx-auto game-bg rounded-lg p-6 mt-4">
             <!-- Character Stats -->
             <div class="stats-box rounded-lg p-4 mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
@@ -139,13 +257,13 @@
             <div class="message-box bg-gray-800 rounded-lg p-4 mb-4">
                 <div v-for="(message, index) in messages" :key="index" class="mb-2">
                     <div v-if="message.type === 'user'" class="text-blue-400">
-                        {{ t('you') }}: {{ message.text }}
+                        {{ message.text }}
                     </div>
                     <div v-else-if="message.type === 'system'" class="text-yellow-400">
-                        {{ t('system') }}: {{ message.text }}
+                        {{ message.text }}
                     </div>
                     <div v-else class="text-green-400">
-                        {{ t('dm') }}: {{ message.text }}
+                        {{ message.text }}
                     </div>
                 </div>
                 <div v-if="isLoading" class="text-gray-400 animate-pulse flex items-center">
@@ -261,6 +379,8 @@
             data() {
                 return {
                     gameStarted: false,
+                    roomJoined: false,
+                    languageSelected: false,
                     characterCreated: false,
                     showFeedback: false,
                     races: {},
@@ -280,13 +400,24 @@
                     diceType: null,
                     lastRoll: null,
                     isLoading: false,
-                    defaultDiceType: 'd20',  // Default dice type for perception checks
+                    defaultDiceType: 'd20',
                     isRolling: false,
                     currentRoll: null,
                     currentLanguage: 'en',
+                    playerName: '',
+                    joinRoomId: '',
+                    roomId: '',
+                    hostId: '',
+                    roomPlayers: {},
+                    updateInterval: null,
+                    lastMessageId: null,
                     translations: {
                         en: {
                             title: 'D&D Console Adventure',
+                            roomManagement: 'Room Management',
+                            createRoom: 'Create Room',
+                            joinRoom: 'Join Room',
+                            enterRoomCode: 'Enter Room Code',
                             createCharacter: 'Create Your Character',
                             chooseRace: 'Choose Your Race',
                             chooseClass: 'Choose Your Class',
@@ -329,10 +460,22 @@
                             dmThinking: 'Dungeon Master is thinking...',
                             you: 'You',
                             system: 'System',
-                            dm: 'DM'
+                            dm: 'DM',
+                            enterPlayerName: 'Enter your name...',
+                            roomInfo: 'Room Information',
+                            roomCode: 'Room Code',
+                            players: 'Players',
+                            host: 'Host',
+                            leaveRoom: 'Leave Room',
+                            copyRoomCode: 'Copy Room Code',
+                            roomCodeCopied: 'Room code copied to clipboard!',
                         },
                         ru: {
                             title: 'D&D Консольное Приключение',
+                            roomManagement: 'Управление Комнатой',
+                            createRoom: 'Создать Комнату',
+                            joinRoom: 'Присоединиться к Комнате',
+                            enterRoomCode: 'Введите Код Комнаты',
                             createCharacter: 'Создайте Своего Персонажа',
                             chooseRace: 'Выберите Расу',
                             chooseClass: 'Выберите Класс',
@@ -375,7 +518,15 @@
                             dmThinking: 'Мастер Подземелий думает...',
                             you: 'Вы',
                             system: 'Система',
-                            dm: 'МП'
+                            dm: 'МП',
+                            enterPlayerName: 'Введите ваше имя...',
+                            roomInfo: 'Информация о Комнате',
+                            roomCode: 'Код Комнаты',
+                            players: 'Игроки',
+                            host: 'Хост',
+                            leaveRoom: 'Покинуть Комнату',
+                            copyRoomCode: 'Скопировать Код',
+                            roomCodeCopied: 'Код комнаты скопирован!',
                         }
                     }
                 }
@@ -397,26 +548,91 @@
                 t(key) {
                     return this.translations[this.currentLanguage][key] || key
                 },
-                async startGame(language) {
-                    const response = await fetch('/start_game', {
+                selectLanguage(language) {
+                    this.currentLanguage = language
+                    this.languageSelected = true
+                },
+                async createRoom() {
+                    if (!this.playerName.trim()) return
+                    
+                    const response = await fetch('/create_room', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ language })
+                        body: JSON.stringify({ player_name: this.playerName })
                     })
                     const data = await response.json()
                     if (data.status === 'success') {
-                        this.currentLanguage = language
-                        this.gameStarted = true
+                        this.roomJoined = true
+                        this.roomId = data.room_id
+                        this.hostId = data.player_id
+                        this.startRoomUpdates()
                         this.loadRacesAndClasses()
                     }
                 },
+                async joinRoom() {
+                    if (!this.playerName.trim() || !this.joinRoomId.trim()) return
+                    
+                    try {
+                        const response = await fetch('/join_room', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                room_id: this.joinRoomId, 
+                                player_name: this.playerName 
+                            })
+                        })
+                        const data = await response.json()
+                        if (data.status === 'success') {
+                            this.roomJoined = true
+                            this.roomId = data.room_id
+                            this.hostId = data.host_id
+                            this.roomPlayers = data.players
+                            
+                            // Add all existing messages
+                            if (data.messages) {
+                                // Keep track of message IDs we've seen
+                                const seenMessageIds = new Set(this.messages.map(m => m.id))
+                                
+                                data.messages.forEach(msg => {
+                                    // Only add message if we haven't seen it before
+                                    if (!seenMessageIds.has(msg.id)) {
+                                        if (msg.type === 'system') {
+                                            this.addMessage(msg.message, 'system', msg.id)
+                                        } else if (msg.type === 'player') {
+                                            this.addMessage(`${msg.player_name}: ${msg.message}`, 'user', msg.id)
+                                        } else if (msg.type === 'dm') {
+                                            this.addMessage(`${this.t('dm')}: ${msg.message}`, 'dm', msg.id)
+                                        }
+                                    }
+                                })
+                                
+                                if (data.messages.length > 0) {
+                                    this.lastMessageId = data.messages[data.messages.length - 1].id
+                                }
+                            }
+                            
+                            this.startRoomUpdates()
+                            this.loadRacesAndClasses()
+                        } else {
+                            alert(data.message)
+                        }
+                    } catch (error) {
+                        console.error('Failed to join room:', error)
+                        alert('Failed to join room. Please try again.')
+                    }
+                },
                 async loadRacesAndClasses() {
-                    const [racesResponse, classesResponse] = await Promise.all([
-                        fetch('/get_races'),
-                        fetch('/get_classes')
-                    ])
-                    this.races = await racesResponse.json()
-                    this.classes = await classesResponse.json()
+                    try {
+                        const [racesResponse, classesResponse] = await Promise.all([
+                            fetch('/get_races'),
+                            fetch('/get_classes')
+                        ])
+                        this.races = await racesResponse.json()
+                        this.classes = await classesResponse.json()
+                    } catch (error) {
+                        console.error('Failed to load races and classes:', error)
+                        this.addMessage('Error loading character options. Please try again.', 'system')
+                    }
                 },
                 selectRace(race) {
                     this.selectedRace = race
@@ -440,11 +656,13 @@
                         const data = await response.json()
                         if (data.status === 'success') {
                             this.characterCreated = true
-                            this.gameState = data.stats
+                            this.gameState = data.player
                             this.addMessage('Welcome to your adventure!', 'system')
                             if (data.opening_scene) {
                                 this.addMessage(data.opening_scene)
                             }
+                        } else if (data.error) {
+                            this.addMessage(`Error: ${data.error}`, 'system')
                         }
                     } catch (error) {
                         this.addMessage('Error creating character. Please try again.', 'system')
@@ -452,8 +670,8 @@
                         this.isCreatingCharacter = false
                     }
                 },
-                addMessage(text, type = 'normal') {
-                    this.messages.push({ text, type })
+                addMessage(text, type = 'normal', id = null) {
+                    this.messages.push({ text, type, id })
                     this.$nextTick(() => {
                         const messageBox = document.querySelector('.message-box')
                         messageBox.scrollTop = messageBox.scrollHeight
@@ -475,13 +693,12 @@
                         const rollData = await rollResponse.json()
                         
                         if (rollData.error) {
-                            this.addMessage(rollData.error, 'system')
+                            this.addMessage(`${this.t('system')}: ${rollData.error}`, 'system')
                             return
                         }
                         
                         // Immediately show the roll result
                         this.currentRoll = rollData.roll
-                        this.addMessage(`You rolled ${rollData.roll} on ${this.displayDiceType}`, 'user')
                         
                         // Then process the roll with Gemini
                         this.isLoading = true
@@ -495,12 +712,8 @@
                         })
                         const processData = await processResponse.json()
                         
-                        if (processData.message) {
-                            this.addMessage(processData.message, 'dm')
-                        }
-                        
                         // Update game state
-                        this.gameState = processData.stats
+                        this.gameState = processData.player
                         this.diceNeeded = processData.dice_roll_needed || false
                         this.diceRollPending = false
                         this.diceType = processData.dice_type
@@ -510,7 +723,7 @@
                             this.userInput = ''
                         }
                     } catch (error) {
-                        this.addMessage('Error rolling dice', 'system')
+                        this.addMessage(`${this.t('system')}: ${this.t('errorRollingDice')}`, 'system')
                     } finally {
                         this.isRolling = false
                         this.isLoading = false
@@ -521,7 +734,6 @@
                     
                     const action = this.userInput
                     this.userInput = ''
-                    this.addMessage(action, 'user')
                     
                     this.isLoading = true
                     try {
@@ -533,12 +745,12 @@
                         const data = await response.json()
                         
                         if (data.error) {
-                            this.addMessage(`Error: ${data.error}`, 'system')
+                            this.addMessage(`${this.t('system')}: ${data.error}`, 'system')
                             return
                         }
                         
                         // Update game state
-                        this.gameState = data.stats
+                        this.gameState = data.player
                         this.diceNeeded = data.dice_needed || false
                         this.diceType = data.dice_type
                         
@@ -548,13 +760,8 @@
                             this.currentRoll = null  // Reset the current roll display
                         }
                         
-                        // Add response message
-                        if (data.response) {
-                            this.addMessage(data.response, 'dm')
-                        }
-                        
                     } catch (error) {
-                        this.addMessage('Error: Failed to send message', 'system')
+                        this.addMessage(`${this.t('system')}: ${this.t('errorSendMessage')}`, 'system')
                     } finally {
                         this.isLoading = false
                     }
@@ -600,7 +807,7 @@
                         })
                         const data = await response.json()
                         if (data.status === 'success') {
-                            this.gameState = data.stats
+                            this.gameState = data.player
                             this.characterCreated = true
                             this.addMessage(data.message, 'system')
                         } else {
@@ -617,6 +824,89 @@
                     if (confirm(this.t('quitConfirm'))) {
                         window.location.reload()
                     }
+                },
+                async leaveRoom() {
+                    if (!this.roomJoined) return
+                    
+                    const response = await fetch('/leave_room', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    })
+                    const data = await response.json()
+                    if (data.status === 'success') {
+                        this.stopRoomUpdates()
+                        this.roomJoined = false
+                        this.roomId = ''
+                        this.hostId = ''
+                        this.roomPlayers = {}
+                        this.characterCreated = false
+                        this.selectedRace = null
+                        this.selectedClass = null
+                    }
+                },
+                startRoomUpdates() {
+                    this.updateInterval = setInterval(this.updateRoomState, 2000)
+                },
+                stopRoomUpdates() {
+                    if (this.updateInterval) {
+                        clearInterval(this.updateInterval)
+                        this.updateInterval = null
+                    }
+                },
+                async updateRoomState() {
+                    if (!this.roomJoined) return
+                    
+                    try {
+                        const response = await fetch(`/get_room_state${this.lastMessageId ? `?last_message_id=${this.lastMessageId}` : ''}`)
+                        const data = await response.json()
+                        if (data.status === 'success') {
+                            this.roomPlayers = data.room.players
+                            this.hostId = data.room.host_id
+                            
+                            // Update game state if it has changed
+                            if (data.room.in_combat !== this.gameState.in_combat) {
+                                this.gameState.in_combat = data.room.in_combat
+                            }
+                            if (data.room.enemy_health !== this.gameState.enemy_health) {
+                                this.gameState.enemy_health = data.room.enemy_health
+                            }
+                            
+                            // Add any new messages
+                            if (data.messages && data.messages.length > 0) {
+                                // Keep track of message IDs we've seen
+                                const seenMessageIds = new Set(this.messages.map(m => m.id))
+                                
+                                data.messages.forEach(msg => {
+                                    // Only add message if we haven't seen it before
+                                    if (!seenMessageIds.has(msg.id)) {
+                                        if (msg.type === 'system') {
+                                            this.addMessage(msg.message, 'system', msg.id)
+                                        } else if (msg.type === 'player') {
+                                            this.addMessage(`${msg.player_name}: ${msg.message}`, 'user', msg.id)
+                                        } else if (msg.type === 'dm') {
+                                            this.addMessage(`${this.t('dm')}: ${msg.message}`, 'dm', msg.id)
+                                        }
+                                    }
+                                })
+                                
+                                // Update last message ID
+                                if (data.last_message_id) {
+                                    this.lastMessageId = data.last_message_id
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Failed to update room state:', error)
+                    }
+                },
+                copyRoomCode() {
+                    navigator.clipboard.writeText(this.roomId)
+                        .then(() => {
+                            alert(this.t('roomCodeCopied'))
+                        })
+                        .catch(err => {
+                            console.error('Failed to copy room code:', err)
+                        })
                 }
             },
             mounted() {
@@ -628,6 +918,9 @@
                 currentLanguage(newLang) {
                     document.documentElement.lang = newLang
                 }
+            },
+            beforeUnmount() {
+                this.stopRoomUpdates()
             }
         }).mount('#app')
     </script>
