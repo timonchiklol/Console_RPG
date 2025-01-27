@@ -36,6 +36,7 @@ class RoomState(BaseModel):
     last_activity: Optional[datetime] = None
     created_at: datetime = datetime.now()
     message_history: List[RoomMessage] = []
+    has_started: bool = False
 
 class PlayerUpdate(BaseModel):
     player_id: str

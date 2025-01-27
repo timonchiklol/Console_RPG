@@ -203,13 +203,13 @@
             <div class="message-box bg-gray-800 rounded-lg p-4 mb-4">
                 <div v-for="(message, index) in messages" :key="index" class="mb-2">
                     <div v-if="message.type === 'user'" class="text-blue-400">
-                        {{ t('you') }}: {{ message.text }}
+                        {{ message.text }}
                     </div>
                     <div v-else-if="message.type === 'system'" class="text-yellow-400">
-                        {{ t('system') }}: {{ message.text }}
+                        {{ message.text }}
                     </div>
                     <div v-else class="text-green-400">
-                        {{ t('dm') }}: {{ message.text }}
+                        {{ message.text }}
                     </div>
                 </div>
                 <div v-if="isLoading" class="text-gray-400 animate-pulse flex items-center">
@@ -536,15 +536,22 @@
                             
                             // Add all existing messages
                             if (data.messages) {
+                                // Keep track of message IDs we've seen
+                                const seenMessageIds = new Set(this.messages.map(m => m.id))
+                                
                                 data.messages.forEach(msg => {
-                                    if (msg.type === 'system') {
-                                        this.addMessage(msg.message, 'system')
-                                    } else if (msg.type === 'player') {
-                                        this.addMessage(`${msg.player_name}: ${msg.message}`, 'user')
-                                    } else if (msg.type === 'dm') {
-                                        this.addMessage(msg.message)
+                                    // Only add message if we haven't seen it before
+                                    if (!seenMessageIds.has(msg.id)) {
+                                        if (msg.type === 'system') {
+                                            this.addMessage(msg.message, 'system', msg.id)
+                                        } else if (msg.type === 'player') {
+                                            this.addMessage(`${msg.player_name}: ${msg.message}`, 'user', msg.id)
+                                        } else if (msg.type === 'dm') {
+                                            this.addMessage(`${this.t('dm')}: ${msg.message}`, 'dm', msg.id)
+                                        }
                                     }
                                 })
+                                
                                 if (data.messages.length > 0) {
                                     this.lastMessageId = data.messages[data.messages.length - 1].id
                                 }
@@ -609,8 +616,8 @@
                         this.isCreatingCharacter = false
                     }
                 },
-                addMessage(text, type = 'normal') {
-                    this.messages.push({ text, type })
+                addMessage(text, type = 'normal', id = null) {
+                    this.messages.push({ text, type, id })
                     this.$nextTick(() => {
                         const messageBox = document.querySelector('.message-box')
                         messageBox.scrollTop = messageBox.scrollHeight
@@ -632,13 +639,12 @@
                         const rollData = await rollResponse.json()
                         
                         if (rollData.error) {
-                            this.addMessage(rollData.error, 'system')
+                            this.addMessage(`${this.t('system')}: ${rollData.error}`, 'system')
                             return
                         }
                         
                         // Immediately show the roll result
                         this.currentRoll = rollData.roll
-                        this.addMessage(`You rolled ${rollData.roll} on ${this.displayDiceType}`, 'user')
                         
                         // Then process the roll with Gemini
                         this.isLoading = true
@@ -652,10 +658,6 @@
                         })
                         const processData = await processResponse.json()
                         
-                        if (processData.message) {
-                            this.addMessage(processData.message, 'dm')
-                        }
-                        
                         // Update game state
                         this.gameState = processData.player
                         this.diceNeeded = processData.dice_roll_needed || false
@@ -667,7 +669,7 @@
                             this.userInput = ''
                         }
                     } catch (error) {
-                        this.addMessage('Error rolling dice', 'system')
+                        this.addMessage(`${this.t('system')}: ${this.t('errorRollingDice')}`, 'system')
                     } finally {
                         this.isRolling = false
                         this.isLoading = false
@@ -678,7 +680,6 @@
                     
                     const action = this.userInput
                     this.userInput = ''
-                    this.addMessage(action, 'user')
                     
                     this.isLoading = true
                     try {
@@ -690,7 +691,7 @@
                         const data = await response.json()
                         
                         if (data.error) {
-                            this.addMessage(`Error: ${data.error}`, 'system')
+                            this.addMessage(`${this.t('system')}: ${data.error}`, 'system')
                             return
                         }
                         
@@ -705,13 +706,8 @@
                             this.currentRoll = null  // Reset the current roll display
                         }
                         
-                        // Add response message
-                        if (data.response) {
-                            this.addMessage(data.response, 'dm')
-                        }
-                        
                     } catch (error) {
-                        this.addMessage('Error: Failed to send message', 'system')
+                        this.addMessage(`${this.t('system')}: ${this.t('errorSendMessage')}`, 'system')
                     } finally {
                         this.isLoading = false
                     }
@@ -823,15 +819,22 @@
                             
                             // Add any new messages
                             if (data.messages && data.messages.length > 0) {
+                                // Keep track of message IDs we've seen
+                                const seenMessageIds = new Set(this.messages.map(m => m.id))
+                                
                                 data.messages.forEach(msg => {
-                                    if (msg.type === 'system') {
-                                        this.addMessage(msg.message, 'system')
-                                    } else if (msg.type === 'player') {
-                                        this.addMessage(`${msg.player_name}: ${msg.message}`, 'user')
-                                    } else if (msg.type === 'dm') {
-                                        this.addMessage(msg.message)
+                                    // Only add message if we haven't seen it before
+                                    if (!seenMessageIds.has(msg.id)) {
+                                        if (msg.type === 'system') {
+                                            this.addMessage(msg.message, 'system', msg.id)
+                                        } else if (msg.type === 'player') {
+                                            this.addMessage(`${msg.player_name}: ${msg.message}`, 'user', msg.id)
+                                        } else if (msg.type === 'dm') {
+                                            this.addMessage(`${this.t('dm')}: ${msg.message}`, 'dm', msg.id)
+                                        }
                                     }
                                 })
+                                
                                 // Update last message ID
                                 if (data.last_message_id) {
                                     this.lastMessageId = data.last_message_id

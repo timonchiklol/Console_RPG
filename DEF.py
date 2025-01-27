@@ -12,6 +12,11 @@ from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
 
+# Add this at the top of the file, before the DnDGame class
+class GetRoomStateFilter(logging.Filter):
+    def filter(self, record):
+        return "GET /get_room_state" not in record.getMessage()
+
 class DnDGame:
     def __init__(self, language="en"):
         load_dotenv()
@@ -196,18 +201,13 @@ class DnDGame:
                 if pid == player_id:
                     current_stats += f"Last Roll: {player.last_dice_roll if player.last_dice_roll is not None else 'None'}\n"
         else:
-            # Fallback to single player mode for backward compatibility
-            current_stats += f"""
-            Race: {self.player_race}
-            Class: {self.player_class}
-            Level: {self.level}
-            HP: {self.health_points}
-            Damage: {self.damage}
-            Gold: {self.gold}
-            Magic slots (1st/2nd level): {self.magic_1lvl}/{self.magic_2lvl}
-            In Combat: {self.in_combat}
-            Last Roll: {self.last_dice_roll if self.last_dice_roll is not None else 'None'}
-            """
+            self.logger.error("No room_state provided to send_message")
+            return {
+                'message': 'Error: Game state not found',
+                'players_update': [],
+                'combat_result': None,
+                'dice_roll': None
+            }
         
         # Add last roll information to context
         if "rolled" in message.lower() and player_id and room_state:
@@ -253,10 +253,8 @@ class DnDGame:
                     if msg.dm_response:
                         context += f"DM: {msg.dm_response}\n"
         else:
-            # Fallback to local message history
-            start_idx = max(0, len(self.message_history) - self.context_limit)
-            for msg in self.message_history[start_idx:]:
-                context += f"Player: {msg['user']}\nDM: {msg['dm']}\n"
+            self.logger.warning("No message history found in room_state")
+            context += "No previous messages available.\n"
         
         full_message = f"{current_stats}\n{context}\nCurrent message: {message}"
         self.logger.debug(f"Full message to Gemini:\n{full_message}")
@@ -330,8 +328,7 @@ class DnDGame:
             if len(room_state.message_history) > 100:
                 room_state.message_history = room_state.message_history[-100:]
         else:
-            # Fallback to local message history
-            self.add_to_history(message, message_text)
+            self.logger.warning("No message history found in room_state")
         
         return {
             'message': message_text,
@@ -346,7 +343,7 @@ class DnDGame:
             race=self.player_race,
             class_name=self.player_class
         )
-        return self.send_message(start_prompt)
+        return self.send_message(start_prompt, player_id=self.player_id, room_state=self.room_state)
 
     def start_combat(self, enemy_type=None):
         """Start combat with a random or specific enemy"""

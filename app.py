@@ -114,9 +114,9 @@ def create_room():
 
 @app.route('/join_room', methods=['POST'])
 def join_room():
-    # Always generate new session ID for joining players
-    session.clear()
-    session['player_id'] = str(uuid.uuid4())  # Generate new unique ID
+    # Only generate new player_id if one doesn't exist
+    if 'player_id' not in session:
+        session['player_id'] = str(uuid.uuid4())
     
     player_id = session['player_id']
     room_id = request.json.get('room_id')
@@ -338,13 +338,17 @@ def choose_character():
         player.magic_1lvl = game.magic_1lvl
         player.magic_2lvl = game.magic_2lvl
         
-        # Generate opening scene
-        response = game.start_game()
-        
-        # Add opening scene to room messages
-        add_room_message(room_id, "start_game", "system")
-        if response.get('message'):
-            add_room_message(room_id, response['message'], 'dm')
+        # Only generate opening scene if this is the host and game hasn't started
+        response = None
+        if player_id == room.host_id and not room.has_started:
+            game.player_id = player_id  # Set player_id
+            game.room_state = room      # Set room_state
+            response = game.start_game()
+            room.has_started = True  # Mark game as started
+            # Add opening scene to room messages
+            add_room_message(room_id, "Game started", "system")
+            if response.get('message'):
+                add_room_message(room_id, response['message'], 'dm')
         
         # Update room state
         room_manager.update_room(room)
@@ -355,7 +359,7 @@ def choose_character():
             'status': 'success',
             'player': player.dict(),
             'room': room.dict(),
-            'message': response.get('message', '')
+            'message': response.get('message', '') if response else ''
         })
         
     except Exception as e:
@@ -387,30 +391,32 @@ def game_action():
             action = data.get('action')
             
             game = DnDGame(language=room.language)
+            # Load player stats into DnDGame
+            game.player_race = player.race
+            game.player_class = player.class_name
+            game.health_points = player.health_points
+            game.gold = player.gold
+            game.damage = player.damage
+            game.level = player.level
+            game.magic_1lvl = player.magic_1lvl
+            game.magic_2lvl = player.magic_2lvl
+            game.last_dice_roll = player.last_dice_roll
+            
             # Set game state from room state
             game.in_combat = room.in_combat
             if room.in_combat:
                 game.enemy = {"name": room.enemy_name, "hp": room.enemy_health} if room.enemy_name else None
             
-            # Convert room messages to RoomMessage objects if not already
-            if not hasattr(room, 'message_history'):
-                room.message_history = []
-                for msg in room_messages.get(room_id, []):
-                    room.message_history.append({
-                        'type': msg.get('type', 'system'),
-                        'user_message': msg.get('message', ''),
-                        'dm_response': msg.get('dm_response', ''),
-                        'player_name': msg.get('player_name'),
-                        'timestamp': msg.get('timestamp', datetime.now())
-                    })
+            # First add the player's action to room messages
+            player_message_id = add_room_message(room_id, action, 'player', player.name)
             
             # Send message with room state context
             response = game.send_message(action, player_id=player_id, room_state=room)
             
-            # Add player's action to room messages
-            add_room_message(room_id, action, 'player', player.name)
+            # Then add DM's response if there is one
+            dm_message_id = None
             if response.get('message'):
-                add_room_message(room_id, response['message'], 'dm')
+                dm_message_id = add_room_message(room_id, response['message'], 'dm')
             
             # Update player states based on players_update
             for player_update in response.get('players_update', []):
@@ -456,13 +462,20 @@ def game_action():
             dice_roll_needed = dice_roll.get('required', False)
             dice_type = dice_roll.get('type')
             
+            # Get the latest messages for this room
+            latest_messages = get_new_messages(room_id)
+            
             return jsonify({
                 'response': response.get('message', ''),
                 'player': player.dict(),
                 'room': room.dict(),
                 'dice_needed': dice_roll_needed,
                 'dice_type': dice_type,
-                'combat_result': combat_result
+                'combat_result': combat_result,
+                'messages': latest_messages,
+                'last_message_id': latest_messages[-1]['id'] if latest_messages else None,
+                'player_message_id': player_message_id,
+                'dm_message_id': dm_message_id
             })
             
         except Exception as e:
@@ -500,7 +513,7 @@ def roll_dice():
             return jsonify({'error': 'Invalid dice type'}), 400
         
         # Add dice roll to room messages
-        add_room_message(
+        roll_message_id = add_room_message(
             room_id,
             f"rolled {roll_result} on {dice_type}",
             'player',
@@ -513,10 +526,16 @@ def roll_dice():
         player.dice_type = None
         room_manager.update_room(room)
         
+        # Get the latest messages for this room
+        latest_messages = get_new_messages(room_id)
+        
         return jsonify({
             'roll': roll_result,
             'dice_type': dice_type,
-            'player': player.dict()
+            'player': player.dict(),
+            'messages': latest_messages,
+            'last_message_id': latest_messages[-1]['id'] if latest_messages else None,
+            'roll_message_id': roll_message_id
         })
 
 @app.route('/process_roll', methods=['POST'])
@@ -544,6 +563,21 @@ def process_roll():
         dice_type = data.get('dice_type')
         
         game = DnDGame(language=room.language)
+        # Load player stats into DnDGame
+        game.player_race = player.race
+        game.player_class = player.class_name
+        game.health_points = player.health_points
+        game.gold = player.gold
+        game.damage = player.damage
+        game.level = player.level
+        game.magic_1lvl = player.magic_1lvl
+        game.magic_2lvl = player.magic_2lvl
+        game.last_dice_roll = player.last_dice_roll
+        
+        # Set game state from room state
+        game.in_combat = room.in_combat
+        if room.in_combat:
+            game.enemy = {"name": room.enemy_name, "hp": room.enemy_health} if room.enemy_name else None
         
         # Send message with room state context
         response = game.send_message(
@@ -552,8 +586,10 @@ def process_roll():
             room_state=room
         )
         
+        # Add DM's response if there is one
+        dm_message_id = None
         if response.get('message'):
-            add_room_message(room_id, response['message'], 'dm')
+            dm_message_id = add_room_message(room_id, response['message'], 'dm')
         
         # Update player states based on players_update
         for player_update in response.get('players_update', []):
@@ -602,13 +638,19 @@ def process_roll():
         dice_roll_needed = dice_roll.get('required', False)
         dice_type = dice_roll.get('type')
         
+        # Get the latest messages for this room
+        latest_messages = get_new_messages(room_id)
+        
         return jsonify({
             'message': response.get('message', ''),
             'player': player.dict(),
             'room': room.dict(),
             'dice_needed': dice_roll_needed,
             'dice_type': dice_type,
-            'combat_result': combat_result
+            'combat_result': combat_result,
+            'messages': latest_messages,
+            'last_message_id': latest_messages[-1]['id'] if latest_messages else None,
+            'dm_message_id': dm_message_id
         })
 
 @app.route('/save_game', methods=['POST'])
@@ -656,31 +698,12 @@ def add_room_message(room_id: str, message: str, message_type: str = 'system', p
     # Get the next message ID
     next_id = len(room_messages[room_id]) + 1
 
-    # Create message data based on type
-    if message_type == 'player':
-        user_message = message
-        dm_response = ""  # Will be filled by DM's response
-    elif message_type == 'dm':
-        # Find the last player message and update its dm_response
-        if room_messages[room_id]:
-            last_msg = room_messages[room_id][-1]
-            if last_msg['type'] == 'player':
-                last_msg['dm_response'] = message
-                return  # Don't add a new message
-        # If no player message found, create a new DM message
-        user_message = ""
-        dm_response = message
-    else:  # system message
-        user_message = message
-        dm_response = message
-
+    # Create message data
     message_data = {
         'id': next_id,
         'message': message,
         'type': message_type,
         'timestamp': datetime.now().isoformat(),
-        'user_message': user_message,
-        'dm_response': dm_response,
         'player_name': player_name if message_type == 'player' else None
     }
 
@@ -697,8 +720,7 @@ def add_room_message(room_id: str, message: str, message_type: str = 'system', p
             room.message_history = []
         room.message_history.append({
             'type': message_type,
-            'user_message': user_message,
-            'dm_response': dm_response,
+            'message': message,
             'player_name': player_name,
             'timestamp': datetime.now()
         })
@@ -706,7 +728,8 @@ def add_room_message(room_id: str, message: str, message_type: str = 'system', p
         if len(room.message_history) > 100:
             room.message_history = room.message_history[-100:]
         room_manager.update_room(room)
-
+    
+    return next_id
 
 def get_new_messages(room_id: str, last_message_id: str = None):
     """Get messages newer than last_message_id"""
