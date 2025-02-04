@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}D&D Console Adventure{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: Arial, sans-serif !important;
+        }
+        .medieval {
+            font-family: 'MedievalSharp', cursive;
+        }
+        .game-bg {
+            background-image: url('https://images.unsplash.com/photo-1519074069444-1ba4fff66d16?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80');
+            background-size: cover;
+            background-position: center;
+        }
+        [v-cloak] { display: none; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <header class="flex justify-between items-center p-4 bg-gray-800">
+        <a href="/" class="medieval text-xl">D&D Console Adventure</a>
+        <button @click="openSettings" class="bg-red-700 hover:bg-red-600 px-4 py-2 rounded-lg medieval">
+            Settings
+        </button>
+    </header>
+    <div id="main-content">
+        {% block content %}{% endblock %}
+    </div>
+    <div id="settings-app">
+        <div v-if="showSettings" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+            <div class="bg-gray-800 rounded-lg p-6 max-w-md w-full">
+                <h3 class="medieval text-2xl mb-4">Settings</h3>
+                <div class="mb-4">
+                    <label class="block mb-2">Interface Language:</label>
+                    <select v-model="interfaceLanguage" class="w-full p-2 rounded-lg bg-gray-700">
+                        <option value="en">English</option>
+                        <option value="ru">Русский</option>
+                    </select>
+                </div>
+                <div class="flex justify-end">
+                    <button @click="closeSettings" class="px-4 py-2 rounded-lg medieval bg-red-700 hover:bg-red-600">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        const settingsApp = Vue.createApp({
+            data() {
+                return {
+                    showSettings: false,
+                    interfaceLanguage: 'en'
+                };
+            },
+            methods: {
+                openSettings() {
+                    this.showSettings = true;
+                },
+                closeSettings() {
+                    this.showSettings = false;
+                    document.documentElement.lang = this.interfaceLanguage;
+                }
+            },
+            mounted() {
+                document.documentElement.lang = this.interfaceLanguage;
+            }
+        });
+        settingsApp.mount('#settings-app');
+    </script>
+</body>
+</html> 

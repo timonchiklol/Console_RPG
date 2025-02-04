@@ -745,5 +745,14 @@ def get_new_messages(room_id: str, last_message_id: str = None):
     except (ValueError, TypeError):
         return room_messages[room_id][-50:]
 
+# New endpoints for multi-page support
+@app.route('/character')
+def character():
+    return render_template('character.html')
+
+@app.route('/game')
+def game():
+    return render_template('game.html')
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8000)
