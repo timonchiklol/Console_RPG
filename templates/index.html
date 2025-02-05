@@ -21,7 +21,26 @@
       Join Room
                     </button>
                 </div>
-            </div>
+
+  <!-- Кнопка Feedback (меняем цвет на темно-красный) -->
+  <div class="mb-4">
+    <button @click="feedbackVisible = true" 
+            class="bg-red-900 hover:bg-red-800 px-4 py-2 rounded-lg medieval w-full">
+      Feedback
+    </button>
+  </div>
+
+  <!-- Модальное окно для feedback -->
+  <div v-if="feedbackVisible" class="modal fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+    <div class="bg-blue-900 p-6 rounded-lg shadow-lg text-white">
+      <h2 class="text-xl font-bold mb-2">Feedback</h2>
+      <p class="mb-4">Our email: flappyfeedback@gmail.com</p>
+      <button @click="feedbackVisible = false" class="bg-red-700 hover:bg-red-600 px-4 py-2 rounded-lg text-white">
+        Close
+      </button>
+    </div>
+  </div>
+</div>
     <script>
 const { createApp } = Vue;
 
@@ -31,7 +50,9 @@ const { createApp } = Vue;
                     playerName: '',
                     joinRoomId: '',
       roomJoined: false,
-      roomId: ''
+      roomId: '',
+      // Переменная для контроля видимости модального окна feedback
+      feedbackVisible: false
     };
             },
             methods: {
