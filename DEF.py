@@ -314,22 +314,6 @@ class DnDGame:
                 'dice_type': dice_type
             }]
         
-        # Add to room's message history if available
-        if room_state and hasattr(room_state, 'message_history'):
-            player_name = room_state.players[player_id].name if player_id in room_state.players else None
-            room_state.message_history.append({
-                'type': 'player',
-                'user_message': message,
-                'dm_response': message_text,
-                'player_name': player_name,
-                'timestamp': datetime.now()
-            })
-            # Keep only last 100 messages
-            if len(room_state.message_history) > 100:
-                room_state.message_history = room_state.message_history[-100:]
-        else:
-            self.logger.warning("No message history found in room_state")
-        
         return {
             'message': message_text,
             'players_update': players_update,

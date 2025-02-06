@@ -11,6 +11,14 @@ from pathlib import Path
 from datetime import datetime
 from threading import Lock
 
+# Monkey-patch DnDGame to update system prompt for Gemini
+_original_init = DnDGame.__init__
+def _patched_init(self, *args, **kwargs):
+    _original_init(self, *args, **kwargs)
+    if hasattr(self, "system_prompt") and "Do not change player's HP" not in self.system_prompt:
+         self.system_prompt += "\nNote: Do not change player's HP unless necessary due to explicit combat events. Only update HP when it is clearly altered by combat damage or healing."
+DnDGame.__init__ = _patched_init
+
 # Create a custom filter to exclude get_room_state messages
 class GetRoomStateFilter(logging.Filter):
     def filter(self, record):
@@ -705,6 +713,11 @@ def add_room_message(room_id: str, message: str, message_type: str = 'system', p
     """Add a message to the room's message history with an ID"""
     if room_id not in room_messages:
         room_messages[room_id] = []
+    # Prevent duplicate DM messages from being added by checking the last few messages
+    if message_type == 'dm' and room_messages[room_id]:
+        for msg in room_messages[room_id][-5:]:
+            if msg['type'] == 'dm' and msg['message'] == message:
+                return msg['id']
 
     # Get the next message ID
     next_id = len(room_messages[room_id]) + 1
