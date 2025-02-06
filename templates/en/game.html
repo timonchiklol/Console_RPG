@@ -1,6 +1,6 @@
-{% extends "base.html" %}
+{% extends "en/base.html" %}
 
-{% block title %}{% if session.get('language', 'en') == 'ru' %}Игра{% else %}Game{% endif %}{% endblock %}
+{% block title %}Game{% endblock %}
 
 {% block content %}
 {% raw %}
@@ -124,7 +124,6 @@ createApp({
       if (this.diceRolling) return;
       this.diceRolling = true;
       try {
-        // First, roll the dice
         const rollResponse = await fetch('/roll_dice', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -135,7 +134,6 @@ createApp({
           alert(rollData.error);
           return;
         }
-        // Then, send the roll result for processing
         const processResponse = await fetch('/process_roll', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

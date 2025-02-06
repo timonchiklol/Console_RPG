@@ -68,6 +68,11 @@ app.secret_key = os.urandom(24)  # For session management
 room_manager = RoomManager()
 room_locks = {}  # Dictionary to store room locks
 
+@app.before_request
+def set_default_language():
+    if 'language' not in session:
+        session['language'] = 'en'
+
 def get_room_lock(room_id):
     """Get or create a lock for a room"""
     if room_id not in room_locks:
@@ -81,11 +86,17 @@ room_messages = {}
 def index():
     if 'player_id' not in session:
         session['player_id'] = str(uuid.uuid4())
-    return render_template('index.html')
+    lang = session.get('language', 'en')
+    if lang == 'ru':
+        return render_template('ru/index.html')
+    else:
+        return render_template('en/index.html')
 
 @app.route('/start_game', methods=['POST'])
 def start_game():
     language = request.json.get('language', 'en')
+    if language not in ['en', 'ru']:  # Only allow English and Russian
+        language = 'en'
     session['language'] = language
     return jsonify({'status': 'success'})
 
@@ -748,11 +759,19 @@ def get_new_messages(room_id: str, last_message_id: str = None):
 # New endpoints for multi-page support
 @app.route('/character')
 def character():
-    return render_template('character.html')
+    lang = session.get('language', 'en')
+    if lang == 'ru':
+        return render_template('ru/character.html')
+    else:
+        return render_template('en/character.html')
 
 @app.route('/game')
 def game():
-    return render_template('game.html')
+    lang = session.get('language', 'en')
+    if lang == 'ru':
+        return render_template('ru/game.html')
+    else:
+        return render_template('en/game.html')
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8000)
