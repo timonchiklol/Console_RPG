@@ -109,19 +109,6 @@
       </button>
     </template>
   </div>
-
-  <!-- Dice Roll Popup Modal -->
-  <div v-if="diceNeeded" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-    <div class="bg-slate-800 rounded-lg p-6 max-w-md w-full border border-slate-700">
-      <h3 class="medieval text-2xl mb-4 text-amber-100">Требуется бросок кубика</h3>
-      <p class="mb-4 text-slate-300">Пожалуйста, бросьте {{ diceType }}.</p>
-      <button @click="rollDice" 
-              :disabled="diceRolling" 
-              class="w-full bg-amber-600 hover:bg-amber-500 px-4 py-2 rounded-lg medieval text-amber-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-        Бросить {{ diceType }}
-      </button>
-    </div>
-  </div>
 </div>
 
 <script>
