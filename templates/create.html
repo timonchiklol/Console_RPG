@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Character Creation</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <h1>Create Your Character</h1>
+    <form method="post">
+        <label>Name: <input type="text" name="name" required></label><br>
+        <label>Strength: <input type="number" name="strength" min="1" max="20" value="10" required></label><br>
+        <label>Dexterity: <input type="number" name="dexterity" min="1" max="20" value="10" required></label><br>
+        <label>Constitution: <input type="number" name="constitution" min="1" max="20" value="10" required></label><br>
+        <label>Intelligence: <input type="number" name="intelligence" min="1" max="20" value="10" required></label><br>
+        <label>Wisdom: <input type="number" name="wisdom" min="1" max="20" value="10" required></label><br>
+        <label>Charisma: <input type="number" name="charisma" min="1" max="20" value="10" required></label><br>
+        <button type="submit">Start Adventure</button>
+    </form>
+</body>
+</html> 

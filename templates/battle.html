@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Battle Field</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <h1>Battle Field</h1>
+    <div class="status-panel">
+        <div class="character-status">
+            <h2>Character: {{ character.name }}</h2>
+            <p>HP: <span id="char_hp">{{ character.hp }}</span></p>
+            <p>Speed: <span id="char_speed">30</span></p>
+            <p>Spell Slots: <span id="spell_slots">{{ character.spell_slots }}</span></p>
+        </div>
+        <div class="enemy-status">
+            <h2>Enemy: {{ enemy.name }}</h2>
+            <p>HP: <span id="enemy_hp">{{ enemy.hp }}</span></p>
+        </div>
+    </div>
+    
+    <!-- Canvas to draw a hexagonal battle grid -->
+    <canvas id="hexCanvas" width="800" height="600"></canvas>
+    <br>
+    
+    <!-- Unified controls section -->
+    <div class="controls">
+        <div class="movement-controls">
+            <button id="applyMoveButton">Apply Move</button>
+            <button id="endTurnButton">End Turn</button>
+        </div>
+        <div class="combat-controls">
+            <div class="attack-options">
+                <h3>Choose your attack:</h3>
+                <button onclick="selectAttack('melee', 1)">Melee Attack (Range: 1)</button>
+                <button onclick="selectAttack('magic', 3)">Magic Missile (Range: 3)</button>
+            </div>
+            <div class="action-buttons">
+                <button id="attackButton" disabled>Attack</button>
+                <button id="castSpellButton" disabled>Cast Spell</button>
+            </div>
+            <div id="attackPreview" style="display:none;"></div>
+            <div id="diceControls" style="display:none;">
+                <button id="rollHitButton">Roll Hit (d20)</button>
+                <button id="rollDamageButton" style="display:none;">Roll Damage (d6)</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="battle-log">
+        <h3>Battle Log:</h3>
+        <div id="battleLog" style="border:1px solid #000; padding: 10px; width: 800px; height: 300px; overflow-y: scroll;"></div>
+    </div>
+    
+    <!-- Add instruction for movement -->
+    <br>
+    <p id="instructions">Use arrow keys to move your character.</p>
+    
+    <script src="{{ url_for('static', filename='js/hexgrid.js') }}"></script>
+    <script>
+        // Draw initial hex grid
+        drawHexGrid();
+        
+        // Global variables for attack options and state
+        let playerActionTaken = false;
+        let selectedAttack = null;
+        let attackRange = 0;
+        let pendingHitRoll = null;
+        let pendingDamageRoll = null;
+        let movementTaken = false;
+
+        // When an attack option is selected, show its range
+        function selectAttack(type, range) {
+            selectedAttack = type;
+            attackRange = range;
+            document.getElementById("attackPreview").style.display = "block";
+            document.getElementById("attackPreview").innerText = "Selected " + type + " attack. Range: " + range + " tile(s).";
+            
+            // Enable the appropriate button based on attack type
+            document.getElementById("attackButton").disabled = (type !== 'melee');
+            document.getElementById("castSpellButton").disabled = (type !== 'magic');
+            
+            // Show range on the grid
+            highlightRange(range);
+        }
+
+        // Add message to battle log
+        function addToBattleLog(message) {
+            let logDiv = document.getElementById("battleLog");
+            logDiv.innerHTML += "<p>" + message + "</p>";
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        // Update the speed display
+        function updateSpeedDisplay() {
+            document.getElementById("char_speed").innerText = playerSpeed;
+        }
+
+        // Clear attack selection and reset controls
+        function clearAttackSelection() {
+            selectedAttack = null;
+            attackRange = 0;
+            pendingHitRoll = null;
+            pendingDamageRoll = null;
+            document.getElementById("attackPreview").style.display = "none";
+            document.getElementById("diceControls").style.display = "none";
+            document.getElementById("attackButton").disabled = true;
+            document.getElementById("castSpellButton").disabled = true;
+            document.getElementById("rollHitButton").disabled = false;
+            document.getElementById("rollDamageButton").disabled = false;
+            clearHighlight();
+        }
+
+        // Roll Hit button handler
+        document.getElementById("rollHitButton").addEventListener("click", function() {
+            if (this.disabled) return;
+            
+            fetch("/api/roll_dice", {
+                method: "POST",
+                body: new URLSearchParams({sides: 20})
+            })
+            .then(response => response.json())
+            .then(data => {
+                pendingHitRoll = data.result;
+                addToBattleLog("Hit roll: " + pendingHitRoll);
+                this.disabled = true;
+                if (pendingHitRoll >= 10) {
+                    document.getElementById("rollDamageButton").style.display = "inline-block";
+                } else {
+                    addToBattleLog("Your attack would miss.");
+                    setTimeout(() => {
+                        clearAttackSelection();
+                    }, 1500);
+                }
+            });
+        });
+
+        // Roll Damage button handler
+        document.getElementById("rollDamageButton").addEventListener("click", function() {
+            if (this.disabled) return;
+            
+            fetch("/api/roll_dice", {
+                method: "POST",
+                body: new URLSearchParams({sides: 6})
+            })
+            .then(response => response.json())
+            .then(data => {
+                pendingDamageRoll = data.result;
+                addToBattleLog("Damage roll: " + pendingDamageRoll);
+                this.disabled = true;
+                
+                // Automatically perform the attack after rolling damage
+                let formData = new FormData();
+                formData.append("hit_roll", pendingHitRoll);
+                formData.append("damage_roll", pendingDamageRoll);
+                
+                if (selectedAttack === 'melee') {
+                    fetch("/api/attack", {method: "POST", body: formData})
+                    .then(response => response.json())
+                    .then(data => {
+                        updateBattleStatus(data);
+                        playerActionTaken = true;
+                        clearAttackSelection();
+                    });
+                } else if (selectedAttack === 'magic') {
+                    formData.append("spell", "Magic Missile");
+                    fetch("/api/cast_spell", {method: "POST", body: formData})
+                    .then(response => response.json())
+                    .then(data => {
+                        updateBattleStatus(data);
+                        playerActionTaken = true;
+                        clearAttackSelection();
+                    });
+                }
+            });
+        });
+
+        // Apply Move button handler
+        document.getElementById("applyMoveButton").addEventListener("click", function() {
+            clearAttackSelection();
+            applyMove();
+            updateSpeedDisplay();
+        });
+
+        // Attack button handler
+        document.getElementById("attackButton").addEventListener("click", function() {
+            if (playerActionTaken) {
+                addToBattleLog("You have already attacked this turn!");
+                return;
+            }
+            if (!isInRange(enemyPos.col, enemyPos.row, attackRange)) {
+                addToBattleLog("Enemy is not in range!");
+                return;
+            }
+            
+            // Show dice controls only after confirming the attack is valid
+            document.getElementById("diceControls").style.display = "block";
+        });
+
+        // Cast Spell button handler
+        document.getElementById("castSpellButton").addEventListener("click", function() {
+            if (playerActionTaken) {
+                addToBattleLog("You have already attacked this turn!");
+                return;
+            }
+            if (!isInRange(enemyPos.col, enemyPos.row, attackRange)) {
+                addToBattleLog("Enemy is not in range!");
+                return;
+            }
+            
+            // Show dice controls only after confirming the spell is valid
+            document.getElementById("diceControls").style.display = "block";
+        });
+
+        // End Turn button handler
+        document.getElementById("endTurnButton").addEventListener("click", function() {
+            clearAttackSelection();
+            playerSpeed = 30;
+            updateSpeedDisplay();
+            playerActionTaken = false;
+            movementTaken = false;
+            
+            let formData = new FormData();
+            formData.append("player_col", playerPos.col);
+            formData.append("player_row", playerPos.row);
+            fetch("/api/enemy_attack", {method: "POST", body: formData})
+            .then(response => response.json())
+            .then(data => {
+                updateBattleStatus(data);
+                if (data.enemy_pos) {
+                    enemyPos.col = data.enemy_pos.col;
+                    enemyPos.row = data.enemy_pos.row;
+                    drawHexGrid();
+                }
+            });
+        });
+
+        function updateBattleStatus(data) {
+            if (data.combat_log) {
+                addToBattleLog(data.combat_log);
+            }
+            if (data.character_hp !== undefined) {
+                document.getElementById("char_hp").innerText = data.character_hp;
+            }
+            if (data.enemy_hp !== undefined) {
+                document.getElementById("enemy_hp").innerText = data.enemy_hp;
+            }
+            if (data.enemy_defeated) {
+                addToBattleLog("Enemy defeated!");
+            }
+            if (data.character_defeated) {
+                addToBattleLog("You have been defeated!");
+            }
+        }
+
+        // Update applyMove function to check for movement action
+        function applyMove() {
+            if (movementTaken) {
+                addToBattleLog("You have already moved this turn!");
+                return;
+            }
+            
+            if (currentPath.length < 2) {
+                alert("No path selected!");
+                return;
+            }
+            
+            let dest = currentPath[currentPath.length - 1];
+            if (dest.col === enemyPos.col && dest.row === enemyPos.row) {
+                alert("Cannot move onto enemy's square!");
+                return;
+            }
+            
+            let steps = currentPath.length - 1;
+            let maxSteps = Math.floor(playerSpeed / 5);
+            if (steps > maxSteps) {
+                alert(`Cannot move more than ${maxSteps} tiles with current speed (${playerSpeed})!`);
+                return;
+            }
+            
+            let moveCost = steps * 5;
+            playerSpeed -= moveCost;
+            playerPos.col = dest.col;
+            playerPos.row = dest.row;
+            currentPath = [];
+            movementTaken = true;
+            drawHexGrid();
+            updateSpeedDisplay();
+            addToBattleLog(`Moved ${steps} tiles. Speed remaining: ${playerSpeed}`);
+        }
+        
+        // Update mousemove handler to show available movement range
+        canvas.addEventListener("mousemove", function(e) {
+            if (!drawingPath) return;
+            let cell = getCellFromPixel(e.clientX, e.clientY);
+            if (cell) {
+                currentPath = computePath(playerPos, cell);
+                drawHexGrid();
+                
+                // Show feedback about path length and speed cost
+                let steps = currentPath.length - 1;
+                let maxSteps = Math.floor(playerSpeed / 5);
+                let canvas = document.getElementById("hexCanvas");
+                let ctx = canvas.getContext("2d");
+                ctx.fillStyle = steps > maxSteps ? "red" : "green";
+                ctx.font = "14px Arial";
+                ctx.fillText(`Path: ${steps} tiles (Max: ${maxSteps} with current speed)`, 10, 20);
+            }
+        });
+    </script>
+</body>
+</html> 
