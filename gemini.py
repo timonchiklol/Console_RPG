@@ -18,7 +18,7 @@ class Gemini:
         self.max_retries = len(self.api_keys) + 1  # one retry per key + one final retry
         
         # Initialize model and settings
-        self.model = "gemini-2.0-flash-exp"
+        self.model = "gemini-2.0-flash"
         self.temperature = temperature
         self.system_instruction = system_instruction or "You are a helpful AI assistant."
         
