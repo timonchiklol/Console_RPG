@@ -1,59 +1,43 @@
 spells_1lvl = {
     "Chromatic Orb": {
         "damage": "3d8",
-        "damage_type": ["acid", "cold", "fire", "lightning", "poison", "thunder"],
-        "range": 90,
-        "description": "Запускает сферу энергии выбранного типа.",
-        "game_mechanics": "Выберите тип урона. Бросьте 3d8."
+        "range": 10,
+        "game_mechanics": "на экране появляется сетка такая же как и у аттаки рукой и он наносит урон в радиусе 2 клетки в каждую сторону от персоонажа."
     },
     
     "Magic Missile": {
-        "damage": "1d4+1",
-        "range": 6,
-        "missiles": 3,
-        "description": "Three magical darts"
+        "damage": "3d3",
+        "range": 1000,
+        "game_mechanics": " выпускает 3 пули которые попадают с вероятностью 100%."
     },
     
     "Ice Knife": {
-        "damage": {
-            "piercing": "1d10",
-            "cold": "2d6"
-        },
-        "range": 60,
-        "description": "Бросает взрывающийся осколок льда.",
-        "game_mechanics": "Основная цель: 1d10 колющего + область: 2d6 холода."
+        "damage": "1d10",
+        "range": 100,
+        "game_mechanics": "игрок может выбрать на карте место вокруг которого появляется сетка из 9 клеток и это наносит спеш урон по всей этой области."
     },
     
     "Healing Word": {
         "healing": "1d4+3",
-        "range": 60,
-        "description": "Быстрое исцеляющее слово восстанавливает здоровье союзника.",
-        "game_mechanics": "Бонусное действие, лечит на 1d4+3."
+        "range": 1,
+        "game_mechanics": "лечит на 1d4+3."
     },
     
     "Burning Hands": {
-        "damage": "3d6",
-        "range": 2,
-        "area_type": "cone",
-        "description": "Fire cone"
+        "damage": "3d7",
+        "range": 20,
+        "game_mechanics": "игрок может выбрать на карте место вокруг которого появляется сетка из 9 клеток и это наносит спеш урон по всей этой области."
     },
     
     "Thunderwave": {
-        "damage": "2d8",
-        "range": 1,
-        "push": 2,
-        "description": "Thunder blast"
+        "damage": "2d5",
+        "range": 10000,
+        "game_mechanics": "наносит урон всем на карте кроме персоонажа ."
     },
     
     "Grease": {
         "range": 60,
-        "description": "Покрывает область скользким жиром",
-        "game_mechanics": "Квадрат 10х10, падение при провале спасброска",
-        "area_type": "square",
-        "area_size": 10,
-        "duration": "1 minute",
-        "save_type": "dexterity",
-        "terrain_effect": "difficult_terrain"
+        "game_mechanics": "Игрок выбирает квадрат 10х10, падение при провале спасброска",
     },
     
     "Shield": {
@@ -67,59 +51,44 @@ spells_1lvl = {
 # Словарь с заклинаниями второго уровня
 spells_2lvl = {
     "Scorching Ray": {
-        "damage": "2d6",
-        "range": 4,
-        "rays": 3,
-        "description": "Fire rays"
+        "damage": "3d9",
+        "range": 50,
+        "game_mechanics": "наносит урон всем на карте кроме персоонажа ."
     },
 
     "Shatter": {
-        "damage": "3d8",
-        "range": 3,
-        "area": 2,
-        "description": "Sound explosion"
+        "damage": "1d15",
+        "range": 5,
+        "game_mechanics": "наносит огромный урон в радиусе 1 клетки от персоонажа ."
     },
 
     "Dragon's Breath": {
-        "damage": "3d6",
-        "range": 2,
-        "area_type": "cone",
-        "description": "Dragon breath"
+        "damage": "2d7",
+        "range": 20,
+        "game_mechanics": "наносит урон + противник будет использовать следующую атаку с помехой ."
     },
 
     "Mirror Image": {
-        "duration": "1 minute",
-        "description": "Создаёт иллюзорные копии себя.",
-        "game_mechanics": "Создаёт 3 копии, враги должны угадать настоящую цель.",
-        "range": 0
+        "damage": "3d5",
+        "range": 50,
+        "game_mechanics": "создает копию персоонажа с 5 хп которая будет делать тоже самое что и персоонажа и наносить такой же урон ."
     },
 
     "Misty Step": {
-        "range": 6,
-        "type": "teleport",
-        "description": "Teleport"
+        "damage": "0",
+        "range": 10000,
+        "game_mechanics": "перемещает персоонажа на любую клетку на карте."
     },
 
     "Cloud of Daggers": {
-        "damage": "4d4",
-        "damage_type": ["slashing"],
-        "range": 60,
-        "description": "Создает облако вращающихся кинжалов",
-        "game_mechanics": "Куб 5х5, урон при входе и в начале хода",
-        "area_type": "cube",
-        "area_size": 5,
-        "duration": "1 minute",
-        "concentration": True
+        "damage": "2d5",
+        "range": 50,
+        "game_mechanics": "создает зону по выбору игрока в которой все получают урон за каждый ход нахождения в ней ."
     },
 
     "Hold Person": {
-        "range": 60,
-        "description": "Парализует гуманоида",
-        "game_mechanics": "Цель парализована при провале спасброска",
-        "save_type": "wisdom",
-        "duration": "1 minute",
-        "concentration": True,
-        "condition": "paralyzed",
-        "target_type": "humanoid"
-    }
+        "damage": "0",
+        "range": 100,
+        "game_mechanics": "не дает противнику нечего делать до тех пор пока его не ударят ."
+    },
 }

@@ -40,10 +40,10 @@
                     <h4>Level 1 Spells</h4>
                     {% for spell_name, spell_data in spells_1lvl.items() %}
                     <button 
+                        data-spell-type="spell"
+                        data-range="{{ spell_data.range }}"
                         data-spell-name="{{ spell_name }}"
-                        data-spell-data="{{ spell_data|tojson|safe }}"
-                        data-level="1"
-                        class="attack-button spell-button">
+                        class="attack-button spell-btn">
                         {{ spell_name }} (Range: {{ spell_data.range }} tiles)
                     </button>
                     {% endfor %}
@@ -51,10 +51,10 @@
                     <h4>Level 2 Spells</h4>
                     {% for spell_name, spell_data in spells_2lvl.items() %}
                     <button 
+                        data-spell-type="spell"
+                        data-range="{{ spell_data.range }}"
                         data-spell-name="{{ spell_name }}"
-                        data-spell-data="{{ spell_data|tojson|safe }}"
-                        data-level="2"
-                        class="attack-button spell-button">
+                        class="attack-button spell-btn">
                         {{ spell_name }} (Range: {{ spell_data.range }} tiles)
                     </button>
                     {% endfor %}
@@ -177,20 +177,32 @@
         let selectedSpellData = null;
 
         // When an attack option is selected, show its range
-        function selectAttack(type, range) {
-            selectedSpellName = null;  // Reset spell selection
-            selectedSpellData = null;
+        function selectAttack(type, range, spellName = null) {
             selectedAttack = type;
             attackRange = range;
+            selectedSpellName = spellName;
+            
+            // Добавляем сохранение данных заклинания
+            if (type === 'spell') {
+                const spellButton = document.querySelector(`[data-spell-name="${spellName}"]`);
+                selectedSpellData = {
+                    name: spellName,
+                    range: range
+                };
+                
+                document.getElementById("attackPreview").innerText = 
+                    `Selected spell: ${spellName} (Range: ${range} tiles)`;
+                document.getElementById("attackButton").disabled = true;
+                document.getElementById("castSpellButton").disabled = false;
+            } else {
+                selectedSpellData = null;
+                document.getElementById("attackPreview").innerText = 
+                    `Selected ${type} attack (Range: ${range} tiles)`;
+                document.getElementById("attackButton").disabled = false;
+                document.getElementById("castSpellButton").disabled = true;
+            }
             
             document.getElementById("attackPreview").style.display = "block";
-            document.getElementById("attackPreview").innerText = "Selected " + type + " attack. Range: " + range + " tile(s).";
-            
-            // Enable the appropriate button based on attack type
-            document.getElementById("attackButton").disabled = false;  // Changed this line
-            document.getElementById("castSpellButton").disabled = true;
-            
-            // Show range on the grid
             highlightRange(range);
         }
 
@@ -477,45 +489,6 @@
             }
         });
 
-        function selectSpell(spellName, spellData, level) {
-            try {
-                // Парсим данные заклинания, если они пришли как строка
-                if (typeof spellData === 'string') {
-                    spellData = JSON.parse(spellData);
-                }
-                
-                console.log('Selecting spell:', spellName);
-                console.log('Spell data:', spellData);
-                
-                // Сохраняем выбранное заклинание
-                selectedSpellName = spellName;
-                selectedSpellData = spellData;
-                selectedAttack = 'spell';
-                attackRange = spellData.range;
-                
-                // Отключаем кнопку атаки и включаем кнопку заклинания
-                document.getElementById("attackButton").disabled = true;
-                document.getElementById("castSpellButton").disabled = false;
-                
-                // Показываем информацию о выбранном заклинании
-                document.getElementById("attackPreview").style.display = "block";
-                document.getElementById("attackPreview").innerText = 
-                    `Selected spell: ${spellName} (Range: ${spellData.range} tiles)`;
-                
-                // Подсвечиваем радиус действия заклинания
-                highlightRange(spellData.range);
-                
-                // Скрываем элементы броска костей, если они были показаны
-                document.getElementById("diceControls").style.display = "none";
-                
-            } catch (error) {
-                console.error('Error in selectSpell:', error);
-                console.error('spellName:', spellName);
-                console.error('spellData:', spellData);
-                addToBattleLog("Error selecting spell!");
-            }
-        }
-
         function highlightRange(range) {
             clearHighlight();
             // Подсвечиваем все клетки в пределах радиуса действия
@@ -528,13 +501,13 @@
             }
         }
 
-        // Add event listener for spell buttons
-        document.querySelectorAll('.spell-button').forEach(button => {
-            button.addEventListener('click', function() {
-                const spellName = this.dataset.spellName;
-                const spellData = JSON.parse(this.dataset.spellData);
-                const level = parseInt(this.dataset.level);
-                selectSpell(spellName, spellData, level);
+        document.querySelectorAll('.spell-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                selectAttack(
+                    this.dataset.spellType,
+                    parseInt(this.dataset.range),
+                    this.dataset.spellName
+                );
             });
         });
     </script>
