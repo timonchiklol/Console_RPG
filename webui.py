@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 import random
 import math
+from dnd_spells import spells_1lvl, spells_2lvl  # Add this import at the top
 
 app = Flask(__name__)
 app.secret_key = 'secret-key-for-session'
@@ -94,7 +95,12 @@ def character_creation():
 def battle():
     if 'character' not in session:
         return redirect(url_for("character_creation"))
-    return render_template("battle.html", character=session['character'], enemy=session['enemy'])
+    # Pass both spell lists to the template
+    return render_template("battle.html", 
+                         character=session['character'], 
+                         enemy=session['enemy'],
+                         spells_1lvl=spells_1lvl,
+                         spells_2lvl=spells_2lvl)
 
 # Add new roll_dice endpoint
 @app.route("/api/roll_dice", methods=["POST"])
@@ -147,31 +153,109 @@ def api_attack():
 def api_cast_spell():
     if 'character' not in session or 'enemy' not in session:
         return jsonify({"error": "No battle in progress."})
-    character = session['character']
-    enemy = session['enemy']
-    spell = request.form.get("spell")
-    if spell not in character['spells']:
-        return jsonify({"error": "Invalid spell."})
-    if character['spell_slots'] <= 0:
-        return jsonify({"error": "No spell slots left."})
-    combat_log = f"{character['name']} casts {spell}. "
-    if spell == "Magic Missile":
-        damage = random.randint(3, 8)
-        enemy['hp'] -= damage
-        combat_log += f"Magic Missile deals {damage} damage."
-    elif spell == "Shield":
-        combat_log += "Shield activated! (But its effect isn't implemented in this demo.)"
-    character['spell_slots'] -= 1
-
-    enemy_defeated = enemy['hp'] <= 0
-    session['character'] = character
-    session['enemy'] = enemy
-    return jsonify({
-        "combat_log": combat_log,
-        "character_hp": character['hp'],
-        "enemy_hp": enemy['hp'],
-        "enemy_defeated": enemy_defeated
-    })
+    
+    try:
+        data = request.get_json()
+        spell_name = data.get('spell_name')
+        spell_data = data.get('spell_data')
+        target = data.get('target', {})
+        
+        print(f"Casting spell: {spell_name}")  # Для отладки
+        print(f"Spell data: {spell_data}")     # Для отладки
+        
+        character = session['character']
+        enemy = session['enemy']
+        
+        if character['spell_slots'] <= 0:
+            return jsonify({"error": "No spell slots remaining!"})
+        
+        combat_log = f"{character['name']} casts {spell_name}! "
+        damage = 0
+        
+        # Handle different spell effects
+        if spell_name == "Magic Missile":
+            # Always hits with 3 missiles
+            for _ in range(3):
+                missile_damage = random.randint(1, 4) + 1
+                damage += missile_damage
+                combat_log += f"Missile hits for {missile_damage} force damage! "
+        
+        elif spell_name == "Burning Hands":
+            # Cone of fire with saving throw
+            save_roll = random.randint(1, 20)
+            base_damage = sum(random.randint(1, 6) for _ in range(3))
+            if save_roll < 12:  # Failed save
+                damage = base_damage
+                combat_log += f"Enemy takes full {damage} fire damage! "
+            else:
+                damage = base_damage // 2
+                combat_log += f"Enemy saves for {damage} fire damage! "
+        
+        elif spell_name == "Shield":
+            # Defensive boost
+            character['temp_ac'] = character.get('ac', 10) + 5
+            character['shield_duration'] = 1
+            combat_log += "Creates a magical barrier! (+5 AC until next turn) "
+        
+        elif spell_name == "Thunderwave":
+            # Thunder damage + push
+            damage = sum(random.randint(1, 8) for _ in range(2))
+            enemy['pushed'] = 2  # Push 2 tiles
+            combat_log += f"Deals {damage} thunder damage and pushes enemy back! "
+        
+        elif spell_name == "Misty Step":
+            # Teleportation
+            character['can_teleport'] = True
+            combat_log += "Ready to teleport! Click a destination hex. "
+        
+        elif spell_name == "Scorching Ray":
+            # Multiple ray attacks
+            for i in range(3):
+                attack_roll = random.randint(1, 20)
+                if attack_roll >= enemy.get('ac', 10):
+                    ray_damage = sum(random.randint(1, 6) for _ in range(2))
+                    damage += ray_damage
+                    combat_log += f"Ray {i+1} hits for {ray_damage} fire damage! "
+                else:
+                    combat_log += f"Ray {i+1} misses! "
+        
+        elif spell_name == "Shatter":
+            # Area damage with structure bonus
+            damage = sum(random.randint(1, 8) for _ in range(3))
+            combat_log += f"Thunderous explosion deals {damage} damage! "
+        
+        elif spell_name == "Dragon's Breath":
+            # Cone breath weapon
+            save_roll = random.randint(1, 20)
+            base_damage = sum(random.randint(1, 6) for _ in range(3))
+            if save_roll < 15:  # Failed save
+                damage = base_damage
+                combat_log += f"Dragon breath deals {damage} damage! "
+            else:
+                damage = base_damage // 2
+                combat_log += f"Enemy partially avoids breath for {damage} damage! "
+        
+        # Apply damage if any was dealt
+        if damage > 0:
+            enemy['hp'] -= damage
+        
+        # Use spell slot
+        character['spell_slots'] -= 1
+        
+        session['character'] = character
+        session['enemy'] = enemy
+        
+        return jsonify({
+            "combat_log": combat_log,
+            "character_hp": character['hp'],
+            "enemy_hp": enemy['hp'],
+            "enemy_defeated": enemy['hp'] <= 0,
+            "spell_slots": character['spell_slots']
+        })
+        
+    except Exception as e:
+        print(f"Error casting spell: {e}")  # Для отладки
+        return jsonify({"error": f"Failed to cast spell: {str(e)}"})
 
 # Update enemy_attack endpoint to return position and use d20+d6
 @app.route("/api/enemy_attack", methods=["POST"])

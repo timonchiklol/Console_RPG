@@ -34,7 +34,31 @@
             <div class="attack-options">
                 <h3>Choose your attack:</h3>
                 <button onclick="selectAttack('melee', 1)">Melee Attack (Range: 1)</button>
-                <button onclick="selectAttack('magic', 3)">Magic Missile (Range: 3)</button>
+                
+                <h3>Available Spells:</h3>
+                <div class="spell-buttons">
+                    <h4>Level 1 Spells</h4>
+                    {% for spell_name, spell_data in spells_1lvl.items() %}
+                    <button 
+                        data-spell-name="{{ spell_name }}"
+                        data-spell-data="{{ spell_data|tojson|safe }}"
+                        data-level="1"
+                        class="attack-button spell-button">
+                        {{ spell_name }} (Range: {{ spell_data.range }} tiles)
+                    </button>
+                    {% endfor %}
+                    
+                    <h4>Level 2 Spells</h4>
+                    {% for spell_name, spell_data in spells_2lvl.items() %}
+                    <button 
+                        data-spell-name="{{ spell_name }}"
+                        data-spell-data="{{ spell_data|tojson|safe }}"
+                        data-level="2"
+                        class="attack-button spell-button">
+                        {{ spell_name }} (Range: {{ spell_data.range }} tiles)
+                    </button>
+                    {% endfor %}
+                </div>
             </div>
             <div class="action-buttons">
                 <button id="attackButton" disabled>Attack</button>
@@ -57,6 +81,84 @@
     <br>
     <p id="instructions">Use arrow keys to move your character.</p>
     
+    <style>
+    .spell-level {
+        margin-bottom: 20px;
+    }
+
+    .spell-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 10px;
+        margin: 5px;
+        background-color: white;
+        width: 200px;
+        display: inline-block;
+        vertical-align: top;
+    }
+
+    .spell-details {
+        font-size: 0.9em;
+        color: #666;
+        margin-top: 5px;
+    }
+
+    .spell-button {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 5px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+
+    .level-1 {
+        background-color: #e3f2fd;
+        color: #1565c0;
+    }
+
+    .level-2 {
+        background-color: #fff3e0;
+        color: #ef6c00;
+    }
+
+    .spell-button:hover {
+        filter: brightness(0.9);
+    }
+
+    .spell-button:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+    }
+
+    .attack-button {
+        display: block;
+        width: 100%;
+        padding: 10px;
+        margin: 5px 0;
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        text-align: left;
+    }
+
+    .attack-button:hover {
+        background-color: #45a049;
+    }
+
+    .attack-button:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+    }
+
+    h4 {
+        margin: 15px 0 5px 0;
+    }
+    </style>
+    
     <script src="{{ url_for('static', filename='js/hexgrid.js') }}"></script>
     <script>
         // Draw initial hex grid
@@ -70,16 +172,23 @@
         let pendingDamageRoll = null;
         let movementTaken = false;
 
+        // Глобальные переменные для хранения выбранного заклинания
+        let selectedSpellName = null;
+        let selectedSpellData = null;
+
         // When an attack option is selected, show its range
         function selectAttack(type, range) {
+            selectedSpellName = null;  // Reset spell selection
+            selectedSpellData = null;
             selectedAttack = type;
             attackRange = range;
+            
             document.getElementById("attackPreview").style.display = "block";
             document.getElementById("attackPreview").innerText = "Selected " + type + " attack. Range: " + range + " tile(s).";
             
             // Enable the appropriate button based on attack type
-            document.getElementById("attackButton").disabled = (type !== 'melee');
-            document.getElementById("castSpellButton").disabled = (type !== 'magic');
+            document.getElementById("attackButton").disabled = false;  // Changed this line
+            document.getElementById("castSpellButton").disabled = true;
             
             // Show range on the grid
             highlightRange(range);
@@ -100,9 +209,9 @@
         // Clear attack selection and reset controls
         function clearAttackSelection() {
             selectedAttack = null;
+            selectedSpellName = null;
+            selectedSpellData = null;
             attackRange = 0;
-            pendingHitRoll = null;
-            pendingDamageRoll = null;
             document.getElementById("attackPreview").style.display = "none";
             document.getElementById("diceControls").style.display = "none";
             document.getElementById("attackButton").disabled = true;
@@ -194,23 +303,63 @@
                 return;
             }
             
-            // Show dice controls only after confirming the attack is valid
+            // Show dice controls for melee attack
             document.getElementById("diceControls").style.display = "block";
+            document.getElementById("rollHitButton").style.display = "inline-block";
+            document.getElementById("rollDamageButton").style.display = "none";
         });
 
         // Cast Spell button handler
         document.getElementById("castSpellButton").addEventListener("click", function() {
             if (playerActionTaken) {
-                addToBattleLog("You have already attacked this turn!");
+                addToBattleLog("You have already acted this turn!");
                 return;
             }
+            
+            if (!selectedSpellName || !selectedSpellData) {
+                addToBattleLog("No spell selected!");
+                return;
+            }
+            
             if (!isInRange(enemyPos.col, enemyPos.row, attackRange)) {
                 addToBattleLog("Enemy is not in range!");
                 return;
             }
             
-            // Show dice controls only after confirming the spell is valid
-            document.getElementById("diceControls").style.display = "block";
+            // Отправляем заклинание на сервер
+            fetch("/api/cast_spell", {
+                method: "POST",
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    spell_name: selectedSpellName,
+                    spell_data: selectedSpellData,
+                    target: {
+                        col: enemyPos.col,
+                        row: enemyPos.row
+                    }
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    addToBattleLog(data.error);
+                    return;
+                }
+                
+                updateBattleStatus(data);
+                playerActionTaken = true;
+                clearAttackSelection();
+                
+                if (data.spell_slots !== undefined) {
+                    document.getElementById("spell_slots").innerText = data.spell_slots;
+                }
+            })
+            .catch(error => {
+                console.error('Error casting spell:', error);
+                addToBattleLog("Failed to cast spell!");
+            });
         });
 
         // End Turn button handler
@@ -241,17 +390,36 @@
                 addToBattleLog(data.combat_log);
             }
             if (data.character_hp !== undefined) {
-                document.getElementById("char_hp").innerText = data.character_hp;
+                let hp = Number(data.character_hp);
+                document.getElementById("char_hp").innerText = hp;
+                if (hp <= 0) {
+                    addToBattleLog("You have been defeated!");
+                    endBattle(false);
+                }
             }
             if (data.enemy_hp !== undefined) {
-                document.getElementById("enemy_hp").innerText = data.enemy_hp;
+                let hp = Number(data.enemy_hp);
+                document.getElementById("enemy_hp").innerText = hp;
+                if (hp <= 0) {
+                    addToBattleLog("Enemy defeated!");
+                    endBattle(true);
+                }
             }
-            if (data.enemy_defeated) {
-                addToBattleLog("Enemy defeated!");
-            }
-            if (data.character_defeated) {
-                addToBattleLog("You have been defeated!");
-            }
+        }
+
+        function endBattle(victory) {
+            // Disable all controls
+            document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+            
+            // Show victory/defeat message
+            const message = victory ? "Victory! Battle ended." : "Defeat! Battle ended.";
+            addToBattleLog(message);
+            
+            // Optional: Add a button to return to main screen
+            const returnButton = document.createElement('button');
+            returnButton.innerText = "Return to Main Screen";
+            returnButton.onclick = () => window.location.href = '/';
+            document.body.appendChild(returnButton);
         }
 
         // Update applyMove function to check for movement action
@@ -307,6 +475,67 @@
                 ctx.font = "14px Arial";
                 ctx.fillText(`Path: ${steps} tiles (Max: ${maxSteps} with current speed)`, 10, 20);
             }
+        });
+
+        function selectSpell(spellName, spellData, level) {
+            try {
+                // Парсим данные заклинания, если они пришли как строка
+                if (typeof spellData === 'string') {
+                    spellData = JSON.parse(spellData);
+                }
+                
+                console.log('Selecting spell:', spellName);
+                console.log('Spell data:', spellData);
+                
+                // Сохраняем выбранное заклинание
+                selectedSpellName = spellName;
+                selectedSpellData = spellData;
+                selectedAttack = 'spell';
+                attackRange = spellData.range;
+                
+                // Отключаем кнопку атаки и включаем кнопку заклинания
+                document.getElementById("attackButton").disabled = true;
+                document.getElementById("castSpellButton").disabled = false;
+                
+                // Показываем информацию о выбранном заклинании
+                document.getElementById("attackPreview").style.display = "block";
+                document.getElementById("attackPreview").innerText = 
+                    `Selected spell: ${spellName} (Range: ${spellData.range} tiles)`;
+                
+                // Подсвечиваем радиус действия заклинания
+                highlightRange(spellData.range);
+                
+                // Скрываем элементы броска костей, если они были показаны
+                document.getElementById("diceControls").style.display = "none";
+                
+            } catch (error) {
+                console.error('Error in selectSpell:', error);
+                console.error('spellName:', spellName);
+                console.error('spellData:', spellData);
+                addToBattleLog("Error selecting spell!");
+            }
+        }
+
+        function highlightRange(range) {
+            clearHighlight();
+            // Подсвечиваем все клетки в пределах радиуса действия
+            for (let col = 0; col < gridCols; col++) {
+                for (let row = 0; row < gridRows; row++) {
+                    if (isInRange(col, row, range)) {
+                        highlightCell(col, row);
+                    }
+                }
+            }
+        }
+
+        // Add event listener for spell buttons
+        document.querySelectorAll('.spell-button').forEach(button => {
+            button.addEventListener('click', function() {
+                const spellName = this.dataset.spellName;
+                const spellData = JSON.parse(this.dataset.spellData);
+                const level = parseInt(this.dataset.level);
+                selectSpell(spellName, spellData, level);
+            });
         });
     </script>
 </body>
