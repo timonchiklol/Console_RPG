@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, session, Response
+from flask import Flask, render_template, request, jsonify, session, Response, send_from_directory
 from DEF import DnDGame
 from character_config import RACE_STATS, CLASS_BONUSES, RACE_TRANSLATIONS, CLASS_TRANSLATIONS
 from room_manager import RoomManager
@@ -95,10 +95,7 @@ def index():
     if 'player_id' not in session:
         session['player_id'] = str(uuid.uuid4())
     lang = session.get('language', 'en')
-    if lang == 'ru':
-        return render_template('ru/index.html')
-    else:
-        return render_template('en/index.html')
+    return render_template('index.html', lang=lang)
 
 @app.route('/start_game', methods=['POST'])
 def start_game():
@@ -773,18 +770,29 @@ def get_new_messages(room_id: str, last_message_id: str = None):
 @app.route('/character')
 def character():
     lang = session.get('language', 'en')
-    if lang == 'ru':
-        return render_template('ru/character.html')
-    else:
-        return render_template('en/character.html')
+    return render_template('character.html', lang=lang)
 
 @app.route('/game')
 def game():
     lang = session.get('language', 'en')
-    if lang == 'ru':
-        return render_template('ru/game.html')
-    else:
-        return render_template('en/game.html')
+    return render_template('game.html', lang=lang)
+
+@app.route('/translations/<path:filename>')
+def serve_translation(filename):
+    return send_from_directory('translations', filename)
+
+def load_translations(lang):
+    try:
+        with open(Path('translations') / f'{lang}.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        return {}
+
+@app.template_filter('trans')
+def translate_filter(key):
+    lang = session.get('language', 'en')
+    translations = load_translations(lang)
+    return translations.get(key, key)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8000)

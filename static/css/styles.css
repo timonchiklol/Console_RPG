@@ -1,0 +1,17 @@
+* { 
+    font-family: Arial, sans-serif !important; 
+}
+
+.medieval { 
+    font-family: 'MedievalSharp', cursive; 
+}
+
+.game-bg { 
+    background-image: url('https://images.unsplash.com/photo-1519074069444-1ba4fff66d16?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'); 
+    background-size: cover; 
+    background-position: center; 
+}
+
+[v-cloak] { 
+    display: none; 
+} 
