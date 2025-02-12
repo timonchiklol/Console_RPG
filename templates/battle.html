@@ -176,26 +176,146 @@
         let selectedSpellName = null;
         let selectedSpellData = null;
 
-        // When an attack option is selected, show its range
+        // Добавим глобальные переменные
+        let selectedSpellTarget = null;
+        let waitingForSpellTarget = false;
+
+        // Добавим функцию для удаления обработчиков
+        function removeMouseMoveHandlers() {
+            canvas.removeEventListener("mousemove", handleSpellAreaPreview);
+        }
+
+        // Создадим отдельную функцию для обработки перемещения мыши
+        function handleSpellAreaPreview(e) {
+            let cell = getCellFromPixel(e.clientX, e.clientY);
+            if (cell) {
+                clearHighlight();
+                
+                // Сначала показываем радиус действия заклинания от игрока
+                let range = selectedSpellData.range;
+                for (let col = 0; col < gridCols; col++) {
+                    for (let row = 0; row < gridRows; row++) {
+                        let distance = Math.sqrt(
+                            Math.pow(col - playerPos.col, 2) + 
+                            Math.pow(row - playerPos.row, 2)
+                        );
+                        if (distance <= range) {
+                            // Подсвечиваем доступную зону другим цветом
+                            highlightCell(col, row, 'rgba(100, 200, 100, 0.3)');
+                        }
+                    }
+                }
+                
+                // Если клетка в пределах радиуса действия, показываем область эффекта
+                let distanceToTarget = Math.sqrt(
+                    Math.pow(cell.col - playerPos.col, 2) + 
+                    Math.pow(cell.row - playerPos.row, 2)
+                );
+                
+                if (distanceToTarget <= range) {
+                    switch(selectedSpellName) {
+                        case "Ice Knife":
+                        case "Cloud of Daggers":
+                        case "Burning Hands":
+                            highlightArea3x3(cell, 'rgba(255, 0, 0, 0.3)');
+                            break;
+                            
+                        case "Chromatic Orb":
+                        case "Dragon's Breath":
+                            highlightRadius(cell, 2, 'rgba(255, 0, 0, 0.3)');
+                            break;
+                            
+                        case "Shatter":
+                            highlightRadius(cell, 1, 'rgba(255, 0, 0, 0.3)');
+                            break;
+                            
+                        case "Magic Missile":
+                        case "Hold Person":
+                        case "Scorching Ray":
+                            highlightCell(cell.col, cell.row, 'rgba(255, 0, 0, 0.3)');
+                            break;
+                    }
+                }
+            }
+        }
+
+        // Обновим функции подсветки, чтобы принимать цвет
+        function highlightCell(col, row, color = 'rgba(255, 255, 0, 0.3)') {
+            let ctx = canvas.getContext("2d");
+            // ... остальной код подсветки ...
+            ctx.fillStyle = color;
+            // ... остальной код подсветки ...
+        }
+
+        function highlightArea3x3(center, color = 'rgba(255, 255, 0, 0.3)') {
+            for (let col = center.col - 1; col <= center.col + 1; col++) {
+                for (let row = center.row - 1; row <= center.row + 1; row++) {
+                    if (col >= 0 && col < gridCols && row >= 0 && row < gridRows) {
+                        highlightCell(col, row, color);
+                    }
+                }
+            }
+        }
+
+        function highlightRadius(center, radius, color = 'rgba(255, 255, 0, 0.3)') {
+            for (let col = 0; col < gridCols; col++) {
+                for (let row = 0; row < gridRows; row++) {
+                    let distance = Math.sqrt(
+                        Math.pow(col - center.col, 2) + 
+                        Math.pow(row - center.row, 2)
+                    );
+                    if (distance <= radius) {
+                        highlightCell(col, row, color);
+                    }
+                }
+            }
+        }
+
+        // Обновим функцию highlightSpellArea
+        function highlightSpellArea(spellName, range) {
+            clearHighlight();
+            removeMouseMoveHandlers();
+            
+            // Для всех заклинаний, требующих выбора цели, добавляем обработчик
+            if (["Ice Knife", "Cloud of Daggers", "Chromatic Orb", "Scorching Ray", 
+                 "Shatter", "Dragon's Breath", "Grease", "Hold Person", 
+                 "Magic Missile", "Misty Step", "Burning Hands"].includes(spellName)) {
+                canvas.addEventListener("mousemove", handleSpellAreaPreview);
+            } else {
+                // Для заклинаний с фиксированной областью
+                switch(spellName) {
+                    case "Thunderwave":
+                        highlightAllExceptPlayer();
+                        break;
+                    default:
+                        highlightRange(range);
+                }
+            }
+        }
+
+        // Обновим функцию selectAttack
         function selectAttack(type, range, spellName = null) {
             selectedAttack = type;
             attackRange = range;
             selectedSpellName = spellName;
+            selectedSpellTarget = null; // Сбрасываем цель
             
-            // Добавляем сохранение данных заклинания
             if (type === 'spell') {
-                const spellButton = document.querySelector(`[data-spell-name="${spellName}"]`);
                 selectedSpellData = {
                     name: spellName,
                     range: range
                 };
                 
+                highlightSpellArea(spellName, range);
                 document.getElementById("attackPreview").innerText = 
-                    `Selected spell: ${spellName} (Range: ${range} tiles)`;
+                    `Selected spell: ${spellName} (Range: ${range} tiles). Click on target location.`;
                 document.getElementById("attackButton").disabled = true;
-                document.getElementById("castSpellButton").disabled = false;
+                document.getElementById("castSpellButton").disabled = true; // Отключаем кнопку до выбора цели
+                waitingForSpellTarget = true;
             } else {
+                waitingForSpellTarget = false;
                 selectedSpellData = null;
+                highlightRange(range);
                 document.getElementById("attackPreview").innerText = 
                     `Selected ${type} attack (Range: ${range} tiles)`;
                 document.getElementById("attackButton").disabled = false;
@@ -203,7 +323,41 @@
             }
             
             document.getElementById("attackPreview").style.display = "block";
-            highlightRange(range);
+        }
+
+        // Добавим вспомогательные функции для подсветки
+        function highlightRadius(center, radius) {
+            for (let col = 0; col < gridCols; col++) {
+                for (let row = 0; row < gridRows; row++) {
+                    let distance = Math.sqrt(
+                        Math.pow(col - center.col, 2) + 
+                        Math.pow(row - center.row, 2)
+                    );
+                    if (distance <= radius) {
+                        highlightCell(col, row);
+                    }
+                }
+            }
+        }
+
+        function highlightArea3x3(center) {
+            for (let col = center.col - 1; col <= center.col + 1; col++) {
+                for (let row = center.row - 1; row <= center.row + 1; row++) {
+                    if (col >= 0 && col < gridCols && row >= 0 && row < gridRows) {
+                        highlightCell(col, row);
+                    }
+                }
+            }
+        }
+
+        function highlightAllExceptPlayer() {
+            for (let col = 0; col < gridCols; col++) {
+                for (let row = 0; row < gridRows; row++) {
+                    if (col !== playerPos.col || row !== playerPos.row) {
+                        highlightCell(col, row);
+                    }
+                }
+            }
         }
 
         // Add message to battle log
@@ -223,7 +377,10 @@
             selectedAttack = null;
             selectedSpellName = null;
             selectedSpellData = null;
+            selectedSpellTarget = null;
+            waitingForSpellTarget = false;
             attackRange = 0;
+            removeMouseMoveHandlers();
             document.getElementById("attackPreview").style.display = "none";
             document.getElementById("diceControls").style.display = "none";
             document.getElementById("attackButton").disabled = true;
@@ -333,12 +490,7 @@
                 return;
             }
             
-            if (!isInRange(enemyPos.col, enemyPos.row, attackRange)) {
-                addToBattleLog("Enemy is not in range!");
-                return;
-            }
-            
-            // Отправляем заклинание на сервер
+            // Отправляем заклинание на сервер с целью
             fetch("/api/cast_spell", {
                 method: "POST",
                 headers: {
@@ -347,7 +499,7 @@
                 body: JSON.stringify({
                     spell_name: selectedSpellName,
                     spell_data: selectedSpellData,
-                    target: {
+                    target: selectedSpellTarget || {
                         col: enemyPos.col,
                         row: enemyPos.row
                     }
@@ -367,10 +519,6 @@
                 if (data.spell_slots !== undefined) {
                     document.getElementById("spell_slots").innerText = data.spell_slots;
                 }
-            })
-            .catch(error => {
-                console.error('Error casting spell:', error);
-                addToBattleLog("Failed to cast spell!");
             });
         });
 
@@ -434,7 +582,7 @@
             document.body.appendChild(returnButton);
         }
 
-        // Update applyMove function to check for movement action
+        // Обновляем функцию applyMove
         function applyMove() {
             if (movementTaken) {
                 addToBattleLog("You have already moved this turn!");
@@ -453,24 +601,37 @@
             }
             
             let steps = currentPath.length - 1;
-            let maxSteps = Math.floor(playerSpeed / 5);
-            if (steps > maxSteps) {
-                alert(`Cannot move more than ${maxSteps} tiles with current speed (${playerSpeed})!`);
-                return;
-            }
             
-            let moveCost = steps * 5;
-            playerSpeed -= moveCost;
-            playerPos.col = dest.col;
-            playerPos.row = dest.row;
-            currentPath = [];
-            movementTaken = true;
-            drawHexGrid();
-            updateSpeedDisplay();
-            addToBattleLog(`Moved ${steps} tiles. Speed remaining: ${playerSpeed}`);
+            // Проверяем активен ли Misty Step
+            if (selectedSpellName === "Misty Step") {
+                // Если Misty Step активен - двигаемся без ограничений
+                playerPos.col = dest.col;
+                playerPos.row = dest.row;
+                currentPath = [];
+                movementTaken = true;
+                drawHexGrid();
+                addToBattleLog(`Teleported ${steps} tiles with Misty Step!`);
+            } else {
+                // Обычное движение с ограничением скорости
+                let maxSteps = Math.floor(playerSpeed / 5);
+                if (steps > maxSteps) {
+                    alert(`Cannot move more than ${maxSteps} tiles with current speed (${playerSpeed})!`);
+                    return;
+                }
+                
+                let moveCost = steps * 5;
+                playerSpeed -= moveCost;
+                playerPos.col = dest.col;
+                playerPos.row = dest.row;
+                currentPath = [];
+                movementTaken = true;
+                drawHexGrid();
+                updateSpeedDisplay();
+                addToBattleLog(`Moved ${steps} tiles. Speed remaining: ${playerSpeed}`);
+            }
         }
         
-        // Update mousemove handler to show available movement range
+        // Обновляем обработчик mousemove
         canvas.addEventListener("mousemove", function(e) {
             if (!drawingPath) return;
             let cell = getCellFromPixel(e.clientX, e.clientY);
@@ -478,14 +639,13 @@
                 currentPath = computePath(playerPos, cell);
                 drawHexGrid();
                 
-                // Show feedback about path length and speed cost
+                // Показываем только длину пути без проверки скорости
                 let steps = currentPath.length - 1;
-                let maxSteps = Math.floor(playerSpeed / 5);
                 let canvas = document.getElementById("hexCanvas");
                 let ctx = canvas.getContext("2d");
-                ctx.fillStyle = steps > maxSteps ? "red" : "green";
+                ctx.fillStyle = "green";
                 ctx.font = "14px Arial";
-                ctx.fillText(`Path: ${steps} tiles (Max: ${maxSteps} with current speed)`, 10, 20);
+                ctx.fillText(`Path: ${steps} tiles`, 10, 20);
             }
         });
 
@@ -509,6 +669,18 @@
                     this.dataset.spellName
                 );
             });
+        });
+
+        // Обновим обработчик клика по canvas
+        canvas.addEventListener("click", function(e) {
+            if (waitingForSpellTarget) {
+                let cell = getCellFromPixel(e.clientX, e.clientY);
+                if (cell) {
+                    selectedSpellTarget = cell;
+                    addToBattleLog(`Target selected at (${cell.col}, ${cell.row})`);
+                    document.getElementById("castSpellButton").disabled = false;
+                }
+            }
         });
     </script>
 </body>

@@ -1,38 +1,43 @@
 spells_1lvl = {
     "Chromatic Orb": {
         "damage": "3d8",
-        "range": 10,
-        "game_mechanics": "на экране появляется сетка такая же как и у аттаки рукой и он наносит урон в радиусе 2 клетки в каждую сторону от персоонажа."
+        "range": 4,
+        "area_radius": 2,
+        "game_mechanics": "наносит урон в радиусе 2 клетки в каждую сторону от точки попадания."
     },
     
     "Magic Missile": {
         "damage": "3d3",
-        "range": 1000,
-        "game_mechanics": " выпускает 3 пули которые попадают с вероятностью 100%."
+        "range": 6,
+        "area_radius": 0,
+        "game_mechanics": "выпускает 3 пули которые попадают с вероятностью 100%."
     },
     
     "Ice Knife": {
         "damage": "1d10",
-        "range": 100,
-        "game_mechanics": "игрок может выбрать на карте место вокруг которого появляется сетка из 9 клеток и это наносит спеш урон по всей этой области."
+        "range": 4,
+        "area_radius": 1,
+        "game_mechanics": "По выбору игрока наносит урон в радиусе 1 клетка от точки попадания."
     },
     
     "Healing Word": {
         "healing": "1d4+3",
         "range": 1,
-        "game_mechanics": "лечит на 1d4+3."
+        "game_mechanics": "лечит игрока на 1d4+3."
     },
     
     "Burning Hands": {
         "damage": "3d7",
-        "range": 20,
-        "game_mechanics": "игрок может выбрать на карте место вокруг которого появляется сетка из 9 клеток и это наносит спеш урон по всей этой области."
+        "range": 3,
+        "area_radius": 1,
+        "game_mechanics": "наносит урон в конусе 3x3 клетки."
     },
     
     "Thunderwave": {
         "damage": "2d5",
-        "range": 10000,
-        "game_mechanics": "наносит урон всем на карте кроме персоонажа ."
+        "range": 3,
+        "area_radius": 2,
+        "game_mechanics": "наносит урон в радиусе 2 клетки от персонажа."
     },
     
     "Grease": {
@@ -52,20 +57,23 @@ spells_1lvl = {
 spells_2lvl = {
     "Scorching Ray": {
         "damage": "3d9",
-        "range": 50,
-        "game_mechanics": "наносит урон всем на карте кроме персоонажа ."
+        "range": 5,
+        "area_radius": 0,
+        "game_mechanics": "выпускает 3 луча по отдельным целям."
     },
 
     "Shatter": {
         "damage": "1d15",
-        "range": 5,
-        "game_mechanics": "наносит огромный урон в радиусе 1 клетки от персоонажа ."
+        "range": 3,
+        "area_radius": 1,
+        "game_mechanics": "наносит урон в радиусе 1 клетки от точки попадания."
     },
 
     "Dragon's Breath": {
         "damage": "2d7",
-        "range": 20,
-        "game_mechanics": "наносит урон + противник будет использовать следующую атаку с помехой ."
+        "range": 3,
+        "area_radius": 2,
+        "game_mechanics": "наносит урон в конусе 5x5 клеток."
     },
 
     "Mirror Image": {
@@ -76,14 +84,15 @@ spells_2lvl = {
 
     "Misty Step": {
         "damage": "0",
-        "range": 10000,
-        "game_mechanics": "перемещает персоонажа на любую клетку на карте."
+        "range": 1000,
+        "game_mechanics": "дает игроку бесконечную скорость перемещения на текущий ход."
     },
 
     "Cloud of Daggers": {
         "damage": "2d5",
-        "range": 50,
-        "game_mechanics": "создает зону по выбору игрока в которой все получают урон за каждый ход нахождения в ней ."
+        "range": 4,
+        "area_radius": 1,
+        "game_mechanics": "создает зону 3x3 клетки с уроном."
     },
 
     "Hold Person": {

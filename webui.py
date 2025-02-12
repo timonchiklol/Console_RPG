@@ -160,9 +160,6 @@ def api_cast_spell():
         spell_data = data.get('spell_data')
         target = data.get('target', {})
         
-        print(f"Casting spell: {spell_name}")  # Для отладки
-        print(f"Spell data: {spell_data}")     # Для отладки
-        
         character = session['character']
         enemy = session['enemy']
         
@@ -172,74 +169,81 @@ def api_cast_spell():
         combat_log = f"{character['name']} casts {spell_name}! "
         damage = 0
         
-        # Handle different spell effects
-        if spell_name == "Magic Missile":
-            # Always hits with 3 missiles
+        # Обработка всех заклинаний
+        if spell_name == "Chromatic Orb":
+            damage = sum(random.randint(1, 8) for _ in range(3))
+            combat_log += f"Orb explodes for {damage} damage in 2-tile radius! "
+        
+        elif spell_name == "Magic Missile":
             for _ in range(3):
-                missile_damage = random.randint(1, 4) + 1
+                missile_damage = random.randint(1, 3)
                 damage += missile_damage
                 combat_log += f"Missile hits for {missile_damage} force damage! "
         
-        elif spell_name == "Burning Hands":
-            # Cone of fire with saving throw
-            save_roll = random.randint(1, 20)
-            base_damage = sum(random.randint(1, 6) for _ in range(3))
-            if save_roll < 12:  # Failed save
-                damage = base_damage
-                combat_log += f"Enemy takes full {damage} fire damage! "
-            else:
-                damage = base_damage // 2
-                combat_log += f"Enemy saves for {damage} fire damage! "
+        elif spell_name == "Ice Knife":
+            primary_damage = random.randint(1, 10)
+            area_damage = sum(random.randint(1, 6) for _ in range(2))
+            damage = primary_damage + area_damage
+            combat_log += f"Ice Knife hits for {primary_damage} + {area_damage} area damage! "
         
-        elif spell_name == "Shield":
-            # Defensive boost
-            character['temp_ac'] = character.get('ac', 10) + 5
-            character['shield_duration'] = 1
-            combat_log += "Creates a magical barrier! (+5 AC until next turn) "
+        elif spell_name == "Healing Word":
+            healing = random.randint(1, 4) + 3
+            character['hp'] += healing
+            combat_log += f"Heals for {healing} HP! "
         
         elif spell_name == "Thunderwave":
-            # Thunder damage + push
-            damage = sum(random.randint(1, 8) for _ in range(2))
-            enemy['pushed'] = 2  # Push 2 tiles
-            combat_log += f"Deals {damage} thunder damage and pushes enemy back! "
+            damage = sum(random.randint(1, 5) for _ in range(2))
+            combat_log += f"Thunder damages all enemies for {damage}! "
         
-        elif spell_name == "Misty Step":
-            # Teleportation
-            character['can_teleport'] = True
-            combat_log += "Ready to teleport! Click a destination hex. "
+        elif spell_name == "Shield":
+            character['damage_reduction'] = 0.5
+            character['shield_duration'] = 1
+            combat_log += "Magical shield reduces incoming damage by half! "
         
         elif spell_name == "Scorching Ray":
-            # Multiple ray attacks
             for i in range(3):
-                attack_roll = random.randint(1, 20)
-                if attack_roll >= enemy.get('ac', 10):
-                    ray_damage = sum(random.randint(1, 6) for _ in range(2))
-                    damage += ray_damage
-                    combat_log += f"Ray {i+1} hits for {ray_damage} fire damage! "
-                else:
-                    combat_log += f"Ray {i+1} misses! "
+                ray_damage = random.randint(1, 9)
+                damage += ray_damage
+                combat_log += f"Ray {i+1} hits for {ray_damage} fire damage! "
         
         elif spell_name == "Shatter":
-            # Area damage with structure bonus
-            damage = sum(random.randint(1, 8) for _ in range(3))
-            combat_log += f"Thunderous explosion deals {damage} damage! "
+            damage = random.randint(1, 15)
+            combat_log += f"Shatter deals {damage} thunder damage! "
         
         elif spell_name == "Dragon's Breath":
-            # Cone breath weapon
-            save_roll = random.randint(1, 20)
-            base_damage = sum(random.randint(1, 6) for _ in range(3))
-            if save_roll < 15:  # Failed save
-                damage = base_damage
-                combat_log += f"Dragon breath deals {damage} damage! "
-            else:
-                damage = base_damage // 2
-                combat_log += f"Enemy partially avoids breath for {damage} damage! "
+            damage = sum(random.randint(1, 7) for _ in range(2))
+            enemy['disadvantage'] = True
+            combat_log += f"Dragon's Breath deals {damage} damage and applies disadvantage! "
         
-        # Apply damage if any was dealt
+        elif spell_name == "Mirror Image":
+            character['clone'] = {
+                'hp': 5,
+                'active': True
+            }
+            combat_log += "Created a mirror image with 5 HP! "
+        
+        elif spell_name == "Misty Step":
+            character['speed'] = float('inf')
+            combat_log += "You can now move anywhere on the map! "
+        
+        elif spell_name == "Cloud of Daggers":
+            damage = sum(random.randint(1, 5) for _ in range(2))
+            session['cloud_daggers'] = {
+                'pos': target,
+                'duration': 3,
+                'damage': damage
+            }
+            combat_log += f"Created a cloud of daggers dealing {damage} damage! "
+        
+        elif spell_name == "Hold Person":
+            enemy['paralyzed'] = True
+            combat_log += "Enemy is paralyzed until damaged! "
+
+        # Применяем урон если он есть
         if damage > 0:
             enemy['hp'] -= damage
-        
-        # Use spell slot
+
+        # Используем слот заклинания
         character['spell_slots'] -= 1
         
         session['character'] = character
@@ -254,7 +258,7 @@ def api_cast_spell():
         })
         
     except Exception as e:
-        print(f"Error casting spell: {e}")  # Для отладки
+        print(f"Error casting spell: {e}")
         return jsonify({"error": f"Failed to cast spell: {str(e)}"})
 
 # Update enemy_attack endpoint to return position and use d20+d6
