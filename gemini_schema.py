@@ -40,6 +40,8 @@ class RoomState(BaseModel):
 
 class PlayerUpdate(BaseModel):
     player_id: str
+    player_race: Optional[str] = None
+    player_class: Optional[str] = None
     health_points: Optional[int] = None
     gold: Optional[int] = None
     damage: Optional[int] = None
@@ -49,6 +51,9 @@ class PlayerUpdate(BaseModel):
     in_combat: Optional[bool] = None
     dice_roll_needed: Optional[bool] = None
     dice_type: Optional[str] = None
+    ability_modifier: Optional[str] = None
+    proficient: Optional[bool] = None
+    ability_scores: Optional[Dict[str, int]] = None
 
 class CombatResult(BaseModel):
     damage_dealt: Optional[int] = None
@@ -59,6 +64,7 @@ class DiceRoll(BaseModel):
     required: bool
     type: Optional[str] = None
     reason: Optional[str] = None
+    modifier: Optional[Dict[str, Union[str, bool]]] = None
 
 # Define the schema as a dictionary that matches Gemini's expected format
 GAME_RESPONSE_SCHEMA = {
@@ -82,7 +88,9 @@ GAME_RESPONSE_SCHEMA = {
                     "magic_2lvl": {"type": "INTEGER"},
                     "in_combat": {"type": "BOOLEAN"},
                     "dice_roll_needed": {"type": "BOOLEAN"},
-                    "dice_type": {"type": "STRING"}
+                    "dice_type": {"type": "STRING"},
+                    "ability_modifier": {"type": "STRING"},
+                    "proficient": {"type": "BOOLEAN"},
                 },
                 "required": ["player_id"]
             },
@@ -96,15 +104,6 @@ GAME_RESPONSE_SCHEMA = {
                 "outcome": {"type": "STRING"}
             },
             "description": "Results of combat actions"
-        },
-        "dice_roll": {
-            "type": "OBJECT",
-            "properties": {
-                "required": {"type": "BOOLEAN"},
-                "type": {"type": "STRING"},
-                "reason": {"type": "STRING"}
-            },
-            "description": "Information about required dice rolls"
         }
     },
     "required": ["message"]

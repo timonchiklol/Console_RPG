@@ -7,7 +7,7 @@ import sys
 from gemini_schema import PlayerState, RoomState
 import logging
 from prompts import SYSTEM_PROMPTS, GAME_START_PROMPTS
-from character_config import get_race_stats, get_class_bonuses, get_enemy, ENEMIES
+from character_config import get_race_stats, get_class_bonuses, get_enemy, ENEMIES, RACE_CONFIGS, CLASS_CONFIGS, calculate_ability_modifier, get_saving_throw
 from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
@@ -126,26 +126,62 @@ class DnDGame:
             self.message_history.pop(0)
     
     def roll_dice(self, dice_type):
-        """Roll dice of specified type (e.g. "d20", "2d6")"""
+        """Roll dice of specified type (e.g. "d20", "2d6") or for ability checks/saving throws based on the new Gemini response format."""
         if not dice_type:
-            dice_type = 'd20'  # Default to d20 if no dice type specified
+            dice_type = 'd20'
             self.logger.info("No dice type specified, defaulting to d20")
-            
         try:
-            num_dice, sides = dice_type.lower().split('d')
-            num_dice = int(num_dice) if num_dice else 1
-            sides = int(sides)
-            
-            if sides <= 0 or num_dice <= 0:
-                self.logger.error(f"Invalid dice parameters: {num_dice}d{sides}")
-                return None
-                
-            result = sum(randint(1, sides) for _ in range(num_dice))
-            self.last_dice_roll = result
-            self.dice_roll_needed = False  # Reset the flag after rolling
-            self.dice_type = None  # Clear the dice type after rolling
-            self.logger.info(f"Rolled {dice_type}: {result}")
-            return result
+            if ':' in dice_type:
+                parts = dice_type.split(':')
+                roll_type = parts[0]
+                ability = parts[1]
+                proficient = False
+                if len(parts) > 2 and parts[2] == "proficient":
+                    proficient = True
+
+                base_roll = randint(1, 20)
+                if roll_type == "ability_check":
+                    proficiency_bonus = 2 if proficient else 0
+                    ability_score = self.get_ability_scores().get(ability, 10)
+                    ability_mod = calculate_ability_modifier(ability_score)
+                    total = base_roll + ability_mod + proficiency_bonus
+                    self.logger.info(f"Ability check ({ability}): d20={base_roll}, ability_mod={ability_mod}, prof_bonus={proficiency_bonus}, total={total}")
+                    if base_roll == 1:
+                        self.logger.info("Critical failure!")
+                    elif base_roll == 20:
+                        self.logger.info("Critical success!")
+                elif roll_type == "saving_throw":
+                    total_bonus = get_saving_throw(self.player_race, self.player_class, self.get_ability_scores(), ability)
+                    total = base_roll + total_bonus
+                    self.logger.info(f"Saving throw ({ability}): d20={base_roll}, total_bonus={total_bonus}, total={total}")
+                    if base_roll == 1:
+                        self.logger.info("Critical failure!")
+                    elif base_roll == 20:
+                        self.logger.info("Critical success!")
+                else:
+                    self.logger.error(f"Unknown roll type: {roll_type}")
+                    return None
+
+                self.last_dice_roll = total
+                self.dice_roll_needed = False
+                self.dice_type = None
+                return total
+            else:
+                # Handle regular dice rolls like '2d6' or 'd20'
+                parts = dice_type.lower().split('d')
+                num_dice = int(parts[0]) if parts[0] != "" else 1
+                sides = int(parts[1])
+                if sides <= 0 or num_dice <= 0:
+                    self.logger.error(f"Invalid dice parameters: {dice_type}")
+                    return None
+                rolls = [randint(1, sides) for _ in range(num_dice)]
+                total = sum(rolls)
+                self.logger.info(f"Regular roll {dice_type}: Rolls: {rolls}, Total: {total}")
+
+                self.last_dice_roll = total
+                self.dice_roll_needed = False
+                self.dice_type = None
+                return total
         except Exception as e:
             self.logger.error(f"Error rolling dice: {e}")
             return None
@@ -182,6 +218,30 @@ class DnDGame:
         self.dice_roll_needed = state_update.get('dice_roll_needed', False)
         self.dice_type = state_update.get('dice_type')
 
+    def get_ability_scores(self):
+        """Return the player's ability scores (base 10 plus racial bonus)"""
+        race_config = RACE_CONFIGS.get(self.player_race, {})
+        base_abilities = race_config.get("ability_scores", {})
+        return {ability: 10 + bonus for ability, bonus in base_abilities.items()}
+
+    def get_all_stats(self):
+        """Return all current player stats including ability scores"""
+        return {
+            'player_id': self.player_id if hasattr(self, 'player_id') else None,
+            'player_race': self.player_race,
+            'player_class': self.player_class,
+            'level': self.level,
+            'health_points': self.health_points,
+            'gold': self.gold,
+            'damage': self.damage,
+            'magic_1lvl': self.magic_1lvl,
+            'magic_2lvl': self.magic_2lvl,
+            'in_combat': self.in_combat,
+            'dice_roll_needed': self.dice_roll_needed,
+            'dice_type': self.dice_type,
+            'ability_scores': self.get_ability_scores()
+        }
+
     def send_message(self, message, player_id=None, room_state=None):
         """Send message and get structured response"""
         self.logger.info(f"\nSending message: {message}")
@@ -200,13 +260,17 @@ class DnDGame:
                 current_stats += f"Magic slots (1st/2nd level): {player.magic_1lvl}/{player.magic_2lvl}\n"
                 if pid == player_id:
                     current_stats += f"Last Roll: {player.last_dice_roll if player.last_dice_roll is not None else 'None'}\n"
+                    ability_scores = self.get_ability_scores()
+                    current_stats += "Ability Scores:\n"
+                    for ability, score in ability_scores.items():
+                        current_stats += f"  {ability.capitalize()}: {score}\n"
         else:
             self.logger.error("No room_state provided to send_message")
             return {
                 'message': 'Error: Game state not found',
                 'players_update': [],
                 'combat_result': None,
-                'dice_roll': None
+                'dice_roll': {'required': False, 'type': None, 'reason': None}
             }
         
         # Add last roll information to context
@@ -229,13 +293,10 @@ class DnDGame:
         
         self.logger.debug(f"Current stats:\n{current_stats}")
         
-        # Get context from room's message history
         context = "Previous messages:\n"
         if room_state and hasattr(room_state, 'message_history'):
-            # Get last 10 messages from room history
             for msg in room_state.message_history[-10:]:
                 if isinstance(msg, dict):
-                    # Handle dictionary format
                     if msg.get('type') == 'player':
                         context += f"{msg.get('player_name', 'Player')}: {msg.get('user_message', '')}\n"
                         if msg.get('dm_response'):
@@ -245,7 +306,6 @@ class DnDGame:
                     elif msg.get('type') == 'system':
                         context += f"System: {msg.get('message', '')}\n"
                 else:
-                    # Handle RoomMessage objects
                     if msg.player_name:
                         context += f"{msg.player_name}: {msg.user_message}\n"
                     else:
@@ -259,34 +319,43 @@ class DnDGame:
         full_message = f"{current_stats}\n{context}\nCurrent message: {message}"
         self.logger.debug(f"Full message to Gemini:\n{full_message}")
         
-        # Get structured response
         response = self.chat.send_structured_message(full_message)
         self.logger.info(f"Gemini response: {response}")
         
-        # Extract the actual message text from the response
         message_text = response.get('message', '')
         if not message_text:
             message_text = "I don't understand. Please try again."
             self.logger.warning("Empty message from Gemini")
         
-        # Handle dice roll requests
         dice_roll = response.get('dice_roll', {})
         dice_roll_needed = False
         dice_type = None
+        ability_modifier = None
+        proficient = None
         
         if dice_roll and isinstance(dice_roll, dict):
             if dice_roll.get('required', False):
                 dice_roll_needed = True
-                dice_type = dice_roll.get('type', 'd20')  # Default to d20 if not specified
-                reason = dice_roll.get('reason', 'A dice roll is needed')
+                modifier = dice_roll.get('modifier', {})
+                if modifier:
+                    ability_modifier = modifier.get('ability')
+                    proficient = modifier.get('proficient', False)
+                    if ability_modifier:
+                        if "saving_throw" in dice_roll.get('reason', '').lower():
+                            dice_type = f"saving_throw:{ability_modifier}"
+                        else:
+                            dice_type = f"ability_check:{ability_modifier}"
+                            if proficient:
+                                dice_type += ":proficient"
+                else:
+                    dice_type = dice_roll.get('type', 'd20')
+                reason = dice_roll.get('reason', f"ROLL REQUIRED: Please roll your dice: {dice_type}")
                 message_text += f"\n\n{reason}"
                 self.logger.info(f"Dice roll required: {dice_type} - {reason}")
         
-        # Handle combat results
         combat_result = response.get('combat_result', {})
         if combat_result:
             self.logger.info(f"Combat result: {combat_result}")
-            
             if room_state:
                 if combat_result.get('damage_dealt') and room_state.enemy_health is not None:
                     old_enemy_hp = room_state.enemy_health
@@ -297,28 +366,42 @@ class DnDGame:
                 self.enemy["hp"] -= combat_result['damage_dealt']
                 self.logger.info(f"Enemy HP changed from {old_enemy_hp} to {self.enemy['hp']}")
         
-        # Handle player updates
         players_update = response.get('players_update', [])
         if not players_update and player_id:
-            # Create a single player update for backward compatibility
-            players_update = [{
-                'player_id': player_id,
-                'health_points': self.health_points,
-                'gold': self.gold,
-                'damage': self.damage,
-                'level': self.level,
-                'magic_1lvl': self.magic_1lvl,
-                'magic_2lvl': self.magic_2lvl,
-                'in_combat': self.in_combat,
-                'dice_roll_needed': dice_roll_needed,
-                'dice_type': dice_type
-            }]
-        
+            stats = self.get_all_stats()
+            stats['player_id'] = player_id
+            stats['dice_roll_needed'] = dice_roll_needed
+            stats['dice_type'] = dice_type
+            stats['ability_modifier'] = ability_modifier
+            stats['proficient'] = proficient
+            players_update = [stats]
+
+        # NEW: If dice_roll info was not set from the response but is provided in players_update for the current player, update it
+        if not dice_roll_needed and player_id and players_update:
+            for update in players_update:
+                if update.get('player_id') == player_id:
+                    if update.get('dice_roll_needed'):
+                        dice_roll_needed = True
+                        dice_type = update.get('dice_type', dice_type)
+                        ability_modifier = update.get('ability_modifier', ability_modifier)
+                        proficient = update.get('proficient', proficient)
+                    break
+
+        final_dice_roll = {
+            'required': dice_roll_needed,
+            'type': dice_type,
+            'reason': dice_roll.get('reason', None),
+            'modifier': {
+                'ability': ability_modifier,
+                'proficient': proficient
+            } if ability_modifier else None
+        }
+
         return {
             'message': message_text,
             'players_update': players_update,
             'combat_result': combat_result,
-            'dice_roll': dice_roll
+            'dice_roll': final_dice_roll
         }
 
     def start_game(self):

@@ -32,9 +32,15 @@ SYSTEM_PROMPTS = {
 
 Броски кубиков:
 1. dice_roll.required = true при необходимости броска
-2. dice_roll.type = тип кубика ('d20', '2d6')
-3. dice_roll.reason = причина броска на русском языке
-4. Ждать броска игрока""",
+2. dice_roll.type = тип кубика (например, 'd20', '2d6')
+3. dice_roll.reason = причина броска
+4. При проверках характеристик:
+   - Укажите в dice_roll.modifier.ability нужную характеристику (strength, dexterity, constitution, intelligence, wisdom, charisma)
+   - Укажите в dice_roll.modifier.proficient = true если персонаж владеет соответствующим навыком
+5. Ждите броска игрока
+
+ВАЖНО: При запросе броска кубика, вы должны явно указать в ответе, какой кубик необходимо бросить. Если для проверки характеристики, формат должен быть: 'ability_check:<характеристика>' или 'ability_check:<характеристика>:proficient', а для спасброска: 'saving_throw:<характеристика>'. Это должно быть указано в ответе точно так, чтобы клиентский интерфейс мог правильно отобразить требуемый бросок.
+""",
     
     "en": """You are a creative and engaging Dungeon Master in a D&D game.
 Generate immersive descriptions and respond to player actions in character.
@@ -58,10 +64,20 @@ Important rules:
 4. Include HP changes in state_update
 
 When requesting dice rolls:
-1. Set dice_roll.required to true
-2. Specify dice_type ('d20', '2d6')
-3. Explain roll reason
-4. Wait for player roll"""
+1. Set players_update.dice_roll_needed to true
+2. Specify players_update.dice_type (e.g. 'd20', '2d6')
+3. For ability checks and saving throws:
+   - Set players_update.ability_modifier to the required ability (strength, dexterity, constitution, intelligence, wisdom, charisma)
+   - Set players_update.proficient to true if applicable
+4. Wait for player roll
+
+Common ability checks:
+- Strength: Athletics, feats of strength
+- Dexterity: Acrobatics, Stealth, Sleight of Hand
+- Constitution: Endurance checks
+- Intelligence: Investigation, History, Arcana, Nature, Religion
+- Wisdom: Perception, Insight, Survival, Animal Handling
+- Charisma: Persuasion, Deception, Intimidation, Performance"""
 }
 
 GAME_START_PROMPTS = {

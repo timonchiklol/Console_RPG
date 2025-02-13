@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify, session, Response, send_from_directory
 from DEF import DnDGame
-from character_config import RACE_STATS, CLASS_BONUSES, RACE_TRANSLATIONS, CLASS_TRANSLATIONS
+from character_config import (RACE_STATS, CLASS_BONUSES, RACE_TRANSLATIONS, CLASS_TRANSLATIONS,
+                            RACE_CONFIGS, CLASS_CONFIGS)
 from room_manager import RoomManager
 import os
 import json
@@ -10,6 +11,8 @@ from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from datetime import datetime
 from threading import Lock
+from gemini_schema import PlayerState
+from pydantic import Extra
 
 # Monkey-patch DnDGame to update system prompt for Gemini
 _original_init = DnDGame.__init__
@@ -181,6 +184,8 @@ def join_room():
             # Translate race and class names if they exist
             player_data['race'] = RACE_TRANSLATIONS[room.language].get(p.race, p.race)
             player_data['class_name'] = CLASS_TRANSLATIONS[room.language].get(p.class_name, p.class_name)
+        if hasattr(p, 'ability_scores') and p.ability_scores is not None:
+            player_data['ability_scores'] = p.ability_scores
         players_dict[pid] = player_data
     
     response_data = {
@@ -254,6 +259,8 @@ def get_room_state():
             # Translate race and class names if they exist
             player_data['race'] = RACE_TRANSLATIONS[room.language].get(p.race, p.race)
             player_data['class_name'] = CLASS_TRANSLATIONS[room.language].get(p.class_name, p.class_name)
+        if hasattr(p, 'ability_scores') and p.ability_scores is not None:
+            player_data['ability_scores'] = p.ability_scores
         players_dict[pid] = player_data
 
     # Convert room state with translated player data
@@ -280,7 +287,10 @@ def get_races():
     
     for eng_name, stats in RACE_STATS.items():
         local_name = translations[eng_name]
-        races[local_name] = stats
+        race_data = stats.copy()
+        # Add ability scores from RACE_CONFIGS
+        race_data['ability_scores'] = RACE_CONFIGS[eng_name]['ability_scores']
+        races[local_name] = race_data
     
     return jsonify(races)
 
@@ -292,7 +302,11 @@ def get_classes():
     
     for eng_name, stats in CLASS_BONUSES.items():
         local_name = translations[eng_name]
-        classes[local_name] = stats
+        class_data = stats.copy()
+        # Add primary ability and saving throws from CLASS_CONFIGS
+        class_data['primary_ability'] = CLASS_CONFIGS[eng_name]['primary_ability']
+        class_data['saving_throws'] = CLASS_CONFIGS[eng_name]['saving_throws']
+        classes[local_name] = class_data
     
     return jsonify(classes)
 
@@ -353,6 +367,9 @@ def choose_character():
         player.level = game.level
         player.magic_1lvl = game.magic_1lvl
         player.magic_2lvl = game.magic_2lvl
+        if player.__pydantic_extra__ is None:
+            object.__setattr__(player, "__pydantic_extra__", {})
+        object.__setattr__(player, "ability_scores", game.get_ability_scores())
         
         # Only generate opening scene if this is the host and game hasn't started
         response = None
@@ -477,6 +494,7 @@ def game_action():
             dice_roll = response.get('dice_roll', {})
             dice_roll_needed = dice_roll.get('required', False)
             dice_type = dice_roll.get('type')
+            dice_modifier = dice_roll.get('modifier', None)
             
             # Get the latest messages for this room
             latest_messages = get_new_messages(room_id)
@@ -487,6 +505,7 @@ def game_action():
                 'room': room.dict(),
                 'dice_needed': dice_roll_needed,
                 'dice_type': dice_type,
+                'dice_modifier': dice_modifier,
                 'combat_result': combat_result,
                 'messages': latest_messages,
                 'last_message_id': latest_messages[-1]['id'] if latest_messages else None,
@@ -653,6 +672,7 @@ def process_roll():
         dice_roll = response.get('dice_roll', {})
         dice_roll_needed = dice_roll.get('required', False)
         dice_type = dice_roll.get('type')
+        dice_modifier = dice_roll.get('modifier', None)
         
         # Get the latest messages for this room
         latest_messages = get_new_messages(room_id)
@@ -663,6 +683,7 @@ def process_roll():
             'room': room.dict(),
             'dice_needed': dice_roll_needed,
             'dice_type': dice_type,
+            'dice_modifier': dice_modifier,
             'combat_result': combat_result,
             'messages': latest_messages,
             'last_message_id': latest_messages[-1]['id'] if latest_messages else None,
@@ -793,6 +814,8 @@ def translate_filter(key):
     lang = session.get('language', 'en')
     translations = load_translations(lang)
     return translations.get(key, key)
+
+PlayerState.model_config = {**PlayerState.model_config, "extra": "allow"}
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8000)

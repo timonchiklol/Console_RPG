@@ -54,6 +54,18 @@
           <div><span class="text-amber-200" data-trans="damage_label"></span> {{ player.damage }}</div>
           <div><span class="text-amber-200" data-trans="gold_label"></span> {{ player.gold }}</div>
           <div class="col-span-2"><span class="text-amber-200" data-trans="magic_label"></span> {{ player.magic_1lvl }}/{{ player.magic_2lvl }}</div>
+          
+          <!-- Ability Scores Section -->
+          <div v-if="player.ability_scores" class="col-span-2 mt-2">
+            <div class="text-amber-200 mb-1" data-trans="ability_scores"></div>
+            <div class="grid grid-cols-3 gap-2 text-xs">
+              <div v-for="(score, ability) in player.ability_scores" :key="ability">
+                <span class="text-amber-200" :data-trans="ability"></span>
+                <span>{{ score >= 10 ? '+' : '' }}{{ Math.floor((score - 10) / 2) }}</span>
+                <span class="text-slate-400">({{ score }})</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -86,13 +98,26 @@
   <!-- Action Input Section -->
   <div class="flex gap-2 mb-6">
     <template v-if="diceNeeded">
-      <div class="flex-grow flex items-center px-4 py-2 rounded-lg bg-slate-800 text-slate-300 border border-slate-700">
-        <span data-trans="please_roll"></span> {{ diceType }}
+      <div class="flex-grow flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 text-slate-300 border border-slate-700">
+        <span data-trans="please_roll"></span>
+        <span class="font-mono">{{ diceType }}</span>
+        <template v-if="diceModifier">
+          <span class="text-amber-200">
+            <template v-if="diceModifier.ability !== undefined">
+              <span data-trans="with"></span>
+              <span>{{ diceModifier.ability >= 0 ? ('+' + diceModifier.ability) : diceModifier.ability }}</span>
+              <span data-trans="modifier"></span>
+              <span v-if="diceModifier.proficient">
+                (<span data-trans="proficient"></span>)
+              </span>
+            </template>
+          </span>
+        </template>
       </div>
       <button @click="rollDice" 
               :disabled="diceRolling"
               class="px-6 py-2 bg-amber-600 hover:bg-amber-500 rounded-lg medieval text-amber-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-        <span data-trans="roll_dice"></span> {{ diceType }}
+        <span data-trans="roll_dice"></span>
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
         </svg>

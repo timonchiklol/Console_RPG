@@ -13,11 +13,24 @@
            class="p-4 rounded-lg cursor-pointer border" 
            :class="selectedRace === race ? 'border-red-500 bg-gray-800' : 'border-gray-700 hover:border-gray-500'">
         <h3 class="medieval text-xl">{{ race }}</h3>
-        <p>
-          <span data-trans="hp"></span>: {{ stats.hp }}, 
-          <span data-trans="damage"></span>: {{ stats.damage }}, 
-          <span data-trans="gold"></span>: {{ stats.gold }}
-        </p>
+        <div class="grid grid-cols-2 gap-2 mt-2">
+          <p><span data-trans="hp"></span>: {{ stats.hp }}</p>
+          <p><span data-trans="damage"></span>: {{ stats.damage }}</p>
+          <p><span data-trans="gold"></span>: {{ stats.gold }}</p>
+        </div>
+        <div class="mt-2 text-sm text-gray-400">
+          <p class="font-semibold mb-1" data-trans="ability_scores"></p>
+          <div class="grid grid-cols-2 gap-x-4">
+            <template v-if="stats.ability_scores">
+              <p><span class="text-amber-200">Strength</span>: {{ stats.ability_scores.strength >= 0 ? '+' : '' }}{{ stats.ability_scores.strength }}</p>
+              <p><span class="text-amber-200">Dexterity</span>: {{ stats.ability_scores.dexterity >= 0 ? '+' : '' }}{{ stats.ability_scores.dexterity }}</p>
+              <p><span class="text-amber-200">Constitution</span>: {{ stats.ability_scores.constitution >= 0 ? '+' : '' }}{{ stats.ability_scores.constitution }}</p>
+              <p><span class="text-amber-200">Intelligence</span>: {{ stats.ability_scores.intelligence >= 0 ? '+' : '' }}{{ stats.ability_scores.intelligence }}</p>
+              <p><span class="text-amber-200">Wisdom</span>: {{ stats.ability_scores.wisdom >= 0 ? '+' : '' }}{{ stats.ability_scores.wisdom }}</p>
+              <p><span class="text-amber-200">Charisma</span>: {{ stats.ability_scores.charisma >= 0 ? '+' : '' }}{{ stats.ability_scores.charisma }}</p>
+            </template>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -28,11 +41,23 @@
            class="p-4 rounded-lg cursor-pointer border" 
            :class="selectedClass === className ? 'border-red-500 bg-gray-800' : 'border-gray-700 hover:border-gray-500'">
         <h3 class="medieval text-xl">{{ className }}</h3>
-        <p>
-          <span data-trans="hp_bonus"></span>: +{{ stats.hp_bonus }}, 
-          <span data-trans="gold_bonus"></span>: +{{ stats.gold_bonus }}, 
-          <span data-trans="magic"></span>: {{ stats.magic }}
-        </p>
+        <div class="grid grid-cols-2 gap-2 mt-2">
+          <p><span data-trans="hp_bonus"></span>: +{{ stats.hp_bonus }}</p>
+          <p><span data-trans="gold_bonus"></span>: +{{ stats.gold_bonus }}</p>
+          <p><span data-trans="magic"></span>: {{ stats.magic }}</p>
+        </div>
+        <div class="mt-2 text-sm text-gray-400">
+          <p v-if="stats.primary_ability" class="mb-1">
+            <span class="font-semibold">Primary Ability</span>: 
+            <span class="text-amber-300">{{ stats.primary_ability.charAt(0).toUpperCase() + stats.primary_ability.slice(1) }}</span>
+          </p>
+          <p v-if="stats.saving_throws" class="mb-1">
+            <span class="font-semibold">Saving Throws</span>:
+            <span class="text-amber-300">
+              {{ stats.saving_throws.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(', ') }}
+            </span>
+          </p>
+        </div>
       </div>
     </div>
   </div>

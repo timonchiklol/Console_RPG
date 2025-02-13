@@ -5,49 +5,113 @@ RACE_CONFIGS = {
         "base_hp": 15,
         "base_gold": 5,
         "damage_roll": (2, 7),
-        "magic_slots": {"1st": 0, "2nd": 0}
+        "magic_slots": {"1st": 0, "2nd": 0},
+        "ability_scores": {
+            "strength": 1,
+            "dexterity": 1,
+            "constitution": 1,
+            "intelligence": 1,
+            "wisdom": 1,
+            "charisma": 1
+        }
     },
     "Elf": {
         "base_hp": 10,
         "base_gold": 5,
         "damage_roll": (1, 12),
-        "magic_slots": {"1st": 0, "2nd": 0}
+        "magic_slots": {"1st": 0, "2nd": 0},
+        "ability_scores": {
+            "strength": 0,
+            "dexterity": 2,
+            "constitution": -1,
+            "intelligence": 1,
+            "wisdom": 0,
+            "charisma": 1
+        }
     },
     "Dwarf": {
         "base_hp": 18,
         "base_gold": 8,
         "damage_roll": (1, 8),
-        "magic_slots": {"1st": 0, "2nd": 0}
+        "magic_slots": {"1st": 0, "2nd": 0},
+        "ability_scores": {
+            "strength": 1,
+            "dexterity": -1,
+            "constitution": 2,
+            "intelligence": 0,
+            "wisdom": 1,
+            "charisma": 0
+        }
     },
     "Orc": {
         "base_hp": 8,
         "base_gold": 3,
         "damage_roll": (3, 12),
-        "magic_slots": {"1st": 0, "2nd": 0}
+        "magic_slots": {"1st": 0, "2nd": 0},
+        "ability_scores": {
+            "strength": 2,
+            "dexterity": 0,
+            "constitution": 1,
+            "intelligence": -1,
+            "wisdom": 0,
+            "charisma": -1
+        }
     },
     "Halfling": {
         "base_hp": 12,
         "base_gold": 10,
         "damage_roll": (1, 6),
-        "magic_slots": {"1st": 0, "2nd": 0}
+        "magic_slots": {"1st": 0, "2nd": 0},
+        "ability_scores": {
+            "strength": -1,
+            "dexterity": 2,
+            "constitution": 0,
+            "intelligence": 0,
+            "wisdom": 0,
+            "charisma": 1
+        }
     },
     "Dragonborn": {
         "base_hp": 14,
         "base_gold": 6,
         "damage_roll": (2, 8),
-        "magic_slots": {"1st": 0, "2nd": 0}
+        "magic_slots": {"1st": 0, "2nd": 0},
+        "ability_scores": {
+            "strength": 2,
+            "dexterity": 0,
+            "constitution": 0,
+            "intelligence": 0,
+            "wisdom": 0,
+            "charisma": 1
+        }
     },
     "Tiefling": {
         "base_hp": 12,
         "base_gold": 5,
         "damage_roll": (1, 10),
-        "magic_slots": {"1st": 1, "2nd": 0}
+        "magic_slots": {"1st": 1, "2nd": 0},
+        "ability_scores": {
+            "strength": 0,
+            "dexterity": 0,
+            "constitution": 0,
+            "intelligence": 1,
+            "wisdom": 0,
+            "charisma": 2
+        }
     },
     "Gnome": {
         "base_hp": 10,
         "base_gold": 7,
         "damage_roll": (1, 6),
-        "magic_slots": {"1st": 2, "2nd": 0}
+        "magic_slots": {"1st": 2, "2nd": 0},
+        "ability_scores": {
+            "strength": -1,
+            "dexterity": 0,
+            "constitution": 0,
+            "intelligence": 2,
+            "wisdom": 0,
+            "charisma": 1
+        }
     }
 }
 
@@ -56,61 +120,81 @@ CLASS_CONFIGS = {
         "hp_bonus": 5,
         "gold_bonus": 2,
         "damage_bonus": 0,
-        "magic_slots_bonus": {"1st": 0, "2nd": 0}
+        "magic_slots_bonus": {"1st": 0, "2nd": 0},
+        "primary_ability": "strength",
+        "saving_throws": ["strength", "constitution"]
     },
     "Mage": {
         "hp_bonus": 2,
         "gold_bonus": 1,
         "damage_bonus": 0,
-        "magic_slots_bonus": {"1st": 3, "2nd": 1}
+        "magic_slots_bonus": {"1st": 3, "2nd": 1},
+        "primary_ability": "intelligence",
+        "saving_throws": ["intelligence", "wisdom"]
     },
     "Ranger": {
         "hp_bonus": 3,
         "gold_bonus": 3,
         "damage_bonus": 0,
-        "magic_slots_bonus": {"1st": 1, "2nd": 0}
+        "magic_slots_bonus": {"1st": 1, "2nd": 0},
+        "primary_ability": "dexterity",
+        "saving_throws": ["dexterity", "wisdom"]
     },
     "Rogue": {
         "hp_bonus": 2,
         "gold_bonus": 5,
         "damage_bonus": 2,
-        "magic_slots_bonus": {"1st": 0, "2nd": 0}
+        "magic_slots_bonus": {"1st": 0, "2nd": 0},
+        "primary_ability": "dexterity",
+        "saving_throws": ["dexterity", "intelligence"]
     },
     "Paladin": {
         "hp_bonus": 4,
         "gold_bonus": 2,
         "damage_bonus": 0,
-        "magic_slots_bonus": {"1st": 1, "2nd": 0}
+        "magic_slots_bonus": {"1st": 1, "2nd": 0},
+        "primary_ability": "strength",
+        "saving_throws": ["wisdom", "charisma"]
     },
     "Warlock": {
         "hp_bonus": 3,
         "gold_bonus": 1,
         "damage_bonus": 0,
-        "magic_slots_bonus": {"1st": 2, "2nd": 1}
+        "magic_slots_bonus": {"1st": 2, "2nd": 1},
+        "primary_ability": "charisma",
+        "saving_throws": ["wisdom", "charisma"]
     },
     "Bard": {
         "hp_bonus": 3,
         "gold_bonus": 4,
         "damage_bonus": 0,
-        "magic_slots_bonus": {"1st": 2, "2nd": 0}
+        "magic_slots_bonus": {"1st": 2, "2nd": 0},
+        "primary_ability": "charisma",
+        "saving_throws": ["dexterity", "charisma"]
     },
     "Cleric": {
         "hp_bonus": 4,
         "gold_bonus": 1,
         "damage_bonus": 0,
-        "magic_slots_bonus": {"1st": 2, "2nd": 1}
+        "magic_slots_bonus": {"1st": 2, "2nd": 1},
+        "primary_ability": "wisdom",
+        "saving_throws": ["wisdom", "charisma"]
     },
     "Monk": {
         "hp_bonus": 3,
         "gold_bonus": 1,
         "damage_bonus": 1,
-        "magic_slots_bonus": {"1st": 0, "2nd": 0}
+        "magic_slots_bonus": {"1st": 0, "2nd": 0},
+        "primary_ability": "dexterity",
+        "saving_throws": ["strength", "dexterity"]
     },
     "Druid": {
         "hp_bonus": 3,
         "gold_bonus": 2,
         "damage_bonus": 0,
-        "magic_slots_bonus": {"1st": 2, "2nd": 1}
+        "magic_slots_bonus": {"1st": 2, "2nd": 1},
+        "primary_ability": "wisdom",
+        "saving_throws": ["intelligence", "wisdom"]
     }
 }
 
@@ -200,7 +284,7 @@ CLASS_BONUSES = {
 }
 
 ENEMIES = {
-    'Goblin': {'hp': 10, 'damage': (1, 6), 'gold': (1, 4), 'xp': 50},
+    'Goblin': {'hp': 10, 'damage': (1, 4), 'gold': (1, 4), 'xp': 50},
     'Orc': {'hp': 15, 'damage': (2, 8), 'gold': (2, 6), 'xp': 100},
     'Troll': {'hp': 30, 'damage': (3, 10), 'gold': (4, 10), 'xp': 200},
     'Dragon': {'hp': 50, 'damage': (4, 12), 'gold': (10, 20), 'xp': 500}
@@ -228,4 +312,53 @@ def get_class_bonuses(class_name):
 
 def get_enemy(enemy_type):
     """Get a copy of enemy stats"""
-    return ENEMIES.get(enemy_type, ENEMIES['Goblin']).copy() 
+    return ENEMIES.get(enemy_type, ENEMIES['Goblin']).copy()
+
+def calculate_ability_modifier(score):
+    """Calculate the ability score modifier using D&D 5e rules"""
+    return (score - 10) // 2
+
+def roll_with_modifier(dice_count, dice_sides, ability_score):
+    """Roll dice and add ability modifier"""
+    total = sum(randint(1, dice_sides) for _ in range(dice_count))
+    modifier = calculate_ability_modifier(ability_score)
+    return total + modifier
+
+def get_attack_roll(character_race, character_class, ability_scores):
+    """Calculate attack roll based on character's race, class and relevant ability score"""
+    race_config = RACE_CONFIGS[character_race]
+    class_config = CLASS_CONFIGS[character_class]
+    
+    # Get primary ability for the class
+    primary_ability = class_config["primary_ability"]
+    
+    # Calculate total ability score
+    total_ability_score = ability_scores[primary_ability] + race_config["ability_scores"][primary_ability]
+    
+    # Get base damage roll
+    dice_count, dice_sides = race_config["damage_roll"]
+    
+    # Roll with ability modifier
+    damage = roll_with_modifier(dice_count, dice_sides, total_ability_score)
+    
+    # Add class damage bonus
+    damage += class_config["damage_bonus"]
+    
+    return damage
+
+def get_saving_throw(character_race, character_class, ability_scores, ability):
+    """Calculate saving throw for a given ability"""
+    race_config = RACE_CONFIGS[character_race]
+    class_config = CLASS_CONFIGS[character_class]
+    
+    # Calculate total ability score
+    total_ability_score = ability_scores[ability] + race_config["ability_scores"][ability]
+    
+    # Calculate base modifier
+    modifier = calculate_ability_modifier(total_ability_score)
+    
+    # Add proficiency bonus if the class is proficient in this saving throw
+    if ability in class_config["saving_throws"]:
+        modifier += 2  # Base proficiency bonus
+        
+    return modifier 
