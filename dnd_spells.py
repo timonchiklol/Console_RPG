@@ -98,6 +98,17 @@ spells_2lvl = {
     "Hold Person": {
         "damage": "0",
         "range": 5,
-        "game_mechanics": "не дает противнику нечего делать до тех пор пока его не ударят."
+        "game_mechanics": "не дает противнику нечего делать до тех пор пока его не ударят ."
+    }
+}
+
+# Добавим словарь для базовых атак
+basic_attacks = {
+    "Melee Attack": {
+        "damage": "1d6",
+        "range": 1,
+        "area_radius": 0,
+        "game_mechanics": "базовая атака ближнего боя",
+        "is_spell": False  # Маркер что это не заклинание
     }
 }

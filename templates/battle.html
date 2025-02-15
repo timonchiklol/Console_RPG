@@ -33,7 +33,13 @@
         <div class="combat-controls">
             <div class="attack-options">
                 <h3>Choose your attack:</h3>
-                <button onclick="selectAttack('melee', 1)">Melee Attack (Range: 1)</button>
+                <button 
+                    data-spell-type="spell"
+                    data-range="1"
+                    data-spell-name="Melee Attack"
+                    class="attack-button spell-btn">
+                    Melee Attack (Range: 1)
+                </button>
                 
                 <h3>Available Spells:</h3>
                 <div class="spell-buttons">
@@ -161,6 +167,19 @@
     
     <script src="{{ url_for('static', filename='js/hexgrid.js') }}"></script>
     <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Обработчик только для кнопок заклинаний
+            document.querySelectorAll('.spell-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    selectAttack(
+                        this.dataset.spellType,
+                        parseInt(this.dataset.range),
+                        this.dataset.spellName
+                    );
+                });
+            });
+        });
+        
         // Draw initial hex grid
         drawHexGrid();
         
@@ -195,28 +214,18 @@
             if (cell) {
                 clearHighlight();
                 
-                // Сначала показываем радиус действия заклинания от игрока
-                let range = selectedSpellData.range;
-                for (let col = 0; col < gridCols; col++) {
-                    for (let row = 0; row < gridRows; row++) {
-                        let distance = Math.sqrt(
-                            Math.pow(col - playerPos.col, 2) + 
-                            Math.pow(row - playerPos.row, 2)
-                        );
-                        if (distance <= range) {
-                            // Подсвечиваем доступную зону другим цветом
-                            highlightCell(col, row, 'rgba(100, 200, 100, 0.3)');
-                        }
-                    }
+                // Для Healing Word сразу активируем кнопку
+                if (selectedSpellName === "Healing Word") {
+                    document.getElementById("castSpellButton").disabled = false;
+                    return;
                 }
                 
-                // Если клетка в пределах радиуса действия, показываем область эффекта
                 let distanceToTarget = Math.sqrt(
                     Math.pow(cell.col - playerPos.col, 2) + 
                     Math.pow(cell.row - playerPos.row, 2)
                 );
                 
-                if (distanceToTarget <= range) {
+                if (distanceToTarget <= attackRange) {
                     switch(selectedSpellName) {
                         case "Ice Knife":
                         case "Cloud of Daggers":
@@ -237,6 +246,11 @@
                         case "Hold Person":
                         case "Scorching Ray":
                             highlightCell(cell.col, cell.row, 'rgba(255, 0, 0, 0.3)');
+                            break;
+                        case "Melee Attack":
+                            highlightCell(cell.col, cell.row, 'rgba(255, 0, 0, 0.3)');
+                            selectedSpellTarget = cell;
+                            document.getElementById("castSpellButton").disabled = false;
                             break;
                     }
                 }
@@ -298,16 +312,23 @@
             clearHighlight();
             removeMouseMoveHandlers();
             
+            // Для Healing Word сразу активируем кнопку
+            if (spellName === "Healing Word") {
+                document.getElementById("castSpellButton").disabled = false;
+                return;
+            }
+            
             // Для всех заклинаний, требующих выбора цели, добавляем обработчик
             if (["Ice Knife", "Cloud of Daggers", "Chromatic Orb", "Scorching Ray", 
-                 "Shatter", "Dragon's Breath", "Grease", "Hold Person", 
-                 "Magic Missile", "Misty Step", "Burning Hands"].includes(spellName)) {
+                 "Shatter", "Dragon's Breath", "Hold Person", 
+                 "Magic Missile", "Burning Hands", "Thunderwave", "Melee Attack"].includes(spellName)) {
                 canvas.addEventListener("mousemove", handleSpellAreaPreview);
             } else {
                 // Для заклинаний с фиксированной областью
                 switch(spellName) {
                     case "Thunderwave":
-                        highlightAllExceptPlayer();
+                        highlightArea3x3({col: playerPos.col, row: playerPos.row}, 'rgba(255, 0, 0, 0.3)');
+                        document.getElementById("castSpellButton").disabled = false;
                         break;
                     default:
                         highlightRange(range);
@@ -317,30 +338,24 @@
 
         // Updated selectAttack function already calls highlightRange or highlightSpellArea as needed
         function selectAttack(type, range, spellName = null) {
+            console.log("Selected attack:", type, range, spellName); // Для отладки
+            
             selectedAttack = type;
             attackRange = range;
             selectedSpellName = spellName;
-            selectedSpellTarget = null; // Reset target
-            if (type === 'spell') {
-                selectedSpellData = {
-                    name: spellName,
-                    range: range
-                };
-                highlightSpellArea(spellName, range);
-                document.getElementById("attackPreview").innerText = 
-                    `Selected spell: ${spellName} (Range: ${range} tiles). Click on target location.`;
-                document.getElementById("attackButton").disabled = true;
-                document.getElementById("castSpellButton").disabled = true; // Disable until a target is chosen
-                waitingForSpellTarget = true;
-            } else {
-                waitingForSpellTarget = false;
-                selectedSpellData = null;
-                highlightRange(range);
-                document.getElementById("attackPreview").innerText = 
-                    `Selected ${type} attack (Range: ${range} tiles)`;
-                document.getElementById("attackButton").disabled = false;
-                document.getElementById("castSpellButton").disabled = true;
-            }
+            
+            // Только для заклинаний
+            selectedSpellData = {
+                name: spellName,
+                range: range
+            };
+            highlightSpellArea(spellName, range);
+            document.getElementById("castSpellButton").disabled = true;
+            document.getElementById("attackButton").disabled = true;
+            waitingForSpellTarget = true;
+            document.getElementById("attackPreview").innerText = 
+                `Selected spell: ${spellName} (Range: ${range} tiles). Click on target location.`;
+            
             document.getElementById("attackPreview").style.display = "block";
         }
 
@@ -466,10 +481,13 @@
                 return;
             }
             
-            // Show dice controls for melee attack
-            document.getElementById("diceControls").style.display = "block";
-            document.getElementById("rollHitButton").style.display = "inline-block";
-            document.getElementById("rollDamageButton").style.display = "none";
+            if (selectedAttack === 'melee') {
+                // Show dice controls for melee attack
+                document.getElementById("diceControls").style.display = "block";
+                document.getElementById("rollHitButton").style.display = "inline-block";
+                document.getElementById("rollDamageButton").style.display = "none";
+                document.getElementById("attackButton").disabled = true;
+            }
         });
 
         // Cast Spell button handler
@@ -479,12 +497,6 @@
                 return;
             }
             
-            if (!selectedSpellName || !selectedSpellData) {
-                addToBattleLog("No spell selected!");
-                return;
-            }
-            
-            // Отправляем заклинание на сервер с целью
             fetch("/api/cast_spell", {
                 method: "POST",
                 headers: {
@@ -505,14 +517,9 @@
                     addToBattleLog(data.error);
                     return;
                 }
-                
                 updateBattleStatus(data);
                 playerActionTaken = true;
                 clearAttackSelection();
-                
-                if (data.spell_slots !== undefined) {
-                    document.getElementById("spell_slots").innerText = data.spell_slots;
-                }
             });
         });
 
@@ -657,17 +664,7 @@
             }
         }
 
-        document.querySelectorAll('.spell-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                selectAttack(
-                    this.dataset.spellType,
-                    parseInt(this.dataset.range),
-                    this.dataset.spellName
-                );
-            });
-        });
-
-        // Updated canvas click event handler for target selection
+        // Обновим обработчик клика по canvas
         canvas.addEventListener("click", function(e) {
             if (waitingForSpellTarget) {
                 let cell = getCellFromPixel(e.clientX, e.clientY);
