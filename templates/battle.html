@@ -210,20 +210,12 @@
             if (cell) {
                 clearHighlight();
                 
-                // Если это Melee Attack, сразу активируем кнопку
-                if (selectedSpellName === "Melee Attack") {
-                    document.getElementById("castSpellButton").disabled = false;
-                    highlightCell(cell.col, cell.row, 'rgba(255, 0, 0, 0.3)');
-                    return;
-                }
-                
-                // Если это Healing Word, сразу активируем кнопку каста
+                // Для Healing Word сразу активируем кнопку
                 if (selectedSpellName === "Healing Word") {
                     document.getElementById("castSpellButton").disabled = false;
                     return;
                 }
                 
-                // Для остальных заклинаний - обычная логика...
                 let distanceToTarget = Math.sqrt(
                     Math.pow(cell.col - playerPos.col, 2) + 
                     Math.pow(cell.row - playerPos.row, 2)
@@ -250,6 +242,11 @@
                         case "Hold Person":
                         case "Scorching Ray":
                             highlightCell(cell.col, cell.row, 'rgba(255, 0, 0, 0.3)');
+                            break;
+                        case "Melee Attack":
+                            highlightCell(cell.col, cell.row, 'rgba(255, 0, 0, 0.3)');
+                            selectedSpellTarget = cell;
+                            document.getElementById("castSpellButton").disabled = false;
                             break;
                     }
                 }
@@ -302,7 +299,7 @@
             // Для всех заклинаний, требующих выбора цели, добавляем обработчик
             if (["Ice Knife", "Cloud of Daggers", "Chromatic Orb", "Scorching Ray", 
                  "Shatter", "Dragon's Breath", "Hold Person", 
-                 "Magic Missile", "Burning Hands", "Thunderwave"].includes(spellName)) {
+                 "Magic Missile", "Burning Hands", "Thunderwave", "Melee Attack"].includes(spellName)) {
                 canvas.addEventListener("mousemove", handleSpellAreaPreview);
             } else {
                 // Для заклинаний с фиксированной областью
@@ -503,15 +500,6 @@
                 return;
             }
             
-            // Проверяем расстояние для ближней атаки
-            if (selectedAttack === 'melee') {
-                if (!isInRange(enemyPos.col, enemyPos.row, 1)) {
-                    addToBattleLog("Enemy is not in range for melee attack!");
-                    return;
-                }
-            }
-            
-            // Отправляем атаку на сервер
             fetch("/api/cast_spell", {
                 method: "POST",
                 headers: {
@@ -520,7 +508,7 @@
                 body: JSON.stringify({
                     spell_name: selectedSpellName,
                     spell_data: selectedSpellData,
-                    target: {
+                    target: selectedSpellTarget || {
                         col: enemyPos.col,
                         row: enemyPos.row
                     }
