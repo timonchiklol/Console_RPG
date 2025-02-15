@@ -23,6 +23,7 @@ spells_1lvl = {
     "Healing Word": {
         "healing": "1d4+3",
         "range": 1,
+        "area_radius": 0,
         "game_mechanics": "лечит игрока на 1d4+3."
     },
     
@@ -38,18 +39,6 @@ spells_1lvl = {
         "range": 3,
         "area_radius": 2,
         "game_mechanics": "наносит урон в радиусе 2 клетки от персонажа."
-    },
-    
-    "Grease": {
-        "range": 60,
-        "game_mechanics": "Игрок выбирает квадрат 10х10, падение при провале спасброска",
-    },
-    
-    "Shield": {
-        "range": 0,
-        "duration": 1,
-        "bonus_ac": 5,
-        "description": "Magic shield"
     }
 }
 
@@ -76,18 +65,6 @@ spells_2lvl = {
         "game_mechanics": "наносит урон в конусе 5x5 клеток."
     },
 
-    "Mirror Image": {
-        "damage": "3d5",
-        "range": 50,
-        "game_mechanics": "создает копию персоонажа с 5 хп которая будет делать тоже самое что и персоонажа и наносить такой же урон ."
-    },
-
-    "Misty Step": {
-        "damage": "0",
-        "range": 1000,
-        "game_mechanics": "дает игроку бесконечную скорость перемещения на текущий ход."
-    },
-
     "Cloud of Daggers": {
         "damage": "2d5",
         "range": 4,
@@ -99,5 +76,16 @@ spells_2lvl = {
         "damage": "0",
         "range": 100,
         "game_mechanics": "не дает противнику нечего делать до тех пор пока его не ударят ."
-    },
+    }
+}
+
+# Добавим словарь для базовых атак
+basic_attacks = {
+    "Melee Attack": {
+        "damage": "1d6",
+        "range": 1,
+        "area_radius": 0,
+        "game_mechanics": "базовая атака ближнего боя",
+        "is_spell": False  # Маркер что это не заклинание
+    }
 }

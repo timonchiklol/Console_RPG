@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 import random
 import math
-from dnd_spells import spells_1lvl, spells_2lvl  # Add this import at the top
+from dnd_spells import spells_1lvl, spells_2lvl, basic_attacks  # Add this import at the top
 
 app = Flask(__name__)
 app.secret_key = 'secret-key-for-session'
@@ -94,13 +94,23 @@ def character_creation():
 @app.route("/battle", methods=["GET"])
 def battle():
     if 'character' not in session:
-        return redirect(url_for("character_creation"))
-    # Pass both spell lists to the template
-    return render_template("battle.html", 
-                         character=session['character'], 
-                         enemy=session['enemy'],
-                         spells_1lvl=spells_1lvl,
-                         spells_2lvl=spells_2lvl)
+        return redirect(url_for('character_creation'))
+    
+    # Initialize enemy if not exists
+    if 'enemy' not in session:
+        session['enemy'] = {
+            'name': 'Goblin',
+            'hp': 20,
+            'pos': {'col': 5, 'row': 4}
+        }
+    
+    return render_template('battle.html', 
+        character=session['character'], 
+        enemy=session['enemy'],
+        spells_1lvl=spells_1lvl,
+        spells_2lvl=spells_2lvl,
+        basic_attacks=basic_attacks  # Добавляем basic_attacks
+    )
 
 # Add new roll_dice endpoint
 @app.route("/api/roll_dice", methods=["POST"])
@@ -151,9 +161,6 @@ def api_attack():
 # API endpoint to cast a spell.
 @app.route("/api/cast_spell", methods=["POST"])
 def api_cast_spell():
-    if 'character' not in session or 'enemy' not in session:
-        return jsonify({"error": "No battle in progress."})
-    
     try:
         data = request.get_json()
         spell_name = data.get('spell_name')
@@ -163,14 +170,21 @@ def api_cast_spell():
         character = session['character']
         enemy = session['enemy']
         
-        if character['spell_slots'] <= 0:
-            return jsonify({"error": "No spell slots remaining!"})
+        # Проверяем слоты только для настоящих заклинаний
+        if spell_name == "Melee Attack":
+            is_spell = False
+        else:
+            is_spell = True
+            if character['spell_slots'] <= 0:
+                return jsonify({"error": "No spell slots remaining!"})
         
-        combat_log = f"{character['name']} casts {spell_name}! "
+        combat_log = f"{character['name']} "
         damage = 0
         
-        # Обработка всех заклинаний
-        if spell_name == "Chromatic Orb":
+        if spell_name == "Melee Attack":
+            damage = random.randint(1, 6)  # d6 урон
+            combat_log += f"attacks with melee and deals {damage} damage! "
+        elif spell_name == "Chromatic Orb":
             damage = sum(random.randint(1, 8) for _ in range(3))
             combat_log += f"Orb explodes for {damage} damage in 2-tile radius! "
         
@@ -187,18 +201,25 @@ def api_cast_spell():
             combat_log += f"Ice Knife hits for {primary_damage} + {area_damage} area damage! "
         
         elif spell_name == "Healing Word":
-            healing = random.randint(1, 4) + 3
+            healing_roll = random.randint(1, 4)  # d4
+            healing = healing_roll + 3  # +3 к броску
             character['hp'] += healing
-            combat_log += f"Heals for {healing} HP! "
+            # Используем слот заклинания
+            character['spell_slots'] -= 1
+            # Сохраняем изменения в сессии
+            session['character'] = character
+            combat_log += f"Heals for {healing} HP! (Roll: {healing_roll} + 3) "
+            return jsonify({
+                "combat_log": combat_log,
+                "character_hp": character['hp'],
+                "enemy_hp": enemy['hp'],
+                "enemy_defeated": enemy['hp'] <= 0,
+                "spell_slots": character['spell_slots']
+            })
         
         elif spell_name == "Thunderwave":
             damage = sum(random.randint(1, 5) for _ in range(2))
             combat_log += f"Thunder damages all enemies for {damage}! "
-        
-        elif spell_name == "Shield":
-            character['damage_reduction'] = 0.5
-            character['shield_duration'] = 1
-            combat_log += "Magical shield reduces incoming damage by half! "
         
         elif spell_name == "Scorching Ray":
             for i in range(3):
@@ -215,17 +236,6 @@ def api_cast_spell():
             enemy['disadvantage'] = True
             combat_log += f"Dragon's Breath deals {damage} damage and applies disadvantage! "
         
-        elif spell_name == "Mirror Image":
-            character['clone'] = {
-                'hp': 5,
-                'active': True
-            }
-            combat_log += "Created a mirror image with 5 HP! "
-        
-        elif spell_name == "Misty Step":
-            character['speed'] = float('inf')
-            combat_log += "You can now move anywhere on the map! "
-        
         elif spell_name == "Cloud of Daggers":
             damage = sum(random.randint(1, 5) for _ in range(2))
             session['cloud_daggers'] = {
@@ -237,14 +247,16 @@ def api_cast_spell():
         
         elif spell_name == "Hold Person":
             enemy['paralyzed'] = True
-            combat_log += "Enemy is paralyzed until damaged! "
+            enemy['paralyzed_duration'] = 3
+            combat_log += "Enemy is paralyzed and cannot move! "
 
         # Применяем урон если он есть
         if damage > 0:
             enemy['hp'] -= damage
 
-        # Используем слот заклинания
-        character['spell_slots'] -= 1
+        # Используем слот только для настоящих заклинаний
+        if is_spell:
+            character['spell_slots'] -= 1
         
         session['character'] = character
         session['enemy'] = enemy
@@ -266,6 +278,29 @@ def api_cast_spell():
 def api_enemy_attack():
     if 'character' not in session or 'enemy' not in session:
         return jsonify({"error": "No battle in progress."})
+    
+    character = session['character']
+    enemy = session['enemy']
+    
+    # Проверяем, парализован ли враг
+    if enemy.get('paralyzed', False):
+        combat_log = "Enemy is paralyzed and cannot move or attack! "
+        
+        # Уменьшаем длительность паралича
+        enemy['paralyzed_duration'] = enemy.get('paralyzed_duration', 0) - 1
+        if enemy['paralyzed_duration'] <= 0:
+            enemy['paralyzed'] = False
+            combat_log += "Enemy is no longer paralyzed! "
+        
+        session['enemy'] = enemy
+        return jsonify({
+            "combat_log": combat_log,
+            "character_hp": character['hp'],
+            "enemy_hp": enemy['hp'],
+            "character_defeated": character['hp'] <= 0,
+            "enemy_pos": enemy['pos']
+        })
+    
     try:
         player_col = int(request.form.get("player_col"))
         player_row = int(request.form.get("player_row"))
@@ -273,8 +308,6 @@ def api_enemy_attack():
     except (TypeError, ValueError):
         return jsonify({"error": "Player position not provided."})
     
-    character = session['character']
-    enemy = session['enemy']
     enemy_pos = enemy.get('pos', {'col': 5, 'row': 4})
     enemy_pos = (enemy_pos['col'], enemy_pos['row'])
     
