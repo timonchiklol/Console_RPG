@@ -149,7 +149,7 @@ function computePath(start, end) {
     
     while (current.col !== end.col || current.row !== end.row) {
         // Check if we've already reached the maximum path length based on speed
-        if (path.length > maxSteps + 1) { // +1 because path includes start position
+        if (path.length > maxSteps) { // +1 because path includes start position
             return path;
         }
         

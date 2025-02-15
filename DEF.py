@@ -219,10 +219,20 @@ class DnDGame:
         self.dice_type = state_update.get('dice_type')
 
     def get_ability_scores(self):
-        """Return the player's ability scores (base 10 plus racial bonus)"""
-        race_config = RACE_CONFIGS.get(self.player_race, {})
-        base_abilities = race_config.get("ability_scores", {})
-        return {ability: 10 + bonus for ability, bonus in base_abilities.items()}
+        """Return the player's final ability scores using the class default stats plus racial bonuses."""
+        class_defaults = CLASS_CONFIGS.get(self.player_class, {}).get("default_stats", {
+            "strength": 10,
+            "dexterity": 10,
+            "constitution": 10,
+            "intelligence": 10,
+            "wisdom": 10,
+            "charisma": 10
+        })
+        race_bonus = RACE_CONFIGS.get(self.player_race, {}).get("ability_scores", {})
+        final_scores = {}
+        for ability in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]:
+            final_scores[ability] = class_defaults.get(ability, 10) + race_bonus.get(ability, 0)
+        return final_scores
 
     def get_all_stats(self):
         """Return all current player stats including ability scores"""

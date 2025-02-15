@@ -817,5 +817,29 @@ def translate_filter(key):
 
 PlayerState.model_config = {**PlayerState.model_config, "extra": "allow"}
 
+# New endpoint to compute effective ability scores based on selected race and class
+@app.route('/get_effective_stats')
+def get_effective_stats():
+    race = request.args.get('race')
+    class_name = request.args.get('class')
+    if not race or not class_name:
+        return jsonify({'error': 'race and class query parameters required'}), 400
+    
+    # Get the default stats for the chosen class
+    class_defaults = CLASS_CONFIGS.get(class_name, {}).get("default_stats", {
+        "strength": 10,
+        "dexterity": 10,
+        "constitution": 10,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+    })
+    # Get racial bonus
+    race_bonus = RACE_CONFIGS.get(race, {}).get("ability_scores", {})
+    effective = {}
+    for ability in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]:
+        effective[ability] = class_defaults.get(ability, 10) + race_bonus.get(ability, 0)
+    return jsonify(effective)
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8000)

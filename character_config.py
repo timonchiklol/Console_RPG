@@ -122,7 +122,8 @@ CLASS_CONFIGS = {
         "damage_bonus": 0,
         "magic_slots_bonus": {"1st": 0, "2nd": 0},
         "primary_ability": "strength",
-        "saving_throws": ["strength", "constitution"]
+        "saving_throws": ["strength", "constitution"],
+        "default_stats": {"strength": 15, "constitution": 14, "dexterity": 13, "wisdom": 12, "intelligence": 10, "charisma": 8}
     },
     "Mage": {
         "hp_bonus": 2,
@@ -130,7 +131,8 @@ CLASS_CONFIGS = {
         "damage_bonus": 0,
         "magic_slots_bonus": {"1st": 3, "2nd": 1},
         "primary_ability": "intelligence",
-        "saving_throws": ["intelligence", "wisdom"]
+        "saving_throws": ["intelligence", "wisdom"],
+        "default_stats": {"intelligence": 15, "constitution": 14, "dexterity": 13, "wisdom": 12, "charisma": 10, "strength": 8}
     },
     "Ranger": {
         "hp_bonus": 3,
@@ -138,7 +140,8 @@ CLASS_CONFIGS = {
         "damage_bonus": 0,
         "magic_slots_bonus": {"1st": 1, "2nd": 0},
         "primary_ability": "dexterity",
-        "saving_throws": ["dexterity", "wisdom"]
+        "saving_throws": ["dexterity", "wisdom"],
+        "default_stats": {"dexterity": 15, "constitution": 14, "wisdom": 13, "strength": 12, "intelligence": 10, "charisma": 8}
     },
     "Rogue": {
         "hp_bonus": 2,
@@ -146,7 +149,8 @@ CLASS_CONFIGS = {
         "damage_bonus": 2,
         "magic_slots_bonus": {"1st": 0, "2nd": 0},
         "primary_ability": "dexterity",
-        "saving_throws": ["dexterity", "intelligence"]
+        "saving_throws": ["dexterity", "intelligence"],
+        "default_stats": {"dexterity": 15, "constitution": 14, "intelligence": 13, "wisdom": 12, "charisma": 10, "strength": 8}
     },
     "Paladin": {
         "hp_bonus": 4,
@@ -154,7 +158,8 @@ CLASS_CONFIGS = {
         "damage_bonus": 0,
         "magic_slots_bonus": {"1st": 1, "2nd": 0},
         "primary_ability": "strength",
-        "saving_throws": ["wisdom", "charisma"]
+        "saving_throws": ["wisdom", "charisma"],
+        "default_stats": {"strength": 15, "charisma": 14, "constitution": 13, "wisdom": 12, "dexterity": 10, "intelligence": 8}
     },
     "Warlock": {
         "hp_bonus": 3,
@@ -162,7 +167,8 @@ CLASS_CONFIGS = {
         "damage_bonus": 0,
         "magic_slots_bonus": {"1st": 2, "2nd": 1},
         "primary_ability": "charisma",
-        "saving_throws": ["wisdom", "charisma"]
+        "saving_throws": ["wisdom", "charisma"],
+        "default_stats": {"charisma": 15, "constitution": 14, "dexterity": 13, "intelligence": 12, "wisdom": 10, "strength": 8}
     },
     "Bard": {
         "hp_bonus": 3,
@@ -170,7 +176,8 @@ CLASS_CONFIGS = {
         "damage_bonus": 0,
         "magic_slots_bonus": {"1st": 2, "2nd": 0},
         "primary_ability": "charisma",
-        "saving_throws": ["dexterity", "charisma"]
+        "saving_throws": ["dexterity", "charisma"],
+        "default_stats": {"charisma": 15, "dexterity": 14, "constitution": 13, "intelligence": 12, "wisdom": 10, "strength": 8}
     },
     "Cleric": {
         "hp_bonus": 4,
@@ -178,7 +185,8 @@ CLASS_CONFIGS = {
         "damage_bonus": 0,
         "magic_slots_bonus": {"1st": 2, "2nd": 1},
         "primary_ability": "wisdom",
-        "saving_throws": ["wisdom", "charisma"]
+        "saving_throws": ["wisdom", "charisma"],
+        "default_stats": {"wisdom": 15, "constitution": 14, "strength": 13, "charisma": 12, "dexterity": 10, "intelligence": 8}
     },
     "Monk": {
         "hp_bonus": 3,
@@ -186,7 +194,8 @@ CLASS_CONFIGS = {
         "damage_bonus": 1,
         "magic_slots_bonus": {"1st": 0, "2nd": 0},
         "primary_ability": "dexterity",
-        "saving_throws": ["strength", "dexterity"]
+        "saving_throws": ["strength", "dexterity"],
+        "default_stats": {"dexterity": 15, "wisdom": 14, "constitution": 13, "strength": 12, "intelligence": 10, "charisma": 8}
     },
     "Druid": {
         "hp_bonus": 3,
@@ -194,7 +203,8 @@ CLASS_CONFIGS = {
         "damage_bonus": 0,
         "magic_slots_bonus": {"1st": 2, "2nd": 1},
         "primary_ability": "wisdom",
-        "saving_throws": ["intelligence", "wisdom"]
+        "saving_throws": ["intelligence", "wisdom"],
+        "default_stats": {"wisdom": 15, "constitution": 14, "dexterity": 13, "intelligence": 12, "charisma": 10, "strength": 8}
     }
 }
 

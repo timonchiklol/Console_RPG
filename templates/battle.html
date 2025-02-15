@@ -172,13 +172,17 @@
         let pendingDamageRoll = null;
         let movementTaken = false;
 
-        // Глобальные переменные для хранения выбранного заклинания
+        // Global variables for storing selected spell
         let selectedSpellName = null;
         let selectedSpellData = null;
 
-        // Добавим глобальные переменные
+        // Global variables for target selection
         let selectedSpellTarget = null;
         let waitingForSpellTarget = false;
+
+        // Define grid dimensions for the hex grid
+        const gridCols = 10;
+        const gridRows = 8;
 
         // Добавим функцию для удаления обработчиков
         function removeMouseMoveHandlers() {
@@ -239,12 +243,30 @@
             }
         }
 
-        // Обновим функции подсветки, чтобы принимать цвет
+        // Updated highlightCell function to draw a hexagon overlay with given color
         function highlightCell(col, row, color = 'rgba(255, 255, 0, 0.3)') {
             let ctx = canvas.getContext("2d");
-            // ... остальной код подсветки ...
+            let hexSize = 30;
+            let hexWidth = hexSize * 2;
+            let hexHeight = Math.sqrt(3) * hexSize;
+            let x = col * hexWidth * 0.75 + hexSize;
+            let y = row * hexHeight + ((col % 2) * hexHeight / 2) + hexSize;
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                let angle = Math.PI / 3 * i; // 60 degree intervals
+                let xi = x + hexSize * Math.cos(angle);
+                let yi = y + hexSize * Math.sin(angle);
+                if (i === 0) {
+                    ctx.moveTo(xi, yi);
+                } else {
+                    ctx.lineTo(xi, yi);
+                }
+            }
+            ctx.closePath();
             ctx.fillStyle = color;
-            // ... остальной код подсветки ...
+            ctx.fill();
+            ctx.strokeStyle = 'black';
+            ctx.stroke();
         }
 
         function highlightArea3x3(center, color = 'rgba(255, 255, 0, 0.3)') {
@@ -293,24 +315,22 @@
             }
         }
 
-        // Обновим функцию selectAttack
+        // Updated selectAttack function already calls highlightRange or highlightSpellArea as needed
         function selectAttack(type, range, spellName = null) {
             selectedAttack = type;
             attackRange = range;
             selectedSpellName = spellName;
-            selectedSpellTarget = null; // Сбрасываем цель
-            
+            selectedSpellTarget = null; // Reset target
             if (type === 'spell') {
                 selectedSpellData = {
                     name: spellName,
                     range: range
                 };
-                
                 highlightSpellArea(spellName, range);
                 document.getElementById("attackPreview").innerText = 
                     `Selected spell: ${spellName} (Range: ${range} tiles). Click on target location.`;
                 document.getElementById("attackButton").disabled = true;
-                document.getElementById("castSpellButton").disabled = true; // Отключаем кнопку до выбора цели
+                document.getElementById("castSpellButton").disabled = true; // Disable until a target is chosen
                 waitingForSpellTarget = true;
             } else {
                 waitingForSpellTarget = false;
@@ -321,33 +341,7 @@
                 document.getElementById("attackButton").disabled = false;
                 document.getElementById("castSpellButton").disabled = true;
             }
-            
             document.getElementById("attackPreview").style.display = "block";
-        }
-
-        // Добавим вспомогательные функции для подсветки
-        function highlightRadius(center, radius) {
-            for (let col = 0; col < gridCols; col++) {
-                for (let row = 0; row < gridRows; row++) {
-                    let distance = Math.sqrt(
-                        Math.pow(col - center.col, 2) + 
-                        Math.pow(row - center.row, 2)
-                    );
-                    if (distance <= radius) {
-                        highlightCell(col, row);
-                    }
-                }
-            }
-        }
-
-        function highlightArea3x3(center) {
-            for (let col = center.col - 1; col <= center.col + 1; col++) {
-                for (let row = center.row - 1; row <= center.row + 1; row++) {
-                    if (col >= 0 && col < gridCols && row >= 0 && row < gridRows) {
-                        highlightCell(col, row);
-                    }
-                }
-            }
         }
 
         function highlightAllExceptPlayer() {
@@ -540,7 +534,7 @@
                 if (data.enemy_pos) {
                     enemyPos.col = data.enemy_pos.col;
                     enemyPos.row = data.enemy_pos.row;
-                    drawHexGrid();
+                    updateGrid();
                 }
             });
         });
@@ -582,63 +576,21 @@
             document.body.appendChild(returnButton);
         }
 
-        // Обновляем функцию applyMove
-        function applyMove() {
-            if (movementTaken) {
-                addToBattleLog("You have already moved this turn!");
-                return;
-            }
-            
-            if (currentPath.length < 2) {
-                alert("No path selected!");
-                return;
-            }
-            
-            let dest = currentPath[currentPath.length - 1];
-            if (dest.col === enemyPos.col && dest.row === enemyPos.row) {
-                alert("Cannot move onto enemy's square!");
-                return;
-            }
-            
-            let steps = currentPath.length - 1;
-            
-            // Проверяем активен ли Misty Step
-            if (selectedSpellName === "Misty Step") {
-                // Если Misty Step активен - двигаемся без ограничений
-                playerPos.col = dest.col;
-                playerPos.row = dest.row;
-                currentPath = [];
-                movementTaken = true;
-                drawHexGrid();
-                addToBattleLog(`Teleported ${steps} tiles with Misty Step!`);
-            } else {
-                // Обычное движение с ограничением скорости
-                let maxSteps = Math.floor(playerSpeed / 5);
-                if (steps > maxSteps) {
-                    alert(`Cannot move more than ${maxSteps} tiles with current speed (${playerSpeed})!`);
-                    return;
-                }
-                
-                let moveCost = steps * 5;
-                playerSpeed -= moveCost;
-                playerPos.col = dest.col;
-                playerPos.row = dest.row;
-                currentPath = [];
-                movementTaken = true;
-                drawHexGrid();
-                updateSpeedDisplay();
-                addToBattleLog(`Moved ${steps} tiles. Speed remaining: ${playerSpeed}`);
+        // New function to update the grid and persistently highlight the selected target
+        function updateGrid() {
+            drawHexGrid();
+            if (selectedSpellTarget) {
+                highlightTargetEffect(selectedSpellTarget);
             }
         }
-        
-        // Обновляем обработчик mousemove
+
+        // Replace call in the canvas mousemove handler
         canvas.addEventListener("mousemove", function(e) {
             if (!drawingPath) return;
             let cell = getCellFromPixel(e.clientX, e.clientY);
             if (cell) {
                 currentPath = computePath(playerPos, cell);
-                drawHexGrid();
-                
+                updateGrid();
                 // Показываем только длину пути без проверки скорости
                 let steps = currentPath.length - 1;
                 let canvas = document.getElementById("hexCanvas");
@@ -648,6 +600,50 @@
                 ctx.fillText(`Path: ${steps} tiles`, 10, 20);
             }
         });
+
+        // In the applyMove function, replace drawHexGrid() with updateGrid()
+        function applyMove() {
+            if (movementTaken) {
+                addToBattleLog("You have already moved this turn!");
+                return;
+            }
+            if (currentPath.length < 2) {
+                alert("No path selected!");
+                return;
+            }
+            let dest = currentPath[currentPath.length - 1];
+            if (dest.col === enemyPos.col && dest.row === enemyPos.row) {
+                alert("Cannot move onto enemy's square!");
+                return;
+            }
+            let steps = currentPath.length - 1;
+            // Проверяем активен ли Misty Step
+            if (selectedSpellName === "Misty Step") {
+                // Если Misty Step активен - двигаемся без ограничений
+                playerPos.col = dest.col;
+                playerPos.row = dest.row;
+                currentPath = [];
+                movementTaken = true;
+                updateGrid();
+                addToBattleLog(`Teleported ${steps} tiles with Misty Step!`);
+            } else {
+                // Обычное движение с ограничением скорости
+                let maxSteps = Math.floor(playerSpeed / 5);
+                if (steps > maxSteps) {
+                    alert(`Cannot move more than ${maxSteps} tiles with current speed (${playerSpeed})!`);
+                    return;
+                }
+                let moveCost = steps * 5;
+                playerSpeed -= moveCost;
+                playerPos.col = dest.col;
+                playerPos.row = dest.row;
+                currentPath = [];
+                movementTaken = true;
+                updateGrid();
+                updateSpeedDisplay();
+                addToBattleLog(`Moved ${steps} tiles. Speed remaining: ${playerSpeed}`);
+            }
+        }
 
         function highlightRange(range) {
             clearHighlight();
@@ -671,17 +667,45 @@
             });
         });
 
-        // Обновим обработчик клика по canvas
+        // Updated canvas click event handler for target selection
         canvas.addEventListener("click", function(e) {
             if (waitingForSpellTarget) {
                 let cell = getCellFromPixel(e.clientX, e.clientY);
                 if (cell) {
                     selectedSpellTarget = cell;
                     addToBattleLog(`Target selected at (${cell.col}, ${cell.row})`);
+                    // Visual cue for the impacted area
+                    highlightTargetEffect(cell);
                     document.getElementById("castSpellButton").disabled = false;
                 }
             }
         });
+
+        // New function to highlight the target effect area based on the selected spell
+        function highlightTargetEffect(cell) {
+            if (!selectedSpellName) return;
+            switch(selectedSpellName) {
+                case "Ice Knife":
+                case "Cloud of Daggers":
+                case "Burning Hands":
+                    highlightArea3x3(cell, 'rgba(255, 0, 0, 0.5)');
+                    break;
+                case "Chromatic Orb":
+                case "Dragon's Breath":
+                    highlightRadius(cell, 2, 'rgba(255, 0, 0, 0.5)');
+                    break;
+                case "Shatter":
+                    highlightRadius(cell, 1, 'rgba(255, 0, 0, 0.5)');
+                    break;
+                case "Magic Missile":
+                case "Hold Person":
+                case "Scorching Ray":
+                    highlightCell(cell.col, cell.row, 'rgba(255, 0, 0, 0.5)');
+                    break;
+                default:
+                    highlightCell(cell.col, cell.row, 'rgba(255, 0, 0, 0.5)');
+            }
+        }
     </script>
 </body>
 </html> 

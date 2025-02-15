@@ -330,4 +330,4 @@ def api_enemy_attack():
 
 if __name__ == "__main__":
     # This web UI runs on port 8000.
-    app.run(port=9000, debug=True) 
+    app.run(port=5000, debug=True) 
