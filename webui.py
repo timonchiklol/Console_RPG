@@ -1,10 +1,57 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 import random
 import math
-from dnd_spells import spells_1lvl, spells_2lvl, basic_attacks  # Add this import at the top
+from dnd_spells import spells_1lvl, spells_2lvl, basic_attacks
+from gemini import Gemini  # Добавляем импорт Gemini
+from prompts import SYSTEM_PROMPTS
+from dotenv import load_dotenv
+import os
 
 app = Flask(__name__)
 app.secret_key = 'secret-key-for-session'
+
+# Загружаем переменные окружения из .env файла
+load_dotenv()
+
+# Добавим в начало файла константы для атак противника
+ENEMY_ATTACKS = {
+    "Bow Attack": {
+        "damage": "1d6",
+        "range": 4,
+        "description": "shoots an arrow"
+    },
+    "Melee Attack": {
+        "damage": "1d8",
+        "range": 1,
+        "description": "strikes with fists"
+    }
+}
+
+# Добавим константу для скорости противника
+ENEMY_SPEED = 25  # 5 клеток в ход
+
+# Получаем API ключ из переменных окружения
+gemini = Gemini(
+    API_KEY=os.getenv('GEMINI_API_KEY'),
+    system_instruction="""You are a D&D combat AI controlling a goblin enemy.
+Your goal is to make tactical decisions based on position and range.
+The goblin has two attacks:
+1. Bow Attack (1d6 damage, 4 tiles range)
+2. Melee Attack (1d8 damage, 1 tile range)
+
+Choose the best action based on:
+1. Distance to player
+2. Current HP
+3. Tactical advantage
+
+Respond with a JSON object containing:
+{
+    "action": "move/bow_attack/melee_attack",
+    "target_position": {"col": x, "row": y},
+    "attack_type": "Bow Attack/Melee Attack",
+    "combat_log": "Description of enemy's actions"
+}
+""")
 
 def get_neighbors(cell):
     """Get neighboring cells. Accepts either a tuple (col, row) or a dict with col/row keys"""
@@ -75,17 +122,19 @@ def character_creation():
             'intelligence': intelligence,
             'wisdom': wisdom,
             'charisma': charisma,
-            'hp': constitution + 10,  # very basic HP calculation
-            'spell_slots': 2,         # basic number of spell slots
+            'hp': constitution + 10,
+            'spell_slots': 6,         # Изменили с 2 на 6
             'spells': ['Magic Missile', 'Shield'],
             'speed': 30
         }
         # Create a simple enemy for demonstration with position
         session['enemy'] = {
             'name': 'Goblin',
-            'hp': 15,
+            'hp': 75,
             'attack': 4,
-            'pos': {'col': 5, 'row': 4}
+            'pos': {'col': 5, 'row': 4},
+            'speed': ENEMY_SPEED,
+            'movement_left': ENEMY_SPEED
         }
         return redirect(url_for("battle"))
     return render_template("create.html")
@@ -100,8 +149,10 @@ def battle():
     if 'enemy' not in session:
         session['enemy'] = {
             'name': 'Goblin',
-            'hp': 20,
-            'pos': {'col': 5, 'row': 4}
+            'hp': 100,
+            'pos': {'col': 5, 'row': 4},
+            'speed': ENEMY_SPEED,
+            'movement_left': ENEMY_SPEED
         }
     
     return render_template('battle.html', 
@@ -170,6 +221,8 @@ def api_cast_spell():
         character = session['character']
         enemy = session['enemy']
         
+        combat_log = f"{character['name']} "
+        
         # Проверяем слоты только для настоящих заклинаний
         if spell_name == "Melee Attack":
             is_spell = False
@@ -177,9 +230,6 @@ def api_cast_spell():
             is_spell = True
             if character['spell_slots'] <= 0:
                 return jsonify({"error": "No spell slots remaining!"})
-        
-        combat_log = f"{character['name']} "
-        damage = 0
         
         if spell_name == "Melee Attack":
             damage = random.randint(1, 6)  # d6 урон
@@ -249,7 +299,27 @@ def api_cast_spell():
             enemy['paralyzed'] = True
             enemy['paralyzed_duration'] = 3
             combat_log += "Enemy is paralyzed and cannot move! "
-
+        
+        elif spell_name == "Misty Step":
+            # Проверяем, что цель в пределах поля
+            if 0 <= target['col'] < 10 and 0 <= target['row'] < 8:
+                # Телепортируем игрока на выбранную позицию
+                combat_log += f"teleports to position ({target['col']}, {target['row']})! "
+                # Возвращаем новую позицию игрока клиенту
+                return jsonify({
+                    "combat_log": combat_log,
+                    "character_hp": character['hp'],
+                    "enemy_hp": enemy['hp'],
+                    "enemy_defeated": enemy['hp'] <= 0,
+                    "spell_slots": character['spell_slots'],
+                    "player_pos": {
+                        "col": target['col'],
+                        "row": target['row']
+                    }
+                })
+            else:
+                return jsonify({"error": "Invalid target position for teleport!"})
+        
         # Применяем урон если он есть
         if damage > 0:
             enemy['hp'] -= damage
@@ -273,7 +343,7 @@ def api_cast_spell():
         print(f"Error casting spell: {e}")
         return jsonify({"error": f"Failed to cast spell: {str(e)}"})
 
-# Update enemy_attack endpoint to return position and use d20+d6
+# Обновляем функцию api_enemy_attack
 @app.route("/api/enemy_attack", methods=["POST"])
 def api_enemy_attack():
     if 'character' not in session or 'enemy' not in session:
@@ -282,17 +352,90 @@ def api_enemy_attack():
     character = session['character']
     enemy = session['enemy']
     
-    # Проверяем, парализован ли враг
-    if enemy.get('paralyzed', False):
-        combat_log = "Enemy is paralyzed and cannot move or attack! "
+    try:
+        player_col = int(request.form.get("player_col"))
+        player_row = int(request.form.get("player_row"))
         
-        # Уменьшаем длительность паралича
-        enemy['paralyzed_duration'] = enemy.get('paralyzed_duration', 0) - 1
-        if enemy['paralyzed_duration'] <= 0:
-            enemy['paralyzed'] = False
-            combat_log += "Enemy is no longer paralyzed! "
+        # Сбрасываем движение в начале хода
+        enemy['movement_left'] = ENEMY_SPEED
+        combat_log = ""
         
+        # Сначала проверяем, нужно ли двигаться для лучшей позиции
+        distance = math.sqrt(
+            (player_col - enemy['pos']['col'])**2 + 
+            (player_row - enemy['pos']['row'])**2
+        )
+        
+        # Если враг далеко - подходим на дистанцию лука
+        if distance > ENEMY_ATTACKS["Bow Attack"]["range"]:
+            steps_taken = 0
+            while enemy['movement_left'] > 0 and steps_taken < 5:
+                dx = player_col - enemy['pos']['col']
+                dy = player_row - enemy['pos']['row']
+                
+                if dx == 0 and dy == 0:
+                    break
+                
+                # Нормализуем движение
+                if abs(dx) > 0:
+                    dx = dx // abs(dx)
+                if abs(dy) > 0:
+                    dy = dy // abs(dy)
+                    
+                new_col = enemy['pos']['col'] + dx
+                new_row = enemy['pos']['row'] + dy
+                
+                # Проверяем границы поля
+                if 0 <= new_col < 10 and 0 <= new_row < 8:
+                    enemy['pos']['col'] = new_col
+                    enemy['pos']['row'] = new_row
+                    enemy['movement_left'] -= 5
+                    steps_taken += 1
+                    
+                    # Проверяем, достигли ли мы дистанции для лука
+                    new_distance = math.sqrt(
+                        (player_col - enemy['pos']['col'])**2 + 
+                        (player_row - enemy['pos']['row'])**2
+                    )
+                    if new_distance <= ENEMY_ATTACKS["Bow Attack"]["range"]:
+                        break
+                else:
+                    break
+            
+            if steps_taken > 0:
+                combat_log += f"Goblin moves {steps_taken} tiles. "
+        
+        # После движения проверяем дистанцию снова для выбора атаки
+        distance = math.sqrt(
+            (player_col - enemy['pos']['col'])**2 + 
+            (player_row - enemy['pos']['row'])**2
+        )
+        
+        # Выбираем тип атаки на основе дистанции
+        if distance <= ENEMY_ATTACKS["Melee Attack"]["range"]:
+            # Ближний бой
+            hit_roll = random.randint(1, 20)
+            if hit_roll >= 10:
+                damage_roll = random.randint(1, 8)
+                character['hp'] -= damage_roll
+                combat_log += f"Goblin strikes with fists and hits with {hit_roll}, dealing {damage_roll} damage!"
+            else:
+                combat_log += f"Goblin tries to punch but misses with {hit_roll}!"
+        elif distance <= ENEMY_ATTACKS["Bow Attack"]["range"]:
+            # Дальний бой
+            hit_roll = random.randint(1, 20)
+            if hit_roll >= 10:
+                damage_roll = random.randint(1, 6)
+                character['hp'] -= damage_roll
+                combat_log += f"Goblin shoots an arrow and hits with {hit_roll}, dealing {damage_roll} damage!"
+            else:
+                combat_log += f"Goblin shoots but misses with {hit_roll}!"
+        else:
+            combat_log += "Goblin is too far to attack!"
+        
+        session['character'] = character
         session['enemy'] = enemy
+        
         return jsonify({
             "combat_log": combat_log,
             "character_hp": character['hp'],
@@ -300,66 +443,10 @@ def api_enemy_attack():
             "character_defeated": character['hp'] <= 0,
             "enemy_pos": enemy['pos']
         })
-    
-    try:
-        player_col = int(request.form.get("player_col"))
-        player_row = int(request.form.get("player_row"))
-        player_pos = (player_col, player_row)
-    except (TypeError, ValueError):
-        return jsonify({"error": "Player position not provided."})
-    
-    enemy_pos = enemy.get('pos', {'col': 5, 'row': 4})
-    enemy_pos = (enemy_pos['col'], enemy_pos['row'])
-    
-    # Check if already adjacent to player
-    if player_pos in get_neighbors(enemy_pos):
-        combat_log = "Goblin is already in attack range. "
-        new_enemy_pos = enemy_pos
-    else:
-        # Try to get closer to player, goblin has 30 speed (6 tiles)
-        max_steps = 6  # Goblin can move up to 6 tiles
-        path = compute_path(enemy_pos[0], enemy_pos[1], player_pos[0], player_pos[1], max_steps)
-        steps = len(path) - 1 if path else 0
         
-        # Move along path, but try to maintain 1 tile distance if using ranged attack
-        new_enemy_pos = path[steps] if steps > 0 else enemy_pos
-        
-        # If we would end up more than 1 tile away, try to get as close as possible
-        dx = new_enemy_pos[0] - player_pos[0]
-        dy = new_enemy_pos[1] - player_pos[1]
-        distance = math.sqrt(dx * dx + dy * dy)
-        
-        if distance > 1.5:  # If more than 1 tile away
-            # Try to find a spot adjacent to player
-            for neighbor in get_neighbors(player_pos):
-                if neighbor != enemy_pos:  # Don't stay in place if we can move
-                    new_enemy_pos = neighbor
-                    break
-        
-        enemy['pos'] = {'col': new_enemy_pos[0], 'row': new_enemy_pos[1]}
-        combat_log = f"Goblin moved {steps} tile(s) to get closer. "
-    
-    # Attack if adjacent after moving
-    if player_pos in get_neighbors(new_enemy_pos):
-        hit_roll = random.randint(1, 20)
-        if hit_roll >= 10:
-            damage_roll = random.randint(1, 6)
-            character['hp'] -= damage_roll
-            combat_log += f"Goblin hit with a roll of {hit_roll} and dealt {damage_roll} damage!"
-        else:
-            combat_log += f"Goblin rolled {hit_roll} and missed!"
-    else:
-        combat_log += "Goblin is not in attack range."
-    
-    session['character'] = character
-    session['enemy'] = enemy
-    return jsonify({
-        "combat_log": combat_log,
-        "character_hp": character['hp'],
-        "enemy_hp": enemy['hp'],
-        "character_defeated": character['hp'] <= 0,
-        "enemy_pos": enemy['pos']
-    })
+    except Exception as e:
+        print(f"Error in enemy logic: {e}")
+        return jsonify({"error": f"Enemy logic error: {str(e)}"})
 
 if __name__ == "__main__":
     # This web UI runs on port 8000.

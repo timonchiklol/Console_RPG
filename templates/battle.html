@@ -214,8 +214,10 @@
             if (cell) {
                 clearHighlight();
                 
-                // Для Healing Word сразу активируем кнопку
-                if (selectedSpellName === "Healing Word") {
+                if (selectedSpellName === "Misty Step") {
+                    // Подсвечиваем точку телепортации
+                    highlightCell(cell.col, cell.row, 'rgba(0, 255, 255, 0.5)');
+                    selectedSpellTarget = cell;
                     document.getElementById("castSpellButton").disabled = false;
                     return;
                 }
@@ -518,6 +520,14 @@
                     return;
                 }
                 updateBattleStatus(data);
+                
+                // Обновляем позицию игрока если это был Misty Step
+                if (data.player_pos) {
+                    playerPos.col = data.player_pos.col;
+                    playerPos.row = data.player_pos.row;
+                    updateGrid();
+                }
+                
                 playerActionTaken = true;
                 clearAttackSelection();
             });
