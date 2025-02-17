@@ -213,6 +213,7 @@ def api_attack():
 @app.route("/api/cast_spell", methods=["POST"])
 def api_cast_spell():
     try:
+        damage = 0  # Initialize damage variable
         data = request.get_json()
         spell_name = data.get('spell_name')
         spell_data = data.get('spell_data')
