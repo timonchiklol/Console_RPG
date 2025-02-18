@@ -1,6 +1,6 @@
 spells_1lvl = {
     "Chromatic Orb": {
-        "damage": "3d8",
+        "damage": "2d7",
         "range": 4,
         "area_radius": 2,
         "game_mechanics": "наносит урон в радиусе 2 клетки в каждую сторону от точки попадания."
@@ -27,7 +27,7 @@ spells_1lvl = {
     },
     
     "Burning Hands": {
-        "damage": "3d7",
+        "damage": "2d7",
         "range": 0,
         "area_radius": 1,
         "game_mechanics": "наносит урон в конусе 3x3 клетки."
@@ -56,14 +56,14 @@ spells_1lvl = {
 # Словарь с заклинаниями второго уровня
 spells_2lvl = {
     "Scorching Ray": {
-        "damage": "3d9",
+        "damage": "3d6",
         "range": 5,
         "area_radius": 0,
         "game_mechanics": "выпускает 3 луча по отдельным целям."
     },
 
     "Shatter": {
-        "damage": "1d15",
+        "damage": "1d18",
         "range": 3,
         "area_radius": 1,
         "game_mechanics": "наносит урон в радиусе 1 клетки от точки попадания."
@@ -76,12 +76,6 @@ spells_2lvl = {
         "game_mechanics": "наносит урон в конусе 5x5 клеток."
     },
 
-    "Mirror Image": {
-        "damage": "3d5",
-        "range": 0,
-        "game_mechanics": "создает копию персоонажа с 5 хп которая будет делать тоже самое что и персоонажа и наносить такой же урон."
-    },
-
     "Misty Step": {
         "damage": "0",
         "range": 0,
@@ -89,7 +83,7 @@ spells_2lvl = {
     },
 
     "Cloud of Daggers": {
-        "damage": "2d5",
+        "damage": "8d2",
         "range": 3,
         "area_radius": 1,
         "game_mechanics": "создает зону 3x3 клетки с уроном."
