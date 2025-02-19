@@ -271,6 +271,7 @@ def get_room_state():
         'status': 'success',
         'room': room_data,
         'is_host': room.host_id == session.get('player_id'),
+        'player': players_dict.get(session.get('player_id')),
         'messages': messages,
         'last_message_id': messages[-1].get('id') if messages else None
     }
@@ -716,10 +717,16 @@ def load_game():
     session['room_id'] = room_id
     add_room_message(room_id, 'Game loaded successfully', 'system')
     
+    current_player = None
+    if room and session.get('player_id') in room.players:
+        # Use model_dump() or dict() based on player implementation
+        current_player = room.players[session.get('player_id')].dict()
+
     return jsonify({
         'status': 'success',
         'message': 'Game loaded successfully',
-        'room': room.dict()
+        'room': room.dict(),
+        'player': current_player
     })
 
 @app.route('/list_saves')

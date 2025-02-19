@@ -114,5 +114,12 @@
     "roll_hit": "Roll Hit",
     "roll_damage": "Roll Damage",
     "battle_log": "Battle Log",
-    "movement_instructions": "Use arrow keys to move your character"
+    "movement_instructions": "Use arrow keys to move your character",
+
+    "my_stats": "My Stats",
+    "players": "Players",
+    "character_stats": "Character Stats",
+    "condition": "Condition",
+    "magic_1lvl": "Level 1 Magic",
+    "magic_2lvl": "Level 2 Magic"
 } 

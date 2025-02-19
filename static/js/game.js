@@ -10,7 +10,8 @@ const gameApp = Vue.createApp({
             diceType: 'd20',
             room: {},
             diceRolling: false,
-            showPlayers: true,
+            showPlayers: false,
+            showStats: false,
             codeCopied: false,
             wasJustCopied: false,
             isThinking: false
@@ -26,11 +27,19 @@ const gameApp = Vue.createApp({
                 result.push({ id: 'thinking', type: 'thinking' });
             }
             return result;
+        },
+        currentPlayer() {
+            return this.gameState;
         }
     },
     methods: {
         translate(key) {
             return translationManager.translate(key);
+        },
+        formatMessage(message) {
+            if (!message) return '';
+            // Replace **text** with <strong>text</strong> for bold formatting
+            return message.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold">$1</strong>');
         },
         resetCopyState() {
             if (this.codeCopied) {
@@ -55,14 +64,23 @@ const gameApp = Vue.createApp({
         togglePlayers() {
             this.showPlayers = !this.showPlayers;
         },
+        toggleStats() {
+            this.showStats = !this.showStats;
+            if (this.showStats) {
+                this.showPlayers = false;
+            }
+        },
         async sendMessage() {
             if (!this.userInput.trim()) return;
+            
+            const messageText = this.userInput;
+            this.userInput = ''; // Clear input immediately
             
             // Add pending message immediately
             this.pendingMessage = {
                 id: 'pending',
                 type: 'player',
-                message: this.userInput,
+                message: messageText,
                 player_name: this.gameState.name || this.translate('you')
             };
             
@@ -74,7 +92,7 @@ const gameApp = Vue.createApp({
                 const response = await fetch('/game_action', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: this.userInput })
+                    body: JSON.stringify({ action: messageText })
                 });
                 const data = await response.json();
                 if (data.error) {
@@ -93,7 +111,6 @@ const gameApp = Vue.createApp({
                     if (data.messages) {
                         this.messages = data.messages;
                     }
-                    this.userInput = '';
                 }
             } catch (e) {
                 console.error(e);
@@ -175,7 +192,7 @@ const gameApp = Vue.createApp({
                 });
                 const data = await response.json();
                 if (data.status === 'success') {
-                    this.gameState = data.room;
+                    this.gameState = data.player;
                     alert(data.message);
                 } else {
                     alert(data.error || data.message || this.translate('load_game_error'));
@@ -206,7 +223,13 @@ const gameApp = Vue.createApp({
                 const response = await fetch('/get_room_state');
                 const data = await response.json();
                 if (data.status === 'success') {
-                    this.gameState = data.room;
+                    if (data.player) {
+                        this.gameState = data.player;
+                        // Ensure ability_scores is properly set
+                        if (data.player.ability_scores) {
+                            this.gameState.ability_scores = data.player.ability_scores;
+                        }
+                    }
                     this.messages = data.messages || [];
                     this.room = data.room;
                 }
