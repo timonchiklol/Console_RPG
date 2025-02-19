@@ -11,6 +11,14 @@ let drawingPath = false;
 let highlightedCells = [];
 let currentRange = 0;
 
+// Add TranslationManager initialization at the top
+let translationManager;
+
+document.addEventListener('DOMContentLoaded', async () => {
+    translationManager = new TranslationManager();
+    await translationManager.loadTranslations();
+});
+
 function drawHexGrid() {
     let canvas = document.getElementById("hexCanvas");
     if (!canvas.getContext) return;
@@ -212,22 +220,22 @@ function checkAdjacent() {
 
 function applyMove() {
     if (currentPath.length < 2) {
-        alert("No path selected!");
+        alert(translationManager.translate("no_path_selected"));
         return;
     }
     let dest = currentPath[currentPath.length - 1];
     if (dest.col === enemyPos.col && dest.row === enemyPos.row) {
-        alert("Cannot move onto enemy's square!");
+        alert(translationManager.translate("cannot_move_enemy"));
         return;
     }
     let steps = currentPath.length - 1;
     if (steps > 5) {
-        alert("Cannot move more than 5 tiles! Maximum allowed: 5.");
+        alert(translationManager.translate("max_move_tiles"));
         return;
     }
     let moveCost = steps * 5;
     if (moveCost > playerSpeed) {
-        alert("Not enough speed for that move! Available: " + playerSpeed);
+        alert(translationManager.translate("not_enough_speed").replace("{speed}", playerSpeed));
         return;
     }
     playerSpeed -= moveCost;

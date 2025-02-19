@@ -11,6 +11,7 @@ from character_config import get_race_stats, get_class_bonuses, get_enemy, ENEMI
 from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
+from translations import load_translations
 
 # Add this at the top of the file, before the DnDGame class
 class GetRoomStateFilter(logging.Filter):
@@ -428,11 +429,15 @@ class DnDGame:
             enemy_type = choice(list(ENEMIES.keys()))
         
         self.enemy = get_enemy(enemy_type)
-        self.enemy["name"] = enemy_type
+        self.enemy["name"] = enemy_type  # Store the translation key
         self.in_combat = True
         
+        # Load translations for the current language
+        translations = load_translations(self.language)
+        enemy_name = translations.get(enemy_type, enemy_type)  # Get translated name or fallback to key
+        
         combat_start = self.send_message(f"""
-        A {enemy_type} appears! Combat starts!
+        A {enemy_name} appears! Combat starts!
         Enemy HP: {self.enemy['hp']}
         Your HP: {self.health_points}
         
@@ -461,11 +466,21 @@ class DnDGame:
         if randint(1, 20) > 12:  # 40% chance to flee
             self.in_combat = False
             self.enemy = None
+            
+            # Load translations for the current language
+            translations = load_translations(self.language)
+            enemy_name = translations.get(self.enemy["name"], self.enemy["name"])  # Get translated name or fallback to key
+            
             return "You successfully fled from combat!"
         
         enemy_damage = randint(*self.enemy["damage"])
         self.health_points -= enemy_damage
-        return f"Failed to flee! The {self.enemy['name']} hits you for {enemy_damage} damage!"
+        
+        # Load translations for the current language
+        translations = load_translations(self.language)
+        enemy_name = translations.get(self.enemy["name"], self.enemy["name"])  # Get translated name or fallback to key
+        
+        return f"Failed to flee! The {enemy_name} hits you for {enemy_damage} damage!"
 
     def _handle_attack(self):
         """Handle attack action in combat"""
@@ -497,6 +512,10 @@ class DnDGame:
         xp_reward = self.enemy["xp"]
         self.gold += gold_reward
         
+        # Load translations for the current language
+        translations = load_translations(self.language)
+        enemy_name = translations.get(self.enemy["name"], self.enemy["name"])  # Get translated name or fallback to key
+        
         if xp_reward >= 100:
             self.level += 1
             self.health_points += 5
@@ -507,7 +526,7 @@ class DnDGame:
         
         self.in_combat = False
         victory_message = f"""
-        You defeated the {self.enemy['name']}!
+        You defeated the {enemy_name}!
         Gained {gold_reward} gold and {xp_reward} XP!
         {level_up_msg}
         """
@@ -519,6 +538,10 @@ class DnDGame:
         enemy_damage = randint(*self.enemy["damage"])
         self.health_points -= enemy_damage
         
+        # Load translations for the current language
+        translations = load_translations(self.language)
+        enemy_name = translations.get(self.enemy["name"], self.enemy["name"])  # Get translated name or fallback to key
+        
         if self.health_points <= 0:
             self.in_combat = False
             self.enemy = None
@@ -526,8 +549,8 @@ class DnDGame:
         
         action_type = "spell" if is_spell else "hit"
         return f"""
-        Your {action_type} the {self.enemy['name']} for {player_damage} damage!
-        The {self.enemy['name']} hits you for {enemy_damage} damage!
+        Your {action_type} the {enemy_name} for {player_damage} damage!
+        The {enemy_name} hits you for {enemy_damage} damage!
         
         Enemy HP: {self.enemy['hp']}
         Your HP: {self.health_points}

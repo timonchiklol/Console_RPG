@@ -126,7 +126,9 @@ const gameApp = Vue.createApp({
                 this.pendingMessage = {
                     id: 'pending-roll',
                     type: 'player',
-                    message: `rolled ${rollData.roll} on ${rollData.dice_type}`,
+                    message: translationManager.translate('rolled_message')
+                        .replace('{roll}', rollData.roll)
+                        .replace('{dice}', rollData.dice_type),
                     player_name: this.gameState.name || this.translate('you')
                 };
                 

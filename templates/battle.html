@@ -1,22 +1,34 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
     <meta charset="UTF-8">
-    <title>Battle Field</title>
+    <title>{{ 'battle'|trans }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h1>Battle Field</h1>
+    <h1>{{ 'battle'|trans }}</h1>
     <div class="status-panel">
         <div class="character-status">
-            <h2>Character: {{ character.name }}</h2>
-            <p>HP: <span id="char_hp">{{ character.hp }}</span></p>
-            <p>Speed: <span id="char_speed">30</span></p>
-            <p>Spell Slots: <span id="spell_slots">{{ character.spell_slots }}</span></p>
+            <h2>{{ 'character'|trans }}: {{ character.name }}</h2>
+            <p>{{ 'hp_label'|trans }} <span id="char_hp">{{ character.hp }}</span></p>
+            <p>{{ 'speed'|trans }}: <span id="char_speed">30</span></p>
+            <p>{{ 'spell_slots'|trans }}: <span id="spell_slots">{{ character.spell_slots }}</span></p>
+            <!-- New Ability Scores Section -->
+            <div class="ability-scores mt-2 text-sm text-gray-400">
+                <h3 data-trans="ability_scores"></h3>
+                <div class="flex space-x-4">
+                    <div><span data-trans="strength"></span>: <span id="ability_strength">{{ character.ability_scores.strength }}</span></div>
+                    <div><span data-trans="dexterity"></span>: <span id="ability_dexterity">{{ character.ability_scores.dexterity }}</span></div>
+                    <div><span data-trans="constitution"></span>: <span id="ability_constitution">{{ character.ability_scores.constitution }}</span></div>
+                    <div><span data-trans="intelligence"></span>: <span id="ability_intelligence">{{ character.ability_scores.intelligence }}</span></div>
+                    <div><span data-trans="wisdom"></span>: <span id="ability_wisdom">{{ character.ability_scores.wisdom }}</span></div>
+                    <div><span data-trans="charisma"></span>: <span id="ability_charisma">{{ character.ability_scores.charisma }}</span></div>
+                </div>
+            </div>
         </div>
         <div class="enemy-status">
-            <h2>Enemy: {{ enemy.name }}</h2>
-            <p>HP: <span id="enemy_hp">{{ enemy.hp }}</span></p>
+            <h2>{{ 'enemy'|trans }}: {{ enemy.name|trans }}</h2>
+            <p>{{ 'hp_label'|trans }} <span id="enemy_hp">{{ enemy.hp }}</span></p>
         </div>
     </div>
     
@@ -27,65 +39,65 @@
     <!-- Unified controls section -->
     <div class="controls">
         <div class="movement-controls">
-            <button id="applyMoveButton">Apply Move</button>
-            <button id="endTurnButton">End Turn</button>
+            <button id="applyMoveButton">{{ 'apply_move'|trans }}</button>
+            <button id="endTurnButton">{{ 'end_turn'|trans }}</button>
         </div>
         <div class="combat-controls">
             <div class="attack-options">
-                <h3>Choose your attack:</h3>
+                <h3>{{ 'choose_attack'|trans }}:</h3>
                 <button 
                     data-spell-type="spell"
                     data-range="1"
                     data-spell-name="Melee Attack"
                     class="attack-button spell-btn">
-                    Melee Attack (Range: 1)
+                    {{ 'melee_attack'|trans }} ({{ 'range'|trans }}: 1)
                 </button>
                 
-                <h3>Available Spells:</h3>
+                <h3>{{ 'available_spells'|trans }}:</h3>
                 <div class="spell-buttons">
-                    <h4>Level 1 Spells</h4>
+                    <h4>{{ 'level_1_spells'|trans }}</h4>
                     {% for spell_name, spell_data in spells_1lvl.items() %}
                     <button 
                         data-spell-type="spell"
                         data-range="{{ spell_data.range }}"
                         data-spell-name="{{ spell_name }}"
                         class="attack-button spell-btn">
-                        {{ spell_name }} (Range: {{ spell_data.range }} tiles)
+                        {{ spell_name|trans }} ({{ 'range'|trans }}: {{ spell_data.range }} {{ 'tiles'|trans }})
                     </button>
                     {% endfor %}
                     
-                    <h4>Level 2 Spells</h4>
+                    <h4>{{ 'level_2_spells'|trans }}</h4>
                     {% for spell_name, spell_data in spells_2lvl.items() %}
                     <button 
                         data-spell-type="spell"
                         data-range="{{ spell_data.range }}"
                         data-spell-name="{{ spell_name }}"
                         class="attack-button spell-btn">
-                        {{ spell_name }} (Range: {{ spell_data.range }} tiles)
+                        {{ spell_name|trans }} ({{ 'range'|trans }}: {{ spell_data.range }} {{ 'tiles'|trans }})
                     </button>
                     {% endfor %}
                 </div>
             </div>
             <div class="action-buttons">
-                <button id="attackButton" disabled>Attack</button>
-                <button id="castSpellButton" disabled>Cast Spell</button>
+                <button id="attackButton" disabled>{{ 'attack'|trans }}</button>
+                <button id="castSpellButton" disabled>{{ 'cast_spell'|trans }}</button>
             </div>
             <div id="attackPreview" style="display:none;"></div>
             <div id="diceControls" style="display:none;">
-                <button id="rollHitButton">Roll Hit (d20)</button>
-                <button id="rollDamageButton" style="display:none;">Roll Damage (d6)</button>
+                <button id="rollHitButton">{{ 'roll_hit'|trans }} (d20)</button>
+                <button id="rollDamageButton" style="display:none;">{{ 'roll_damage'|trans }} (d6)</button>
             </div>
         </div>
     </div>
     
     <div class="battle-log">
-        <h3>Battle Log:</h3>
+        <h3>{{ 'battle_log'|trans }}:</h3>
         <div id="battleLog" style="border:1px solid #000; padding: 10px; width: 800px; height: 300px; overflow-y: scroll;"></div>
     </div>
     
     <!-- Add instruction for movement -->
     <br>
-    <p id="instructions">Use arrow keys to move your character.</p>
+    <p id="instructions">{{ 'movement_instructions'|trans }}</p>
     
     <style>
     .spell-level {

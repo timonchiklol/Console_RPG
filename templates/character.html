@@ -4,69 +4,126 @@
 
 {% block content %}
 {% raw %}
-<div id="character-app" v-cloak class="container mx-auto p-4">
-  <h1 class="medieval text-3xl mb-4" data-trans="character_creation"></h1>
-  <div class="mb-4">
-    <h2 class="medieval text-2xl mb-2" data-trans="select_race"></h2>
-    <div class="grid grid-cols-2 gap-4">
-      <div v-for="(stats, race) in races" :key="race" @click="selectRace(race)" 
-           class="p-4 rounded-lg cursor-pointer border" 
-           :class="selectedRace === race ? 'border-red-500 bg-gray-800' : 'border-gray-700 hover:border-gray-500'">
-        <h3 class="medieval text-xl">{{ race }}</h3>
-        <div class="grid grid-cols-2 gap-2 mt-2">
-          <p><span data-trans="hp"></span>: {{ stats.hp }}</p>
-          <p><span data-trans="damage"></span>: {{ stats.damage }}</p>
-          <p><span data-trans="gold"></span>: {{ stats.gold }}</p>
-        </div>
-        <div class="mt-2 text-sm text-gray-400">
-          <p class="font-semibold mb-1" data-trans="ability_scores"></p>
-          <div class="grid grid-cols-2 gap-x-4">
-            <template v-if="stats.ability_scores">
-              <p><span class="text-amber-200">Strength</span>: {{ stats.ability_scores.strength >= 0 ? '+' : '' }}{{ stats.ability_scores.strength }}</p>
-              <p><span class="text-amber-200">Dexterity</span>: {{ stats.ability_scores.dexterity >= 0 ? '+' : '' }}{{ stats.ability_scores.dexterity }}</p>
-              <p><span class="text-amber-200">Constitution</span>: {{ stats.ability_scores.constitution >= 0 ? '+' : '' }}{{ stats.ability_scores.constitution }}</p>
-              <p><span class="text-amber-200">Intelligence</span>: {{ stats.ability_scores.intelligence >= 0 ? '+' : '' }}{{ stats.ability_scores.intelligence }}</p>
-              <p><span class="text-amber-200">Wisdom</span>: {{ stats.ability_scores.wisdom >= 0 ? '+' : '' }}{{ stats.ability_scores.wisdom }}</p>
-              <p><span class="text-amber-200">Charisma</span>: {{ stats.ability_scores.charisma >= 0 ? '+' : '' }}{{ stats.ability_scores.charisma }}</p>
-            </template>
+<div id="character-app" v-cloak class="min-h-screen bg-gray-900">
+  <div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <h1 class="medieval text-4xl text-amber-100 text-center mb-8" data-trans="character_creation"></h1>
+    
+    <!-- Main Content -->
+    <div class="max-w-6xl mx-auto space-y-8">
+      <!-- Race Selection -->
+      <section>
+        <h2 class="medieval text-2xl text-amber-200 mb-4" data-trans="select_race"></h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div v-for="(stats, race) in races" :key="race"
+               @click="selectRace(race)"
+               class="bg-gray-800 rounded-lg border-2 transition-all duration-200 hover:shadow-lg hover:shadow-red-900/20"
+               :class="[
+                 selectedRace === race 
+                   ? 'border-red-500 shadow-lg shadow-red-900/30' 
+                   : 'border-gray-700 hover:border-gray-500'
+               ]">
+            <div class="p-5 cursor-pointer">
+              <!-- Race Name -->
+              <h3 class="medieval text-2xl text-amber-100 mb-3">{{ race }}</h3>
+              
+              <!-- Basic Stats -->
+              <div class="grid grid-cols-3 gap-4 mb-4">
+                <div class="text-center">
+                  <div class="text-gray-400 text-sm mb-1" data-trans="hp"></div>
+                  <div class="text-xl font-bold text-amber-200">{{ stats.hp }}</div>
+                </div>
+                <div class="text-center">
+                  <div class="text-gray-400 text-sm mb-1" data-trans="damage"></div>
+                  <div class="text-xl font-bold text-amber-200">{{ stats.damage }}</div>
+                </div>
+                <div class="text-center">
+                  <div class="text-gray-400 text-sm mb-1" data-trans="gold"></div>
+                  <div class="text-xl font-bold text-amber-200">{{ stats.gold }}</div>
+                </div>
+              </div>
+
+              <!-- Ability Scores -->
+              <div class="bg-gray-900/50 rounded-lg p-3">
+                <div class="text-sm text-gray-400 mb-2" data-trans="ability_scores"></div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div v-for="(value, ability) in stats.ability_scores" :key="ability"
+                       class="flex justify-between items-center">
+                    <span class="text-gray-300 text-sm">{{ translate(ability) }}</span>
+                    <span class="font-mono text-sm" 
+                          :class="value >= 0 ? 'text-emerald-400' : 'text-red-400'">
+                      {{ value >= 0 ? '+' : '' }}{{ value }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
+      </section>
+
+      <!-- Class Selection -->
+      <section>
+        <h2 class="medieval text-2xl text-amber-200 mb-4" data-trans="select_class"></h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div v-for="(stats, className) in classes" :key="className"
+               @click="selectClass(className)"
+               class="bg-gray-800 rounded-lg border-2 transition-all duration-200 hover:shadow-lg hover:shadow-red-900/20"
+               :class="[
+                 selectedClass === className 
+                   ? 'border-red-500 shadow-lg shadow-red-900/30' 
+                   : 'border-gray-700 hover:border-gray-500'
+               ]">
+            <div class="p-5 cursor-pointer">
+              <!-- Class Name -->
+              <h3 class="medieval text-2xl text-amber-100 mb-3">{{ className }}</h3>
+              
+              <!-- Class Stats -->
+              <div class="grid grid-cols-3 gap-4 mb-4">
+                <div class="text-center">
+                  <div class="text-gray-400 text-sm mb-1" data-trans="hp_bonus"></div>
+                  <div class="text-xl font-bold text-amber-200">+{{ stats.hp_bonus }}</div>
+                </div>
+                <div class="text-center">
+                  <div class="text-gray-400 text-sm mb-1" data-trans="gold_bonus"></div>
+                  <div class="text-xl font-bold text-amber-200">+{{ stats.gold_bonus }}</div>
+                </div>
+                <div class="text-center">
+                  <div class="text-gray-400 text-sm mb-1" data-trans="magic"></div>
+                  <div class="text-xl font-bold text-amber-200">{{ stats.magic }}</div>
+                </div>
+              </div>
+
+              <!-- Class Features -->
+              <div class="bg-gray-900/50 rounded-lg p-3 space-y-2">
+                <div v-if="stats.primary_ability" class="flex items-center justify-between">
+                  <span class="text-gray-400 text-sm" data-trans="primary_ability"></span>
+                  <span class="text-amber-300 text-sm">{{ translate(stats.primary_ability) }}</span>
+                </div>
+                <div v-if="stats.saving_throws" class="flex items-center justify-between">
+                  <span class="text-gray-400 text-sm" data-trans="saving_throws"></span>
+                  <span class="text-amber-300 text-sm">{{ stats.saving_throws.map(s => translate(s)).join(', ') }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Begin Adventure Button -->
+      <div class="pt-4">
+        <button @click="createCharacter"
+                :disabled="!selectedRace || !selectedClass || submitted"
+                class="w-full h-14 medieval text-xl rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                :class="[
+                  (!selectedRace || !selectedClass || submitted)
+                    ? 'bg-gray-700 text-gray-400'
+                    : 'bg-red-700 hover:bg-red-600 text-amber-100 shadow-lg shadow-red-900/30'
+                ]"
+                data-trans="begin_adventure">
+        </button>
       </div>
     </div>
-  </div>
-  <div class="mb-4">
-    <h2 class="medieval text-2xl mb-2" data-trans="select_class"></h2>
-    <div class="grid grid-cols-2 gap-4">
-      <div v-for="(stats, className) in classes" :key="className" @click="selectClass(className)" 
-           class="p-4 rounded-lg cursor-pointer border" 
-           :class="selectedClass === className ? 'border-red-500 bg-gray-800' : 'border-gray-700 hover:border-gray-500'">
-        <h3 class="medieval text-xl">{{ className }}</h3>
-        <div class="grid grid-cols-2 gap-2 mt-2">
-          <p><span data-trans="hp_bonus"></span>: +{{ stats.hp_bonus }}</p>
-          <p><span data-trans="gold_bonus"></span>: +{{ stats.gold_bonus }}</p>
-          <p><span data-trans="magic"></span>: {{ stats.magic }}</p>
-        </div>
-        <div class="mt-2 text-sm text-gray-400">
-          <p v-if="stats.primary_ability" class="mb-1">
-            <span class="font-semibold">Primary Ability</span>: 
-            <span class="text-amber-300">{{ stats.primary_ability.charAt(0).toUpperCase() + stats.primary_ability.slice(1) }}</span>
-          </p>
-          <p v-if="stats.saving_throws" class="mb-1">
-            <span class="font-semibold">Saving Throws</span>:
-            <span class="text-amber-300">
-              {{ stats.saving_throws.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(', ') }}
-            </span>
-          </p>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div>
-    <button @click="createCharacter" 
-            :disabled="!selectedRace || !selectedClass || submitted" 
-            :class="['w-full', 'bg-red-700', (!selectedRace || !selectedClass || submitted) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-600', 'px-4', 'py-2', 'rounded-lg', 'medieval']"
-            data-trans="begin_adventure">
-    </button>
   </div>
 </div>
 {% endraw %}

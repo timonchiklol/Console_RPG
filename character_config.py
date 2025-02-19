@@ -209,14 +209,14 @@ CLASS_CONFIGS = {
 }
 
 ENEMIES = {
-    "Goblin": {"hp": 7, "damage": (1,6), "xp": 50, "gold": (1,6)},
-    "Skeleton": {"hp": 13, "damage": (1,8), "xp": 100, "gold": (2,8)},
-    "Orc": {"hp": 15, "damage": (1,12), "xp": 150, "gold": (2,10)},
-    "Wolf": {"hp": 11, "damage": (2,4), "xp": 75, "gold": (0,2)},
-    "Bandit": {"hp": 11, "damage": (1,8), "xp": 100, "gold": (4,10)},
-    "Zombie": {"hp": 22, "damage": (1,6), "xp": 125, "gold": (0,4)},
-    "Dark Cultist": {"hp": 9, "damage": (1,10), "xp": 150, "gold": (3,8)},
-    "Giant Spider": {"hp": 10, "damage": (1,8), "xp": 100, "gold": (0,3)}
+    "enemy_goblin": {"hp": 7, "damage": (1,6), "xp": 50, "gold": (1,6)},
+    "enemy_skeleton": {"hp": 13, "damage": (1,8), "xp": 100, "gold": (2,8)},
+    "enemy_orc": {"hp": 15, "damage": (1,12), "xp": 150, "gold": (2,10)},
+    "enemy_wolf": {"hp": 11, "damage": (2,4), "xp": 75, "gold": (0,2)},
+    "enemy_bandit": {"hp": 11, "damage": (1,8), "xp": 100, "gold": (4,10)},
+    "enemy_zombie": {"hp": 22, "damage": (1,6), "xp": 125, "gold": (0,4)},
+    "enemy_dark_cultist": {"hp": 9, "damage": (1,10), "xp": 150, "gold": (3,8)},
+    "enemy_giant_spider": {"hp": 10, "damage": (1,8), "xp": 100, "gold": (0,3)}
 }
 
 RACE_TRANSLATIONS = {
@@ -322,7 +322,7 @@ def get_class_bonuses(class_name):
 
 def get_enemy(enemy_type):
     """Get a copy of enemy stats"""
-    return ENEMIES.get(enemy_type, ENEMIES['Goblin']).copy()
+    return ENEMIES.get(enemy_type, ENEMIES['enemy_goblin']).copy()
 
 def calculate_ability_modifier(score):
     """Calculate the ability score modifier using D&D 5e rules"""
