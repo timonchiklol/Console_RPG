@@ -228,10 +228,14 @@
                 clearHighlight();
                 
                 if (selectedSpellName === "Misty Step") {
+                    // Проверяем, что клетка не занята врагом
+                    if (cell.col === enemyPos.col && cell.row === enemyPos.row) {
+                        return;
+                    }
                     // Подсвечиваем точку телепортации
-                    highlightCell(cell.col, cell.row, 'rgba(0, 255, 255, 0.5)');
+                    highlightCell(cell.col, cell.row, 'rgba(0, 255, 255, 0.3)');  // Голубая подсветка
+                    drawTargetingLine(playerPos, cell);  // Добавляем линию от игрока до точки телепортации
                     selectedSpellTarget = cell;
-                    document.getElementById("castSpellButton").disabled = false;
                     return;
                 }
                 
@@ -512,6 +516,36 @@
                 return;
             }
             
+            if (selectedSpellName === "Misty Step" && selectedSpellTarget) {
+                // Телепортация
+                playerPos.col = selectedSpellTarget.col;
+                playerPos.row = selectedSpellTarget.row;
+                updateGrid();
+                
+                fetch("/api/cast_spell", {
+                    method: "POST",
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        spell_name: selectedSpellName,
+                        target: selectedSpellTarget
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        addToBattleLog(data.error);
+                        return;
+                    }
+                    addToBattleLog("Successfully teleported with Misty Step!");
+                    playerActionTaken = true;
+                    clearAttackSelection();
+                    updateEndTurnButton();
+                });
+                return;
+            }
+            
             fetch("/api/cast_spell", {
                 method: "POST",
                 headers: {
@@ -733,11 +767,20 @@
             if (waitingForSpellTarget) {
                 let cell = getCellFromPixel(e.clientX, e.clientY);
                 if (cell) {
-                    selectedSpellTarget = cell;
-                    addToBattleLog(`Target selected at (${cell.col}, ${cell.row})`);
-                    // Visual cue for the impacted area
-                    highlightTargetEffect(cell);
-                    document.getElementById("castSpellButton").disabled = false;
+                    if (selectedSpellName === "Misty Step") {
+                        // Проверяем, что клетка не занята врагом
+                        if (cell.col === enemyPos.col && cell.row === enemyPos.row) {
+                            addToBattleLog("Cannot teleport onto enemy!");
+                            return;
+                        }
+                        selectedSpellTarget = cell;
+                        document.getElementById("castSpellButton").disabled = false;
+                    } else {
+                        selectedSpellTarget = cell;
+                        addToBattleLog(`Target selected at (${cell.col}, ${cell.row})`);
+                        highlightTargetEffect(cell);
+                        document.getElementById("castSpellButton").disabled = false;
+                    }
                 }
             }
         });
@@ -766,6 +809,22 @@
                 default:
                     highlightCell(cell.col, cell.row, 'rgba(255, 0, 0, 0.5)');
             }
+        }
+
+        // Добавим функцию для рисования линии прицеливания
+        function drawTargetingLine(start, end) {
+            ctx.beginPath();
+            ctx.moveTo(
+                start.col * CELL_SIZE + CELL_SIZE / 2,
+                start.row * CELL_SIZE + CELL_SIZE / 2
+            );
+            ctx.lineTo(
+                end.col * CELL_SIZE + CELL_SIZE / 2,
+                end.row * CELL_SIZE + CELL_SIZE / 2
+            );
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)';  // Полупрозрачная голубая линия
+            ctx.lineWidth = 2;
+            ctx.stroke();
         }
     </script>
 </body>

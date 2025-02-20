@@ -50,18 +50,6 @@ spells_1lvl = {
         "effect_duration": 1,
         "game_mechanics": "наносит урон и отталкивает цели"
     },
-    
-    "Grease": {
-        "range": 4,
-        "game_mechanics": "Игрок выбирает квадрат 10х10, падение при провале спасброска"
-    },
-    
-    "Shield": {
-        "range": 0,
-        "duration": 1,
-        "bonus_ac": 5,
-        "description": "Magic shield"
-    }
 }
 
 # Словарь с заклинаниями второго уровня
@@ -73,15 +61,6 @@ spells_2lvl = {
         "effect": "weakness",  # Уменьшение урона цели на 50%
         "effect_duration": 2,
         "game_mechanics": "выпускает 3 луча и ослабляет цель"
-    },
-
-    "Shatter": {
-        "damage": "1d18",
-        "range": 3,
-        "area_radius": 1,
-        "effect": "stun",  # Оглушение на 1 ход
-        "effect_duration": 1,
-        "game_mechanics": "наносит урон и оглушает цели"
     },
 
     "Dragon's Breath": {

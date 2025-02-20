@@ -373,30 +373,35 @@ def api_enemy_attack():
         # Создаем новый словарь для обновленных эффектов
         updated_effects = {}
         
-        # Обрабатываем эффекты контроля
+        # Проверяем эффекты контроля сначала
         if any(effect in effects['enemy'] for effect in ['paralyze', 'hold_person', 'frozen']):
             effect_name = next(effect for effect in ['paralyze', 'hold_person', 'frozen'] 
                              if effect in effects['enemy'])
             data = effects['enemy'][effect_name].copy()
             
-            # Уменьшаем длительность
+            # Пропускаем ход из-за эффекта
+            combat_log = f"Enemy is {effect_name} and skips their turn! "
+            
+            # Уменьшаем длительность после пропуска хода
             data['duration'] = data['duration'] - 1
-            print(f"Debug - {effect_name} duration: {data['duration']}")
             
             if data['duration'] > 0:
                 updated_effects[effect_name] = data
-                effects['enemy'] = updated_effects
-                session['effects'] = effects
-                session.modified = True
-                
-                return jsonify({
-                    "combat_log": f"Enemy is {effect_name}d and skips their turn! ({data['duration']} turns remaining)",
-                    "character_hp": character['hp'],
-                    "enemy_hp": enemy['hp'],
-                    "enemy_pos": enemy['pos']
-                })
+                combat_log += f"({data['duration']} turns remaining)"
             else:
-                combat_log += f"Effect {effect_name} has worn off! "
+                combat_log += f"Effect {effect_name} will wear off next turn!"
+            
+            # Обновляем эффекты в сессии
+            effects['enemy'] = updated_effects
+            session['effects'] = effects
+            session.modified = True
+            
+            return jsonify({
+                "combat_log": combat_log,
+                "character_hp": character['hp'],
+                "enemy_hp": enemy['hp'],
+                "enemy_pos": enemy['pos']
+            })
         
         # Обрабатываем другие эффекты
         for effect_name, data in effects['enemy'].items():
