@@ -122,10 +122,13 @@ def character_creation():
             'intelligence': intelligence,
             'wisdom': wisdom,
             'charisma': charisma,
-            'hp': constitution + 10,
-            'spell_slots': 6,         # Изменили с 2 на 6
+            'hp': 100,  # начальное значение HP
+            'max_hp': 100,  # добавляем max_hp
+            'spell_slots': 100,
+            'pos': {'col': 5, 'row': 1},
+            'speed': 30,
+            'movement_left': 30,
             'spells': ['Magic Missile', 'Shield'],
-            'speed': 30
         }
         # Create a simple enemy for demonstration with position
         session['enemy'] = {
@@ -135,6 +138,11 @@ def character_creation():
             'pos': {'col': 5, 'row': 4},
             'speed': ENEMY_SPEED,
             'movement_left': ENEMY_SPEED
+        }
+        # Добавляем словарь для отслеживания эффектов
+        session['effects'] = {
+            'enemy': {},  # эффекты на враге
+            'player': {}  # эффекты на игроке
         }
         return redirect(url_for("battle"))
     return render_template("create.html")
@@ -155,12 +163,32 @@ def battle():
             'movement_left': ENEMY_SPEED
         }
     
+    # Инициализируем эффекты, если их нет
+    if 'effects' not in session:
+        session['effects'] = {
+            'enemy': {},
+            'player': {}
+        }
+    
+    # Добавляем ability_scores в character, если их нет
+    if 'ability_scores' not in session['character']:
+        session['character']['ability_scores'] = {
+            'strength': session['character'].get('strength', 10),
+            'dexterity': session['character'].get('dexterity', 10),
+            'constitution': session['character'].get('constitution', 10),
+            'intelligence': session['character'].get('intelligence', 10),
+            'wisdom': session['character'].get('wisdom', 10),
+            'charisma': session['character'].get('charisma', 10)
+        }
+    
+    # Добавляем переменную lang для шаблона
     return render_template('battle.html', 
         character=session['character'], 
         enemy=session['enemy'],
         spells_1lvl=spells_1lvl,
         spells_2lvl=spells_2lvl,
-        basic_attacks=basic_attacks  # Добавляем basic_attacks
+        basic_attacks=basic_attacks,
+        lang='en'  # Добавляем язык по умолчанию
     )
 
 # Add new roll_dice endpoint
@@ -213,7 +241,7 @@ def api_attack():
 @app.route("/api/cast_spell", methods=["POST"])
 def api_cast_spell():
     try:
-        damage = 0  # Initialize damage variable
+        damage = 0
         data = request.get_json()
         spell_name = data.get('spell_name')
         spell_data = data.get('spell_data')
@@ -221,116 +249,96 @@ def api_cast_spell():
         
         character = session['character']
         enemy = session['enemy']
+        effects = session.get('effects', {'enemy': {}, 'player': {}})
         
         combat_log = f"{character['name']} "
         
         # Проверяем слоты только для настоящих заклинаний
-        if spell_name == "Melee Attack":
+        if spell_name in basic_attacks:
             is_spell = False
         else:
             is_spell = True
             if character['spell_slots'] <= 0:
                 return jsonify({"error": "No spell slots remaining!"})
         
-        if spell_name == "Melee Attack":
-            damage = random.randint(1, 6)  # d6 урон
-            combat_log += f"attacks with melee and deals {damage} damage! "
-        elif spell_name == "Chromatic Orb":
-            damage = sum(random.randint(1, 8) for _ in range(3))
-            combat_log += f"Orb explodes for {damage} damage in 2-tile radius! "
-        
-        elif spell_name == "Magic Missile":
-            for _ in range(3):
-                missile_damage = random.randint(1, 3)
-                damage += missile_damage
-                combat_log += f"Missile hits for {missile_damage} force damage! "
-        
-        elif spell_name == "Ice Knife":
-            primary_damage = random.randint(1, 10)
-            area_damage = sum(random.randint(1, 6) for _ in range(2))
-            damage = primary_damage + area_damage
-            combat_log += f"Ice Knife hits for {primary_damage} + {area_damage} area damage! "
-        
-        elif spell_name == "Healing Word":
-            healing_roll = random.randint(1, 4)  # d4
-            healing = healing_roll + 3  # +3 к броску
-            character['hp'] += healing
+        # Специальная обработка для Healing Word
+        if spell_name == "Healing Word":
+            # Если max_hp не установлен, устанавливаем его равным начальному HP
+            if 'max_hp' not in character:
+                character['max_hp'] = 100  # или другое начальное значение HP
+            
+            # Парсим формулу лечения (1d4+3)
+            healing_formula = spells_1lvl["Healing Word"]["healing"]
+            dice_part, modifier = healing_formula.split('+')
+            num_dice, dice_size = map(int, dice_part.split('d'))
+            
+            # Вычисляем количество лечения
+            healing = sum(random.randint(1, dice_size) for _ in range(num_dice)) + int(modifier)
+            
+            # Применяем лечение
+            old_hp = character['hp']
+            character['hp'] = min(character['hp'] + healing, character['max_hp'])
+            actual_healing = character['hp'] - old_hp
+            
+            combat_log += f"uses Healing Word and heals for {actual_healing} HP! "
+            
             # Используем слот заклинания
             character['spell_slots'] -= 1
-            # Сохраняем изменения в сессии
+            
             session['character'] = character
-            combat_log += f"Heals for {healing} HP! (Roll: {healing_roll} + 3) "
             return jsonify({
                 "combat_log": combat_log,
                 "character_hp": character['hp'],
                 "enemy_hp": enemy['hp'],
-                "enemy_defeated": enemy['hp'] <= 0,
                 "spell_slots": character['spell_slots']
             })
         
-        elif spell_name == "Thunderwave":
-            damage = sum(random.randint(1, 5) for _ in range(2))
-            combat_log += f"Thunder damages all enemies for {damage}! "
+        # Получаем данные заклинания
+        spell_info = None
+        if spell_name in spells_1lvl:
+            spell_info = spells_1lvl[spell_name]
+        elif spell_name in spells_2lvl:
+            spell_info = spells_2lvl[spell_name]
+        elif spell_name in basic_attacks:
+            spell_info = basic_attacks[spell_name]
         
-        elif spell_name == "Scorching Ray":
-            for i in range(3):
-                ray_damage = random.randint(1, 9)
-                damage += ray_damage
-                combat_log += f"Ray {i+1} hits for {ray_damage} fire damage! "
+        if not spell_info:
+            return jsonify({"error": "Invalid spell!"})
         
-        elif spell_name == "Shatter":
-            damage = random.randint(1, 15)
-            combat_log += f"Shatter deals {damage} thunder damage! "
+        # Обработка урона, только если у заклинания есть урон
+        if "damage" in spell_info and spell_info["damage"] != "0":
+            damage_dice = spell_info["damage"].split('d')
+            num_dice = int(damage_dice[0])
+            dice_size = int(damage_dice[1])
+            damage = sum(random.randint(1, dice_size) for _ in range(num_dice))
+            combat_log += f"deals {damage} damage! "
         
-        elif spell_name == "Dragon's Breath":
-            damage = sum(random.randint(1, 7) for _ in range(2))
-            enemy['disadvantage'] = True
-            combat_log += f"Dragon's Breath deals {damage} damage and applies disadvantage! "
-        
-        elif spell_name == "Cloud of Daggers":
-            damage = sum(random.randint(1, 5) for _ in range(2))
-            session['cloud_daggers'] = {
-                'pos': target,
-                'duration': 3,
-                'damage': damage
+        # Обработка эффектов
+        if "effect" in spell_info:
+            effect_name = spell_info["effect"]
+            effect_duration = spell_info.get("effect_duration", 1)
+            
+            # Специальная обработка для определенных эффектов
+            if effect_name == "paralyze" or effect_name == "hold_person":
+                effect_duration = 3
+            
+            effects['enemy'][effect_name] = {
+                'duration': effect_duration,
+                'source': spell_name
             }
-            combat_log += f"Created a cloud of daggers dealing {damage} damage! "
+            combat_log += f"Enemy is affected by {effect_name}! "
         
-        elif spell_name == "Hold Person":
-            enemy['paralyzed'] = True
-            enemy['paralyzed_duration'] = 3
-            combat_log += "Enemy is paralyzed and cannot move! "
-        
-        elif spell_name == "Misty Step":
-            # Проверяем, что цель в пределах поля
-            if 0 <= target['col'] < 10 and 0 <= target['row'] < 8:
-                # Телепортируем игрока на выбранную позицию
-                combat_log += f"teleports to position ({target['col']}, {target['row']})! "
-                # Возвращаем новую позицию игрока клиенту
-                return jsonify({
-                    "combat_log": combat_log,
-                    "character_hp": character['hp'],
-                    "enemy_hp": enemy['hp'],
-                    "enemy_defeated": enemy['hp'] <= 0,
-                    "spell_slots": character['spell_slots'],
-                    "player_pos": {
-                        "col": target['col'],
-                        "row": target['row']
-                    }
-                })
-            else:
-                return jsonify({"error": "Invalid target position for teleport!"})
-        
-        # Применяем урон если он есть
+        # Применяем урон
         if damage > 0:
             enemy['hp'] -= damage
-
-        # Используем слот только для настоящих заклинаний
+        
+        # Используем слот заклинания если это не базовая атака
         if is_spell:
             character['spell_slots'] -= 1
         
         session['character'] = character
         session['enemy'] = enemy
+        session['effects'] = effects
         
         return jsonify({
             "combat_log": combat_log,
@@ -350,8 +358,9 @@ def api_enemy_attack():
     if 'character' not in session or 'enemy' not in session:
         return jsonify({"error": "No battle in progress."})
     
-    character = session['character']
-    enemy = session['enemy']
+    character = session.get('character')
+    enemy = session.get('enemy')
+    effects = session.get('effects', {'enemy': {}, 'player': {}})
     
     try:
         player_col = int(request.form.get("player_col"))
@@ -360,79 +369,163 @@ def api_enemy_attack():
         # Сбрасываем движение в начале хода
         enemy['movement_left'] = ENEMY_SPEED
         combat_log = ""
+
+        # Создаем новый словарь для обновленных эффектов
+        updated_effects = {}
         
-        # Сначала проверяем, нужно ли двигаться для лучшей позиции
-        distance = math.sqrt(
-            (player_col - enemy['pos']['col'])**2 + 
-            (player_row - enemy['pos']['row'])**2
-        )
+        # Обрабатываем эффекты контроля
+        if any(effect in effects['enemy'] for effect in ['paralyze', 'hold_person', 'frozen']):
+            effect_name = next(effect for effect in ['paralyze', 'hold_person', 'frozen'] 
+                             if effect in effects['enemy'])
+            data = effects['enemy'][effect_name].copy()
+            
+            # Уменьшаем длительность
+            data['duration'] = data['duration'] - 1
+            print(f"Debug - {effect_name} duration: {data['duration']}")
+            
+            if data['duration'] > 0:
+                updated_effects[effect_name] = data
+                effects['enemy'] = updated_effects
+                session['effects'] = effects
+                session.modified = True
+                
+                return jsonify({
+                    "combat_log": f"Enemy is {effect_name}d and skips their turn! ({data['duration']} turns remaining)",
+                    "character_hp": character['hp'],
+                    "enemy_hp": enemy['hp'],
+                    "enemy_pos": enemy['pos']
+                })
+            else:
+                combat_log += f"Effect {effect_name} has worn off! "
         
-        # Если враг далеко - подходим на дистанцию лука
-        if distance > ENEMY_ATTACKS["Bow Attack"]["range"]:
-            steps_taken = 0
-            while enemy['movement_left'] > 0 and steps_taken < 5:
-                dx = player_col - enemy['pos']['col']
-                dy = player_row - enemy['pos']['row']
+        # Обрабатываем другие эффекты
+        for effect_name, data in effects['enemy'].items():
+            if effect_name not in ['paralyze', 'hold_person', 'frozen']:
+                data = data.copy()
+                data['duration'] = data['duration'] - 1
                 
-                if dx == 0 and dy == 0:
-                    break
-                
-                # Нормализуем движение
-                if abs(dx) > 0:
-                    dx = dx // abs(dx)
-                if abs(dy) > 0:
-                    dy = dy // abs(dy)
+                if effect_name == 'burn':
+                    enemy['hp'] -= 2
+                    combat_log += "Enemy takes 2 burning damage! "
+                elif effect_name == 'bleed':
+                    enemy['hp'] -= 3
+                    combat_log += "Enemy takes 3 bleeding damage! "
+                elif effect_name == 'fear':
+                    # Логика убегания от игрока
+                    dx = enemy['pos']['col'] - player_col
+                    dy = enemy['pos']['row'] - player_row
                     
-                new_col = enemy['pos']['col'] + dx
-                new_row = enemy['pos']['row'] + dy
-                
-                # Проверяем границы поля
-                if 0 <= new_col < 10 and 0 <= new_row < 8:
+                    # Определяем направление движения (от игрока)
+                    if abs(dx) >= abs(dy):
+                        # Двигаемся по горизонтали
+                        if dx > 0:
+                            new_col = min(9, enemy['pos']['col'] + 1)
+                            new_row = enemy['pos']['row']
+                        else:
+                            new_col = max(0, enemy['pos']['col'] - 1)
+                            new_row = enemy['pos']['row']
+                    else:
+                        # Двигаемся по вертикали
+                        if dy > 0:
+                            new_col = enemy['pos']['col']
+                            new_row = min(7, enemy['pos']['row'] + 1)
+                        else:
+                            new_col = enemy['pos']['col']
+                            new_row = max(0, enemy['pos']['row'] - 1)
+                    
+                    # Применяем движение
                     enemy['pos']['col'] = new_col
                     enemy['pos']['row'] = new_row
-                    enemy['movement_left'] -= 5
-                    steps_taken += 1
-                    
-                    # Проверяем, достигли ли мы дистанции для лука
-                    new_distance = math.sqrt(
-                        (player_col - enemy['pos']['col'])**2 + 
-                        (player_row - enemy['pos']['row'])**2
-                    )
-                    if new_distance <= ENEMY_ATTACKS["Bow Attack"]["range"]:
-                        break
+                    combat_log += "Enemy flees in fear! "
+                
+                if data['duration'] > 0:
+                    updated_effects[effect_name] = data
                 else:
-                    break
+                    combat_log += f"Effect {effect_name} has worn off! "
+        
+        # Обновляем сессию с новыми эффектами
+        effects['enemy'] = updated_effects
+        session['effects'] = effects
+        session['enemy'] = enemy
+        session.modified = True
+        
+        # Если нет эффектов контроля, продолжаем с обычной логикой боя
+        if not any(effect in ['paralyze', 'hold_person', 'frozen'] for effect in updated_effects):
+            # Сначала проверяем, нужно ли двигаться для лучшей позиции
+            distance = math.sqrt(
+                (player_col - enemy['pos']['col'])**2 + 
+                (player_row - enemy['pos']['row'])**2
+            )
             
-            if steps_taken > 0:
-                combat_log += f"Goblin moves {steps_taken} tiles. "
-        
-        # После движения проверяем дистанцию снова для выбора атаки
-        distance = math.sqrt(
-            (player_col - enemy['pos']['col'])**2 + 
-            (player_row - enemy['pos']['row'])**2
-        )
-        
-        # Выбираем тип атаки на основе дистанции
-        if distance <= ENEMY_ATTACKS["Melee Attack"]["range"]:
-            # Ближний бой
-            hit_roll = random.randint(1, 20)
-            if hit_roll >= 10:
-                damage_roll = random.randint(1, 8)
-                character['hp'] -= damage_roll
-                combat_log += f"Goblin strikes with fists and hits with {hit_roll}, dealing {damage_roll} damage!"
+            # Если враг далеко - подходим на дистанцию лука
+            if distance > ENEMY_ATTACKS["Bow Attack"]["range"]:
+                steps_taken = 0
+                while enemy['movement_left'] > 0 and steps_taken < 5:
+                    dx = player_col - enemy['pos']['col']
+                    dy = player_row - enemy['pos']['row']
+                    
+                    if dx == 0 and dy == 0:
+                        break
+                    
+                    # Нормализуем движение
+                    if abs(dx) > 0:
+                        dx = dx // abs(dx)
+                    if abs(dy) > 0:
+                        dy = dy // abs(dy)
+                        
+                    new_col = enemy['pos']['col'] + dx
+                    new_row = enemy['pos']['row'] + dy
+                    
+                    # Проверяем границы поля
+                    if 0 <= new_col < 10 and 0 <= new_row < 8:
+                        enemy['pos']['col'] = new_col
+                        enemy['pos']['row'] = new_row
+                        enemy['movement_left'] -= 5
+                        steps_taken += 1
+                        
+                        # Проверяем, достигли ли мы дистанции для лука
+                        new_distance = math.sqrt(
+                            (player_col - enemy['pos']['col'])**2 + 
+                            (player_row - enemy['pos']['row'])**2
+                        )
+                        if new_distance <= ENEMY_ATTACKS["Bow Attack"]["range"]:
+                            break
+                    else:
+                        break
+                
+                if steps_taken > 0:
+                    combat_log += f"Goblin moves {steps_taken} tiles. "
+            
+            # После движения проверяем дистанцию снова для выбора атаки
+            distance = math.sqrt(
+                (player_col - enemy['pos']['col'])**2 + 
+                (player_row - enemy['pos']['row'])**2
+            )
+            
+            # Проверяем эффект weakness для уменьшения урона
+            damage_multiplier = 0.5 if 'weakness' in effects['enemy'] else 1.0
+            
+            # Выбираем тип атаки на основе дистанции
+            if distance <= ENEMY_ATTACKS["Melee Attack"]["range"]:
+                # Ближний бой
+                hit_roll = random.randint(1, 20)
+                if hit_roll >= 10:
+                    damage_roll = int(random.randint(1, 8) * damage_multiplier)
+                    character['hp'] -= damage_roll
+                    combat_log += f"Goblin strikes with fists and hits with {hit_roll}, dealing {damage_roll} damage!"
+                else:
+                    combat_log += f"Goblin tries to punch but misses with {hit_roll}!"
+            elif distance <= ENEMY_ATTACKS["Bow Attack"]["range"]:
+                # Дальний бой
+                hit_roll = random.randint(1, 20)
+                if hit_roll >= 10:
+                    damage_roll = int(random.randint(1, 6) * damage_multiplier)
+                    character['hp'] -= damage_roll
+                    combat_log += f"Goblin shoots an arrow and hits with {hit_roll}, dealing {damage_roll} damage!"
+                else:
+                    combat_log += f"Goblin shoots but misses with {hit_roll}!"
             else:
-                combat_log += f"Goblin tries to punch but misses with {hit_roll}!"
-        elif distance <= ENEMY_ATTACKS["Bow Attack"]["range"]:
-            # Дальний бой
-            hit_roll = random.randint(1, 20)
-            if hit_roll >= 10:
-                damage_roll = random.randint(1, 6)
-                character['hp'] -= damage_roll
-                combat_log += f"Goblin shoots an arrow and hits with {hit_roll}, dealing {damage_roll} damage!"
-            else:
-                combat_log += f"Goblin shoots but misses with {hit_roll}!"
-        else:
-            combat_log += "Goblin is too far to attack!"
+                combat_log += "Goblin is too far to attack!"
         
         session['character'] = character
         session['enemy'] = enemy
