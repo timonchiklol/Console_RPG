@@ -325,7 +325,7 @@ def get_enemy(enemy_type):
     return ENEMIES.get(enemy_type, ENEMIES['enemy_goblin']).copy()
 
 def calculate_ability_modifier(score):
-    """Calculate the ability score modifier using D&D 5e rules"""
+    """Calculate ability modifier: (score - 10) // 2"""
     return (score - 10) // 2
 
 def roll_with_modifier(dice_count, dice_sides, ability_score):

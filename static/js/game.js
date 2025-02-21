@@ -8,13 +8,20 @@ const gameApp = Vue.createApp({
             isLoading: false,
             diceNeeded: false,
             diceType: 'd20',
+            diceModifier: null,
+            detailedRollResult: null,
             room: {},
             diceRolling: false,
             showPlayers: false,
             showStats: false,
             codeCopied: false,
             wasJustCopied: false,
-            isThinking: false
+            isThinking: false,
+            testMode: window.TEST_MODE === "true",
+            customType: 'normal',
+            customDice: 'd20',
+            customAbility: 'strength',
+            customProficient: false
         };
     },
     computed: {
@@ -102,9 +109,10 @@ const gameApp = Vue.createApp({
                     if (data.room) {
                         this.room = data.room;
                     }
-                    if (data.dice_needed) {
+                    if (data.dice_roll_required) {
                         this.diceNeeded = true;
-                        this.diceType = data.dice_type || 'd20';
+                        this.diceType = (data.dice_roll_request && data.dice_roll_request.dice_type) || 'd20';
+                        console.log('Dice roll request data:', data);
                     } else {
                         this.diceNeeded = false;
                     }
@@ -161,6 +169,20 @@ const gameApp = Vue.createApp({
                     this.gameState = processData.player;
                     if (processData.messages) {
                         this.messages = processData.messages;
+                    }
+                    // Capture detailed dice roll breakdown
+                    if (processData.detailed_roll) {
+                        this.detailedRollResult = processData.detailed_roll;
+                    } else if (rollData.detailed_result) {
+                        this.detailedRollResult = rollData.detailed_result;
+                    } else {
+                        this.detailedRollResult = null;
+                    }
+                    // Capture any dice modifier info
+                    if (processData.dice_modifier) {
+                        this.diceModifier = processData.dice_modifier;
+                    } else {
+                        this.diceModifier = null;
                     }
                 }
             } catch (e) {
@@ -232,6 +254,87 @@ const gameApp = Vue.createApp({
                     }
                     this.messages = data.messages || [];
                     this.room = data.room;
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        },
+        async customRoll() {
+            // Build the dice command based on customType:
+            let diceCommand = '';
+            if (this.customType === 'normal') {
+                diceCommand = this.customDice.trim();
+            } else if (this.customType === 'ability') {
+                diceCommand = 'ability_check:' + this.customAbility;
+                if (this.customProficient) {
+                    diceCommand += ':proficient';
+                }
+            }
+            console.log('Custom Dice Command:', diceCommand);
+            
+            try {
+                // First, roll the dice
+                const rollResponse = await fetch('/roll_dice', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dice_type: diceCommand })
+                });
+                const rollData = await rollResponse.json();
+                if (rollData.error) {
+                    alert(rollData.error);
+                    return;
+                }
+                
+                // Now, process the roll with game logic (simulate Gemini response)
+                const processResponse = await fetch('/process_roll', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ roll: rollData.roll, dice_type: diceCommand })
+                });
+                const processData = await processResponse.json();
+                if (processData.error) {
+                    alert(processData.error);
+                    return;
+                }
+                
+                // Update game state and messages
+                this.gameState = processData.player;
+                if (processData.room) {
+                    this.room = processData.room;
+                }
+                if (processData.messages) {
+                    this.messages = processData.messages;
+                }
+                
+                // Show the outcome with detailed dice info and game response
+                alert(`Roll: ${rollData.roll}\nDetailed: ${JSON.stringify(rollData.detailed_result)}\n\nGame Response: ${processData.message || processData.response}`);
+            } catch (e) {
+                console.error(e);
+            }
+        },
+        async testRoll() {
+            try {
+                const response = await fetch('/test_roll?dice_type=d20');
+                const data = await response.json();
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    console.log('Test Roll:', data);
+                    alert(`Roll: ${data.roll}\nDetails: ${JSON.stringify(data.detailed_result)}`);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        },
+        async testBattle() {
+            try {
+                const response = await fetch('/test_battle');
+                const data = await response.json();
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    console.log('Test Battle:', data);
+                    alert(`Battle Test:\nResponse: ${data.combat_response}\nEnemy: ${JSON.stringify(data.enemy)}\nIn Combat: ${data.in_combat}`);
                 }
             } catch (e) {
                 console.error(e);

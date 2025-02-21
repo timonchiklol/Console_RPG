@@ -24,6 +24,13 @@ class PlayerState(BaseModel):
     dice_type: Optional[str] = None
     is_active: bool = True
     last_activity: Optional[datetime] = None
+    strength: int = 10
+    dexterity: int = 10
+    constitution: int = 10
+    intelligence: int = 10
+    wisdom: int = 10
+    charisma: int = 10
+    last_dice_detail: Optional[dict] = None
 
 class RoomState(BaseModel):
     room_id: str
@@ -68,43 +75,72 @@ class DiceRoll(BaseModel):
 
 # Define the schema as a dictionary that matches Gemini's expected format
 GAME_RESPONSE_SCHEMA = {
-    "type": "OBJECT",
+    "type": "object",
     "properties": {
         "message": {
-            "type": "STRING",
-            "description": "The message from the DM to all players"
+            "type": "string",
+            "description": "The DM message to all players."
+        },
+        "player_update_required": {
+            "type": "boolean",
+            "description": "Boolean flag indicating if a player updates are required."
+        },
+        "dice_roll_required": {
+            "type": "boolean",
+            "description": "Boolean flag indicating if a dice roll is required."
+        },
+        "combat_started": {
+            "type": "boolean",
+            "description": "Boolean flag indicating if combat has started."
         },
         "players_update": {
-            "type": "ARRAY",
+            "type": "array",
+            "description": "Array of player updates, only present if player_update_required is true.",
             "items": {
-                "type": "OBJECT",
+                "type": "object",
                 "properties": {
-                    "player_id": {"type": "STRING"},
-                    "health_points": {"type": "INTEGER"},
-                    "gold": {"type": "INTEGER"},
-                    "damage": {"type": "INTEGER"},
-                    "level": {"type": "INTEGER"},
-                    "magic_1lvl": {"type": "INTEGER"},
-                    "magic_2lvl": {"type": "INTEGER"},
-                    "in_combat": {"type": "BOOLEAN"},
-                    "dice_roll_needed": {"type": "BOOLEAN"},
-                    "dice_type": {"type": "STRING"},
-                    "ability_modifier": {"type": "STRING"},
-                    "proficient": {"type": "BOOLEAN"},
+                    "player_id": { "type": "string" },
+                    "health_points": { "type": "integer" },
+                    "gold": { "type": "integer" },
+                    "damage": { "type": "integer" }
                 },
                 "required": ["player_id"]
-            },
-            "description": "Updates for specific players' states"
+            }
         },
-        "combat_result": {
-            "type": "OBJECT",
+        "dice_roll_request": {
+            "type": "object",
+            "description": "Dice roll request details, only present if dice_roll_required is true.",
             "properties": {
-                "damage_dealt": {"type": "INTEGER"},
-                "damage_taken": {"type": "INTEGER"},
-                "outcome": {"type": "STRING"}
+                "dice_type": { "type": "string", "description": "The type of dice to roll (e.g. 'd20', '2d6')." },
+                "reason": { "type": "string", "description": "The reason for the dice roll." }
             },
-            "description": "Results of combat actions"
+            "required": ["dice_type"]
         }
     },
-    "required": ["message"]
+    "required": ["message", "player_update_required", "dice_roll_required", "combat_started"]
+}
+
+# New schema for player updates
+PLAYER_UPDATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "player_id": { "type": "string" },
+        "health_points": { "type": "integer" },
+        "gold": { "type": "integer" },
+        "damage": { "type": "integer" }
+    },
+    "required": ["player_id"]
+}
+
+# New schema for dice roll requests
+DICE_ROLL_REQUEST_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "dice_roll_needed": { "type": "boolean", "description": "Flag indicating if dice roll is needed." },
+        "dice_type": { "type": "string", "description": "The type of dice to roll (e.g. 'd20', '2d6'). Use 'd20' for ability check rolls." },
+        "ability_modifier": { "type": "string", "description": "The ability to check, e.g., 'charisma', 'strength', etc., if applicable." },
+        "proficient": { "type": "boolean", "description": "True if the character is proficient in the relevant ability." },
+        "reason": { "type": "string", "description": "The reason for the dice roll." }
+    },
+    "required": ["dice_roll_needed", "dice_type", "ability_modifier", "proficient"]
 } 

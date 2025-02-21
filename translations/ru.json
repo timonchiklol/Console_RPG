@@ -121,5 +121,17 @@
     "character_stats": "Характеристики персонажа",
     "condition": "Состояние",
     "magic_1lvl": "Магия 1 уровня",
-    "magic_2lvl": "Магия 2 уровня"
+    "magic_2lvl": "Магия 2 уровня",
+
+    "base_roll": "Базовый бросок",
+    "ability_modifier": "Модификатор характеристики",
+    "proficiency_bonus": "Бонус мастерства",
+    "total": "Итого",
+    "proficiency": "Мастерство",
+    "roll_details": "Детали броска",
+    "dice_roll": "Бросок кубика",
+    "roll_for": "Бросок на: {reason}",
+    "critical_success": "Критический успех!",
+    "critical_failure": "Критический провал!",
+    "rolling": "Бросаем..."
 } 
