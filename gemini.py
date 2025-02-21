@@ -3,11 +3,26 @@ from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from gemini_schema import GAME_RESPONSE_SCHEMA
+from gemini_schema import GAME_RESPONSE_SCHEMA, PLAYER_UPDATE_SCHEMA, DICE_ROLL_REQUEST_SCHEMA
 import json
 import time
 import logging
 
+COMPOSITE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "message": GAME_RESPONSE_SCHEMA["properties"]["message"],
+        "player_update_required": GAME_RESPONSE_SCHEMA["properties"]["player_update_required"],
+        "dice_roll_required": GAME_RESPONSE_SCHEMA["properties"]["dice_roll_required"],
+        "combat_started": GAME_RESPONSE_SCHEMA["properties"]["combat_started"],
+        "players_update": {
+            "type": "array",
+            "items": PLAYER_UPDATE_SCHEMA
+        },
+        "dice_roll_request": DICE_ROLL_REQUEST_SCHEMA
+    },
+    "required": GAME_RESPONSE_SCHEMA["required"]
+}
 
 class Gemini:
     def __init__(self, API_KEY=None, system_instruction=None, temperature=1):
@@ -92,7 +107,7 @@ class Gemini:
                 return f"Error: {str(e)}"
     
     def send_structured_message(self, prompt):
-        """Send a message and get a structured response using the game response schema."""
+        """Send a message and get a structured response using multiple schemas."""
         retries = 0
         while retries < self.max_retries:
             try:
@@ -104,7 +119,7 @@ class Gemini:
                         temperature=self.temperature,
                         safety_settings=self.safety_settings,
                         response_mime_type="application/json",
-                        response_schema=GAME_RESPONSE_SCHEMA
+                        response_schema=COMPOSITE_SCHEMA
                     )
                 )
                 

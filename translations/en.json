@@ -121,5 +121,17 @@
     "character_stats": "Character Stats",
     "condition": "Condition",
     "magic_1lvl": "Level 1 Magic",
-    "magic_2lvl": "Level 2 Magic"
+    "magic_2lvl": "Level 2 Magic",
+
+    "base_roll": "Base Roll",
+    "ability_modifier": "Ability Modifier",
+    "proficiency_bonus": "Proficiency Bonus",
+    "total": "Total",
+    "proficiency": "Proficiency",
+    "roll_details": "Roll Details",
+    "dice_roll": "Dice Roll",
+    "roll_for": "Rolling for: {reason}",
+    "critical_success": "Critical Success!",
+    "critical_failure": "Critical Failure!",
+    "rolling": "Rolling..."
 } 

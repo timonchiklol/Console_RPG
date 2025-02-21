@@ -1,7 +1,10 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from flask import Flask, render_template, request, jsonify, session, Response, send_from_directory
 from DEF import DnDGame
 from character_config import (RACE_STATS, CLASS_BONUSES, RACE_TRANSLATIONS, CLASS_TRANSLATIONS,
-                            RACE_CONFIGS, CLASS_CONFIGS)
+                            RACE_CONFIGS, CLASS_CONFIGS, calculate_ability_modifier)
 from room_manager import RoomManager
 import os
 import json
@@ -12,7 +15,8 @@ from pathlib import Path
 from datetime import datetime
 from threading import Lock
 from gemini_schema import PlayerState
-from pydantic import Extra
+from pydantic import Extra, BaseModel
+from typing import Optional
 
 # Monkey-patch DnDGame to update system prompt for Gemini
 _original_init = DnDGame.__init__
@@ -76,6 +80,7 @@ setup_logging()
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # For session management
+
 room_manager = RoomManager()
 room_locks = {}  # Dictionary to store room locks
 
@@ -92,6 +97,20 @@ def get_room_lock(room_id):
 
 # Store messages for each room
 room_messages = {}
+
+class RoomMessage(BaseModel):
+    type: str
+    message: str
+    player_name: Optional[str] = None
+    timestamp: datetime
+
+    @property
+    def user_message(self) -> str:
+        return self.message
+
+    @property
+    def dm_response(self) -> str:
+        return self.message if self.type == 'dm' else ""
 
 @app.route('/')
 def index():
@@ -368,6 +387,12 @@ def choose_character():
         player.level = game.level
         player.magic_1lvl = game.magic_1lvl
         player.magic_2lvl = game.magic_2lvl
+        player.strength = game.strength
+        player.dexterity = game.dexterity
+        player.constitution = game.constitution
+        player.intelligence = game.intelligence
+        player.wisdom = game.wisdom
+        player.charisma = game.charisma
         if player.__pydantic_extra__ is None:
             object.__setattr__(player, "__pydantic_extra__", {})
         object.__setattr__(player, "ability_scores", game.get_ability_scores())
@@ -391,8 +416,8 @@ def choose_character():
         
         return jsonify({
             'status': 'success',
-            'player': player.dict(),
-            'room': room.dict(),
+            'player': player.model_dump(),
+            'room': room.model_dump(),
             'message': response.get('message', '') if response else ''
         })
         
@@ -450,64 +475,75 @@ def game_action():
             # Then add DM's response if there is one
             dm_message_id = None
             if response.get('message'):
-                dm_message_id = add_room_message(room_id, response['message'], 'dm')
+                dm_message_id = add_room_message(room_id, response['message'], 'dm', detailed_result=getattr(player, 'last_dice_detail', None))
             
-            # Update player states based on players_update
-            for player_update in response.get('players_update', []):
-                target_pid = player_update.get('player_id')
-                if not target_pid or target_pid not in room.players:
-                    continue
+            # Handle player updates if required
+            if response.get('player_update_required'):
+                for player_update in response.get('players_update', []):
+                    target_pid = player_update.get('player_id')
+                    if not target_pid or target_pid not in room.players:
+                        continue
 
-                target_player = room.players[target_pid]
-
-                # Update player stats if provided
-                if 'health_points' in player_update:
-                    target_player.health_points = player_update['health_points']
-                if 'gold' in player_update:
-                    target_player.gold = player_update['gold']
-                if 'damage' in player_update:
-                    target_player.damage = player_update['damage']
-                if 'level' in player_update:
-                    target_player.level = player_update['level']
-                if 'magic_1lvl' in player_update:
-                    target_player.magic_1lvl = player_update['magic_1lvl']
-                if 'magic_2lvl' in player_update:
-                    target_player.magic_2lvl = player_update['magic_2lvl']
-                if 'dice_roll_needed' in player_update:
-                    target_player.dice_roll_needed = player_update['dice_roll_needed']
-                if 'dice_type' in player_update:
-                    target_player.dice_type = player_update['dice_type']
+                    target_player = room.players[target_pid]
+                    # Update only the allowed stats
+                    if 'health_points' in player_update:
+                        target_player.health_points = player_update['health_points']
+                    if 'gold' in player_update:
+                        target_player.gold = player_update['gold']
+                    if 'damage' in player_update:
+                        target_player.damage = player_update['damage']
             
-            # Update room combat state if needed
-            combat_result = response.get('combat_result', {})
-            if combat_result:
-                if combat_result.get('damage_dealt') and room.enemy_health:
-                    room.enemy_health -= combat_result['damage_dealt']
-                    if room.enemy_health <= 0:
-                        room.in_combat = False
-                        room.enemy_name = None
-                        room.enemy_health = None
+            # Handle dice roll request if required
+            if response.get('dice_roll_required'):
+                dice_request = response.get('dice_roll_request', {})
+                player.dice_roll_needed = True
+                if dice_request.get('ability_modifier'):
+                    ability_name = dice_request['ability_modifier']
+                    proficient = dice_request.get('proficient', False)
+                    player.dice_type = 'd20'  # Always use d20 for ability checks
+                    ability_score = 10
+                    player_data = player.model_dump()
+                    ability_score = player_data[ability_name.lower()]
+                    player.dice_modifier = {
+                        'modifier': calculate_ability_modifier(ability_score),
+                        'proficient': proficient,
+                        'reason': dice_request.get('reason', '')
+                    }
+                    response['dice_roll_request'] = {
+                        'dice_type': player.dice_type,
+                        'dice_modifier': player.dice_modifier,
+                        'ability_modifier': ability_name
+                    }
+                else:
+                    player.dice_type = dice_request.get('dice_type', 'd20')
+                    player.dice_modifier = {
+                        'reason': dice_request.get('reason', '')
+                    }
+                    response['dice_roll_request'] = {
+                        'dice_type': player.dice_type,
+                        'dice_modifier': player.dice_modifier
+                    }
+            else:
+                player.dice_roll_needed = False
+                player.dice_type = None
+                player.dice_modifier = None
+            
+            # Handle combat started flag (placeholder for now)
+            if response.get('combat_started'):
+                room.in_combat = True
             
             # Update room state
             room_manager.update_room(room)
-            
-            # Get dice roll info
-            dice_roll = response.get('dice_roll', {})
-            dice_roll_needed = dice_roll.get('required', False)
-            dice_type = dice_roll.get('type')
-            dice_modifier = dice_roll.get('modifier', None)
             
             # Get the latest messages for this room
             latest_messages = get_new_messages(room_id)
             
             return jsonify({
-                'response': response.get('message', ''),
-                'player': player.dict(),
-                'room': room.dict(),
-                'dice_needed': dice_roll_needed,
-                'dice_type': dice_type,
-                'dice_modifier': dice_modifier,
-                'combat_result': combat_result,
+                'message': response.get('message', ''),
+                'player': player.model_dump(),
+                'room': room.model_dump(),
+                'dice_roll_required': response.get('dice_roll_required', False),
+                'dice_roll_request': response.get('dice_roll_request', {}),
                 'messages': latest_messages,
                 'last_message_id': latest_messages[-1]['id'] if latest_messages else None,
                 'player_message_id': player_message_id,
@@ -541,20 +577,28 @@ def roll_dice():
         game = DnDGame(language=room.language)
         
         data = request.get_json()
+        logging.info(f"Received dice roll request - Room: {room_id}, Player: {player_id}, Data: {data}")
         dice_type = data.get('dice_type', 'd20')
-        
-        roll_result = game.roll_dice(dice_type)
+        # Check if player has a dice_modifier (for ability check)
+        if len(player.dice_modifier) > 1:
+            modifier = player.dice_modifier.get('modifier', 0)
+            proficient = player.dice_modifier.get('proficient', False)
+            reason = player.dice_modifier.get('reason', '')
+            logging.info(f"Ability modifier: {modifier}, Proficient: {proficient}, Reason: {reason}")
+            roll_result = game.roll_dice(dice_type, ability_modifier=modifier, proficient=proficient, reason=reason)
+        else:
+            roll_result = game.roll_dice(dice_type)
         
         if roll_result is None:
-            return jsonify({'error': 'Invalid dice type'}), 400
+            return jsonify({'error': 'Error rolling dice'}), 400
         
-        # Add dice roll to room messages
-        roll_message_id = add_room_message(
-            room_id,
-            f"rolled {roll_result} on {dice_type}",
-            'player',
-            player.name
-        )
+        # Persist the dice roll details into player's state
+        player.last_dice_detail = game.last_dice_detail
+        room_manager.update_room(room)
+        
+        # Add dice roll to room messages with detailed_result
+        roll_message = f"rolled {roll_result}"
+        roll_message_id = add_room_message(room_id, roll_message, 'player', player.name, detailed_result=game.last_dice_detail)
         
         # Update player's last roll
         player.last_dice_roll = roll_result
@@ -562,17 +606,31 @@ def roll_dice():
         player.dice_type = None
         room_manager.update_room(room)
         
+        # Construct roll details message for Gemini along with debugging info
+        detail = game.last_dice_detail
+        bonus = detail.get('ability_modifier', 0) + detail.get('proficient_bonus', 0)
+        roll_details_message = (f"Rolled a {dice_type} with base roll = {detail.get('base_roll')}, "
+                                f"ability modifier = {detail.get('ability_modifier')} "
+                                f"(proficiency bonus: {detail.get('proficient_bonus')}), "
+                                f"total bonus = {bonus}, resulting in final total = {detail.get('total')}. "
+                                f"Reason: {detail.get('reason')}.")
+        
         # Get the latest messages for this room
         latest_messages = get_new_messages(room_id)
         
-        return jsonify({
+        response_data = {
             'roll': roll_result,
+            'base_roll': detail.get('base_roll'),
             'dice_type': dice_type,
-            'player': player.dict(),
+            'player': player.model_dump(),
             'messages': latest_messages,
             'last_message_id': latest_messages[-1]['id'] if latest_messages else None,
-            'roll_message_id': roll_message_id
-        })
+            'roll_message_id': roll_message_id,
+            'detailed_result': detail,
+            'roll_details_message': roll_details_message
+        }
+        
+        return jsonify(response_data)
 
 @app.route('/process_roll', methods=['POST'])
 def process_roll():
@@ -596,7 +654,7 @@ def process_roll():
         
         data = request.get_json()
         roll_value = data.get('roll')
-        dice_type = data.get('dice_type')
+        dice_type = data.get('dice_type', 'd20')
         
         game = DnDGame(language=room.language)
         # Load player stats into DnDGame
@@ -615,9 +673,22 @@ def process_roll():
         if room.in_combat:
             game.enemy = {"name": room.enemy_name, "hp": room.enemy_health} if room.enemy_name else None
         
-        # Send message with room state context
+        # Create detailed dice roll message
+        if hasattr(player, 'dice_modifier') and player.dice_modifier and getattr(player, 'last_dice_detail', None) and 'base_roll' in player.last_dice_detail:
+            base_roll = player.last_dice_detail.get('base_roll')
+            ability_mod = player.last_dice_detail.get('ability_modifier', 0)
+            proficient_bonus = player.last_dice_detail.get('proficient_bonus', 0)
+            total = player.last_dice_detail.get('total', roll_value)
+            if proficient_bonus:
+                mod_text = f"{ability_mod} (+{proficient_bonus})"
+            else:
+                mod_text = f"{ability_mod}"
+            detail_msg = f"I rolled a {dice_type}: base roll = {base_roll}, modifier = {mod_text}, total = {total}."
+        else:
+            detail_msg = f"I rolled {roll_value} on {dice_type}."
+
         response = game.send_message(
-            f"I rolled {roll_value} on {dice_type}",
+            detail_msg,
             player_id=player_id,
             room_state=room
         )
@@ -625,7 +696,7 @@ def process_roll():
         # Add DM's response if there is one
         dm_message_id = None
         if response.get('message'):
-            dm_message_id = add_room_message(room_id, response['message'], 'dm')
+            dm_message_id = add_room_message(room_id, response['message'], 'dm', detailed_result=getattr(player, 'last_dice_detail', None))
         
         # Update player states based on players_update
         for player_update in response.get('players_update', []):
@@ -648,10 +719,6 @@ def process_roll():
                 target_player.magic_1lvl = player_update['magic_1lvl']
             if 'magic_2lvl' in player_update:
                 target_player.magic_2lvl = player_update['magic_2lvl']
-            if 'dice_roll_needed' in player_update:
-                target_player.dice_roll_needed = player_update['dice_roll_needed']
-            if 'dice_type' in player_update:
-                target_player.dice_type = player_update['dice_type']
         
         # Update room combat state if needed
         combat_result = response.get('combat_result', {})
@@ -669,23 +736,13 @@ def process_roll():
         # Update room state
         room_manager.update_room(room)
         
-        # Get dice roll info for next action
-        dice_roll = response.get('dice_roll', {})
-        dice_roll_needed = dice_roll.get('required', False)
-        dice_type = dice_roll.get('type')
-        dice_modifier = dice_roll.get('modifier', None)
-        
         # Get the latest messages for this room
         latest_messages = get_new_messages(room_id)
         
         return jsonify({
             'message': response.get('message', ''),
-            'player': player.dict(),
-            'room': room.dict(),
-            'dice_needed': dice_roll_needed,
-            'dice_type': dice_type,
-            'dice_modifier': dice_modifier,
-            'combat_result': combat_result,
+            'player': player.model_dump(),
+            'room': room.model_dump(),
             'messages': latest_messages,
             'last_message_id': latest_messages[-1]['id'] if latest_messages else None,
             'dm_message_id': dm_message_id
@@ -719,13 +776,12 @@ def load_game():
     
     current_player = None
     if room and session.get('player_id') in room.players:
-        # Use model_dump() or dict() based on player implementation
-        current_player = room.players[session.get('player_id')].dict()
+        current_player = room.players[session.get('player_id')].model_dump()
 
     return jsonify({
         'status': 'success',
         'message': 'Game loaded successfully',
-        'room': room.dict(),
+        'room': room.model_dump(),
         'player': current_player
     })
 
@@ -734,7 +790,7 @@ def list_saves():
     saves = [f.stem.replace('room_', '') for f in Path('saves').glob('room_*.json')]
     return jsonify({'saves': '\n'.join(saves)})
 
-def add_room_message(room_id: str, message: str, message_type: str = 'system', player_name: str = None):
+def add_room_message(room_id: str, message: str, message_type: str = 'system', player_name: str = None, detailed_result=None):
     """Add a message to the room's message history with an ID"""
     if room_id not in room_messages:
         room_messages[room_id] = []
@@ -755,6 +811,8 @@ def add_room_message(room_id: str, message: str, message_type: str = 'system', p
         'timestamp': datetime.now().isoformat(),
         'player_name': player_name if message_type == 'player' else None
     }
+    if detailed_result is not None:
+        message_data['detailed_result'] = detailed_result
 
     room_messages[room_id].append(message_data)
 
@@ -767,12 +825,16 @@ def add_room_message(room_id: str, message: str, message_type: str = 'system', p
     if room:
         if not hasattr(room, 'message_history'):
             room.message_history = []
-        room.message_history.append({
-            'type': message_type,
-            'message': message,
-            'player_name': player_name,
-            'timestamp': datetime.now()
-        })
+        room_message = RoomMessage(
+            type=message_type,
+            message=message,
+            player_name=player_name,
+            timestamp=datetime.now()
+        )
+        # Optionally add detailed_result as an extra attribute
+        if detailed_result is not None:
+            room_message.__dict__['detailed_result'] = detailed_result
+        room.message_history.append(room_message)
         # Keep only last 100 messages
         if len(room.message_history) > 100:
             room.message_history = room.message_history[-100:]
@@ -847,6 +909,27 @@ def get_effective_stats():
     for ability in ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]:
         effective[ability] = class_defaults.get(ability, 10) + race_bonus.get(ability, 0)
     return jsonify(effective)
+
+@app.route('/send_message', methods=['POST'])
+def send_message():
+    data = request.get_json()
+    user_message = data.get('message', '')
+    player_id = data.get('player_id')
+    room_state = data.get('room_state')
+
+    # Call the game logic to process the message
+    response = game.send_message(user_message, player_id=player_id, room_state=room_state)
+
+    # Return the entire response to the frontend, which now includes dice roll and player update information if requested
+    return jsonify(response)
+
+try:
+    from gemini_schema import _GenerateContentParameters
+    _GenerateContentParameters.model_config = {**_GenerateContentParameters.model_config, "extra": "allow"}
+except ImportError:
+    pass
+
+PlayerState.model_config = {**PlayerState.model_config, "extra": "allow"}
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8000)

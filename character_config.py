@@ -1,4 +1,6 @@
+import logging
 from random import randint
+logger = logging.getLogger(__name__)
 
 RACE_CONFIGS = {
     "Human": {
@@ -325,50 +327,53 @@ def get_enemy(enemy_type):
     return ENEMIES.get(enemy_type, ENEMIES['enemy_goblin']).copy()
 
 def calculate_ability_modifier(score):
-    """Calculate the ability score modifier using D&D 5e rules"""
+    """Calculate ability modifier: (score - 10) // 2"""
     return (score - 10) // 2
 
 def roll_with_modifier(dice_count, dice_sides, ability_score):
     """Roll dice and add ability modifier"""
-    total = sum(randint(1, dice_sides) for _ in range(dice_count))
+    rolls = [randint(1, dice_sides) for _ in range(dice_count)]
+    total = sum(rolls)
     modifier = calculate_ability_modifier(ability_score)
-    return total + modifier
+    result = total + modifier
+    logger.info(
+        f"roll_with_modifier: Rolling {dice_count}d{dice_sides}: Rolls={rolls}, Sum={total}, "
+        f"Ability Score={ability_score}, Modifier={(ability_score - 10)//2}, Total result={result}"
+    )
+    return result
 
 def get_attack_roll(character_race, character_class, ability_scores):
-    """Calculate attack roll based on character's race, class and relevant ability score"""
+    logger.info(
+        f"get_attack_roll: character_race={character_race}, character_class={character_class}, ability_scores={ability_scores}"
+    )
     race_config = RACE_CONFIGS[character_race]
     class_config = CLASS_CONFIGS[character_class]
-    
-    # Get primary ability for the class
     primary_ability = class_config["primary_ability"]
-    
-    # Calculate total ability score
     total_ability_score = ability_scores[primary_ability] + race_config["ability_scores"][primary_ability]
-    
-    # Get base damage roll
     dice_count, dice_sides = race_config["damage_roll"]
-    
-    # Roll with ability modifier
-    damage = roll_with_modifier(dice_count, dice_sides, total_ability_score)
-    
-    # Add class damage bonus
-    damage += class_config["damage_bonus"]
-    
+    damage_from_roll = roll_with_modifier(dice_count, dice_sides, total_ability_score)
+    damage = damage_from_roll + class_config["damage_bonus"]
+    logger.info(
+        f"get_attack_roll: Rolls damage from roll_with_modifier={damage_from_roll} plus class damage_bonus={class_config['damage_bonus']} equals total damage={damage}"
+    )
     return damage
 
 def get_saving_throw(character_race, character_class, ability_scores, ability):
-    """Calculate saving throw for a given ability"""
+    logger.info(
+        f"get_saving_throw: character_race={character_race}, character_class={character_class}, ability_scores={ability_scores}, ability={ability}"
+    )
     race_config = RACE_CONFIGS[character_race]
     class_config = CLASS_CONFIGS[character_class]
-    
-    # Calculate total ability score
     total_ability_score = ability_scores[ability] + race_config["ability_scores"][ability]
-    
-    # Calculate base modifier
-    modifier = calculate_ability_modifier(total_ability_score)
-    
-    # Add proficiency bonus if the class is proficient in this saving throw
+    base_modifier = calculate_ability_modifier(total_ability_score)
+    modifier = base_modifier
     if ability in class_config["saving_throws"]:
-        modifier += 2  # Base proficiency bonus
-        
+        modifier += 2
+        prof_bonus = 2
+    else:
+        prof_bonus = 0
+    logger.info(
+        f"get_saving_throw: For ability {ability}, total_ability_score={total_ability_score}, "
+        f"base modifier={base_modifier}, proficiency bonus={prof_bonus}, final modifier={modifier}"
+    )
     return modifier 
