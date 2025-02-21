@@ -108,64 +108,22 @@
         <div class="w-full flex flex-col gap-4">
           <!-- Dice Roll Request Card -->
           <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
-            <!-- Header with Reason -->
-            <div v-if="diceModifier && diceModifier.reason" class="mb-3 text-amber-200 font-medium">
-              {{ diceModifier.reason }}
-            </div>
-            
-            <!-- Dice Type and Modifiers -->
+            <!-- Dice Type -->
             <div class="flex items-center gap-2 mb-3">
               <div class="flex items-center gap-2 px-3 py-1.5 bg-gray-900/50 rounded-lg">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M10 3.75l6.5 3.75v5l-6.5 3.75L3.5 12.5v-5L10 3.75zM10 1L2 5.75v8.5L10 19l8-4.75v-8.5L10 1z"/>
                 </svg>
-                <span class="font-mono text-amber-100">{{ diceType }}</span>
+                <span class="font-mono text-lg text-amber-100">d20</span>
               </div>
-              
-              <template v-if="diceModifier">
-                <div class="flex items-center gap-2">
-                  <div class="text-gray-400">+</div>
-                  <div class="flex items-center gap-1 px-3 py-1.5 bg-gray-900/50 rounded-lg">
-                    <span class="text-amber-100">{{ diceModifier.ability >= 0 ? '+' + diceModifier.ability : diceModifier.ability }}</span>
-                    <span class="text-gray-400" data-trans="modifier"></span>
-                  </div>
-                  
-                  <template v-if="diceModifier.proficient">
-                    <div class="text-gray-400">+</div>
-                    <div class="px-3 py-1.5 bg-gray-900/50 rounded-lg">
-                      <span class="text-amber-100">+2</span>
-                      <span class="text-gray-400 ml-1" data-trans="proficiency"></span>
-                    </div>
-                  </template>
-                </div>
-              </template>
             </div>
 
             <!-- Roll Result -->
-            <div v-if="detailedRollResult" class="space-y-2">
-              <!-- Base Roll -->
+            <div v-if="last_dice_roll" class="space-y-2">
+              <!-- Roll -->
               <div class="flex items-center gap-2">
-                <span class="text-gray-400" data-trans="base_roll"></span>
-                <span class="text-xl font-bold text-amber-300">{{ detailedRollResult.base_roll }}</span>
-              </div>
-              
-              <!-- Modifiers Breakdown -->
-              <div v-if="detailedRollResult.ability_mod || detailedRollResult.proficiency_bonus" 
-                   class="flex flex-col gap-1 text-sm">
-                <div v-if="detailedRollResult.ability_mod" class="flex items-center gap-2">
-                  <span class="text-gray-400" data-trans="ability_modifier"></span>
-                  <span class="text-amber-200">{{ detailedRollResult.ability_mod >= 0 ? '+' + detailedRollResult.ability_mod : detailedRollResult.ability_mod }}</span>
-                </div>
-                <div v-if="detailedRollResult.proficiency_bonus" class="flex items-center gap-2">
-                  <span class="text-gray-400" data-trans="proficiency_bonus"></span>
-                  <span class="text-amber-200">+{{ detailedRollResult.proficiency_bonus }}</span>
-                </div>
-              </div>
-              
-              <!-- Total -->
-              <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-700">
-                <span class="text-gray-400" data-trans="total"></span>
-                <span class="text-2xl font-bold text-amber-400">{{ detailedRollResult.total }}</span>
+                <span class="text-gray-400" data-trans="roll"></span>
+                <span class="text-2xl font-bold text-amber-400">{{ last_dice_roll }}</span>
               </div>
             </div>
           </div>

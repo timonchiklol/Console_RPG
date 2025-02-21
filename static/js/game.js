@@ -8,8 +8,6 @@ const gameApp = Vue.createApp({
             isLoading: false,
             diceNeeded: false,
             diceType: 'd20',
-            diceModifier: null,
-            detailedRollResult: null,
             room: {},
             diceRolling: false,
             showPlayers: false,
@@ -139,7 +137,7 @@ const gameApp = Vue.createApp({
                 const rollResponse = await fetch('/roll_dice', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ dice_type: this.diceType })
+                    body: JSON.stringify({ dice_type: 'd20' })  // Always send d20
                 });
                 const rollData = await rollResponse.json();
                 if (rollData.error) {
@@ -153,14 +151,14 @@ const gameApp = Vue.createApp({
                     type: 'player',
                     message: translationManager.translate('rolled_message')
                         .replace('{roll}', rollData.roll)
-                        .replace('{dice}', rollData.dice_type),
+                        .replace('{dice}', 'd20'),
                     player_name: this.gameState.name || this.translate('you')
                 };
                 
                 const processResponse = await fetch('/process_roll', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ roll: rollData.roll, dice_type: rollData.dice_type })
+                    body: JSON.stringify({ roll: rollData.roll, dice_type: 'd20' })
                 });
                 const processData = await processResponse.json();
                 if (processData.error) {
@@ -169,20 +167,6 @@ const gameApp = Vue.createApp({
                     this.gameState = processData.player;
                     if (processData.messages) {
                         this.messages = processData.messages;
-                    }
-                    // Capture detailed dice roll breakdown
-                    if (processData.detailed_roll) {
-                        this.detailedRollResult = processData.detailed_roll;
-                    } else if (rollData.detailed_result) {
-                        this.detailedRollResult = rollData.detailed_result;
-                    } else {
-                        this.detailedRollResult = null;
-                    }
-                    // Capture any dice modifier info
-                    if (processData.dice_modifier) {
-                        this.diceModifier = processData.dice_modifier;
-                    } else {
-                        this.diceModifier = null;
                     }
                 }
             } catch (e) {

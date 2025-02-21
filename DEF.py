@@ -150,93 +150,20 @@ Response Format:
             self.message_history.pop(0)
     
     def roll_dice(self, dice_type, ability_modifier=None, modifier=0, proficient=False, reason=''):
-        """Roll dice of specified type (e.g. "d20", "2d6") or for ability checks/saving throws based on the new Gemini response format."""
-        if not dice_type:
-            dice_type = 'd20'
-            self.logger.info("No dice type specified, defaulting to d20")
+        """Roll a d20 regardless of requested dice type."""
         try:
-            # if ':' in dice_type:
-            #     parts = dice_type.split(':')
-            #     roll_type = parts[0]
-            #     ability = parts[1]
-            #     proficient = False
-            #     if len(parts) > 2 and parts[2] == "proficient":
-            #         proficient = True
+            # Always use d20
+            roll = randint(1, 20)
+            self.last_dice_detail = {
+                "rolls": [roll],
+                "total": roll
+            }
+            self.logger.info(f"Rolling d20 (instead of {dice_type}): {roll}")
 
-            #     base_roll = randint(1, 20)
-            #     if roll_type == "ability_check":
-            #         proficiency_bonus = 2 if proficient else 0
-            #         ability_score = self.get_ability_scores().get(ability, 10)
-            #         ability_mod = calculate_ability_modifier(ability_score)
-            #         total = base_roll + ability_mod + proficiency_bonus
-            #         self.last_dice_detail = {
-            #             "roll_type": roll_type,
-            #             "ability": ability,
-            #             "base_roll": base_roll,
-            #             "ability_mod": ability_mod,
-            #             "proficiency_bonus": proficiency_bonus,
-            #             "total": total
-            #         }
-            #         self.logger.info(f"Ability check ({ability}): d20={base_roll}, ability_mod={ability_mod}, prof_bonus={proficiency_bonus}, total={total}")
-            #     elif roll_type == "saving_throw":
-            #         total_bonus = get_saving_throw(self.player_race, self.player_class, self.get_ability_scores(), ability)
-            #         total = base_roll + total_bonus
-            #         self.last_dice_detail = {
-            #             "roll_type": roll_type,
-            #             "ability": ability,
-            #             "base_roll": base_roll,
-            #             "total_bonus": total_bonus,
-            #             "total": total
-            #         }
-            #         self.logger.info(f"Saving throw ({ability}): d20={base_roll}, total_bonus={total_bonus}, total={total}")
-            #     else:
-            #         self.logger.error(f"Unknown roll type: {roll_type}")
-            #         return None
-
-            #     self.last_dice_roll = total
-            #     self.dice_roll_needed = False
-            #     self.dice_type = None
-            #     return total
-            if ability_modifier:
-                # Handle ability check rolls
-                base_roll = randint(1, 20)
-                proficiency_bonus = 2 if proficient else 0
-                total = base_roll + modifier
-                
-                self.last_dice_detail = {
-                    "roll_type": "ability_check",
-                    "ability": ability_modifier,
-                    "base_roll": base_roll,
-                    "ability_mod": modifier - proficiency_bonus,
-                    "proficiency_bonus": proficiency_bonus,
-                    "total": total
-                }
-                self.logger.info(f"Ability check ({ability_modifier}): d20={base_roll}, modifier={modifier}, total={total}")
-                
-                self.last_dice_roll = total
-                self.dice_roll_needed = False
-                self.dice_type = None
-                return total
-            else:
-                # Handle regular dice rolls like '2d6' or 'd20'
-                parts = dice_type.lower().split('d')
-                num_dice = int(parts[0]) if parts[0] != "" else 1
-                sides = int(parts[1])
-                if sides <= 0 or num_dice <= 0:
-                    self.logger.error(f"Invalid dice parameters: {dice_type}")
-                    return None
-                rolls = [randint(1, sides) for _ in range(num_dice)]
-                total = sum(rolls)
-                self.last_dice_detail = {
-                    "rolls": rolls,
-                    "total": total
-                }
-                self.logger.info(f"Regular roll {dice_type}: Rolls: {rolls}, Total: {total}")
-
-                self.last_dice_roll = total
-                self.dice_roll_needed = False
-                self.dice_type = None
-                return total
+            self.last_dice_roll = roll
+            self.dice_roll_needed = False
+            self.dice_type = None
+            return roll
         except Exception as e:
             self.logger.error(f"Error rolling dice: {e}")
             return None
