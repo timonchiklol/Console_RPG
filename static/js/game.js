@@ -1,3 +1,115 @@
+// Add CSS animations for dice rolling
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes spin-bounce {
+    0%, 100% { transform: rotate(0deg) scale(1); }
+    25% { transform: rotate(90deg) scale(1.1); }
+    50% { transform: rotate(180deg) scale(1); }
+    75% { transform: rotate(270deg) scale(1.1); }
+  }
+
+  @keyframes particle-1 { 0%, 100% { transform: rotate(0deg) translateY(-10px) scale(1); opacity: 1; }
+    50% { transform: rotate(0deg) translateY(-15px) scale(0.5); opacity: 0.5; } }
+  @keyframes particle-2 { 0%, 100% { transform: rotate(60deg) translateY(-10px) scale(1); opacity: 1; }
+    50% { transform: rotate(60deg) translateY(-15px) scale(0.5); opacity: 0.5; } }
+  @keyframes particle-3 { 0%, 100% { transform: rotate(120deg) translateY(-10px) scale(1); opacity: 1; }
+    50% { transform: rotate(120deg) translateY(-15px) scale(0.5); opacity: 0.5; } }
+  @keyframes particle-4 { 0%, 100% { transform: rotate(180deg) translateY(-10px) scale(1); opacity: 1; }
+    50% { transform: rotate(180deg) translateY(-15px) scale(0.5); opacity: 0.5; } }
+  @keyframes particle-5 { 0%, 100% { transform: rotate(240deg) translateY(-10px) scale(1); opacity: 1; }
+    50% { transform: rotate(240deg) translateY(-15px) scale(0.5); opacity: 0.5; } }
+  @keyframes particle-6 { 0%, 100% { transform: rotate(300deg) translateY(-10px) scale(1); opacity: 1; }
+    50% { transform: rotate(300deg) translateY(-15px) scale(0.5); opacity: 0.5; } }
+
+  @keyframes gradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  .animate-spin-bounce {
+    animation: spin-bounce 1s infinite linear;
+  }
+
+  .animate-gradient {
+    background-size: 200% 200%;
+    animation: gradient 2s ease infinite;
+  }
+
+  @keyframes roll-and-bounce {
+    0% { transform: rotate3d(1, 1, 1, 0deg) translateY(0); }
+    25% { transform: rotate3d(2, -1, 1, 180deg) translateY(-20px); }
+    50% { transform: rotate3d(-1, 2, 1, 360deg) translateY(0); }
+    75% { transform: rotate3d(1, 1, -2, 540deg) translateY(-10px); }
+    100% { transform: rotate3d(1, 1, 1, 720deg) translateY(0); }
+  }
+
+  @keyframes glow {
+    0%, 100% { filter: drop-shadow(0 0 2px #fbbf24) drop-shadow(0 0 4px #fbbf24); }
+    50% { filter: drop-shadow(0 0 6px #fbbf24) drop-shadow(0 0 12px #fbbf24); }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0) rotate3d(1, 1, 1, 0deg); }
+    50% { transform: translateY(-5px) rotate3d(1, 1, 1, 10deg); }
+  }
+
+  .dice-container {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    perspective: 1200px;
+    transform-style: preserve-3d;
+  }
+
+  .dice-rolling {
+    animation: roll-and-bounce 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-style: preserve-3d;
+  }
+
+  .dice-floating {
+    animation: float 2s infinite ease-in-out;
+    transform-style: preserve-3d;
+  }
+
+  .dice-glowing {
+    animation: glow 2s infinite ease-in-out;
+  }
+
+  .roll-button {
+    position: relative;
+    overflow: visible;
+    transition: all 0.3s ease;
+    padding: 20px;
+  }
+
+  .roll-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
+  }
+
+  .roll-button:active {
+    transform: translateY(0);
+  }
+
+  .roll-button::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(251, 191, 36, 0.4) 0%, rgba(251, 191, 36, 0) 70%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .roll-button:hover::after {
+    opacity: 1;
+  }
+`;
+document.head.appendChild(style);
+
 const gameApp = Vue.createApp({
     data() {
         return {
@@ -21,7 +133,12 @@ const gameApp = Vue.createApp({
             customType: 'normal',
             customDice: 'd20',
             customAbility: 'strength',
-            customProficient: false
+            customProficient: false,
+            currentFace: 1,
+            timeoutId: null,
+            transitionDuration: 500,
+            animationDuration: 3000,
+            lastFace: null
         };
     },
     computed: {
@@ -138,7 +255,7 @@ const gameApp = Vue.createApp({
         async rollDice() {
             if (this.diceRolling) return;
             
-            // Show thinking indicator immediately
+            // Start dice animation
             this.diceRolling = true;
             this.isThinking = true;
             
@@ -146,15 +263,19 @@ const gameApp = Vue.createApp({
                 const rollResponse = await fetch('/roll_dice', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ dice_type: this.diceType })  // Use selected dice type instead of hardcoded d20
+                    body: JSON.stringify({ dice_type: this.diceType })
                 });
                 const rollData = await rollResponse.json();
+                
                 if (rollData.error) {
                     alert(rollData.error);
                     return;
                 }
                 
-                // Add roll message immediately with detailed result
+                // Get the base roll from the detailed result
+                const baseRoll = rollData.detailed_result?.base_roll || rollData.roll;
+                
+                // Add roll message with animation
                 this.pendingMessage = {
                     id: 'pending-roll',
                     type: 'player',
@@ -163,29 +284,50 @@ const gameApp = Vue.createApp({
                     detailed_result: rollData.detailed_result
                 };
                 
-                const processResponse = await fetch('/process_roll', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        roll: rollData.roll, 
-                        dice_type: this.diceType,
-                        detailed_result: rollData.detailed_result
-                    })
-                });
-                const processData = await processResponse.json();
-                if (processData.error) {
-                    alert(processData.error);
-                } else {
-                    this.gameState = processData.player;
-                    if (processData.messages) {
-                        this.messages = processData.messages;
-                    }
-                }
+                // Show dice animation and then process the roll
+                this.timeoutId = setTimeout(async () => {
+                    this.diceRolling = false;
+                    // Set the face to match the base roll
+                    this.currentFace = baseRoll;
+                    
+                    // Process the roll after showing the result
+                    setTimeout(async () => {
+                        const processResponse = await fetch('/process_roll', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                roll: rollData.roll, 
+                                dice_type: this.diceType,
+                                detailed_result: rollData.detailed_result
+                            })
+                        });
+                        const processData = await processResponse.json();
+                        
+                        if (processData.error) {
+                            alert(processData.error);
+                        } else {
+                            this.gameState = processData.player;
+                            if (processData.messages) {
+                                this.messages = processData.messages;
+                            }
+                        }
+                        
+                        // Hide dice overlay after processing
+                        setTimeout(() => {
+                            this.diceNeeded = false;
+                            this.resetDice();
+                            this.pendingMessage = null;
+                            this.isThinking = false;
+                            this.diceRollRequest = null;
+                        }, 1000);
+                    }, 1000);
+                }, this.animationDuration);
+                
             } catch (e) {
                 console.error(e);
-            } finally {
                 this.diceRolling = false;
                 this.diceNeeded = false;
+                this.resetDice();
                 this.pendingMessage = null;
                 this.isThinking = false;
                 this.diceRollRequest = null;
@@ -342,6 +484,24 @@ const gameApp = Vue.createApp({
             } catch (e) {
                 console.error(e);
             }
+        },
+        computeAbilityModifier(ability) {
+            if (!ability || !this.gameState.ability_scores) return '';
+            const score = this.gameState.ability_scores[ability.toLowerCase()] || 10;
+            return Math.floor((score - 10) / 2);
+        },
+        randomFace() {
+            let face = Math.floor((Math.random() * 20)) + 1;
+            this.lastFace = face === this.lastFace ? this.randomFace() : face;
+            return face;
+        },
+        rollTo(face) {
+            clearTimeout(this.timeoutId);
+            this.currentFace = face;
+        },
+        resetDice() {
+            this.currentFace = null;
+            this.diceRolling = false;
         }
     },
     watch: {

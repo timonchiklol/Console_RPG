@@ -2,9 +2,41 @@
 
 {% block title %}{{ 'game'|trans }}{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dice.css') }}">
+{% endblock %}
+
 {% block content %}
 {% raw %}
 <div id="game-app" v-cloak class="h-screen flex flex-col bg-gray-900">
+  <!-- Dice Overlay -->
+  <div class="dice-overlay" :class="{ 'active': diceNeeded }" @click="rollDice">
+    <div class="content">
+      <div class="die" :class="{ 'rolling': diceRolling }" :data-face="currentFace">
+        <figure class="face face-1" data-number="1"></figure>
+        <figure class="face face-2" data-number="2"></figure>
+        <figure class="face face-3" data-number="3"></figure>
+        <figure class="face face-4" data-number="4"></figure>
+        <figure class="face face-5" data-number="5"></figure>
+        <figure class="face face-6" data-number="6"></figure>
+        <figure class="face face-7" data-number="7"></figure>
+        <figure class="face face-8" data-number="8"></figure>
+        <figure class="face face-9" data-number="9"></figure>
+        <figure class="face face-10" data-number="10"></figure>
+        <figure class="face face-11" data-number="11"></figure>
+        <figure class="face face-12" data-number="12"></figure>
+        <figure class="face face-13" data-number="13"></figure>
+        <figure class="face face-14" data-number="14"></figure>
+        <figure class="face face-15" data-number="15"></figure>
+        <figure class="face face-16" data-number="16"></figure>
+        <figure class="face face-17" data-number="17"></figure>
+        <figure class="face face-18" data-number="18"></figure>
+        <figure class="face face-19" data-number="19"></figure>
+        <figure class="face face-20" data-number="20"></figure>
+      </div>
+    </div>
+  </div>
+
   <!-- Header Bar - Fixed at top -->
   <header class="flex-none bg-gray-800 border-b border-gray-700 p-4">
     <div class="container mx-auto flex justify-between items-center">
@@ -123,74 +155,35 @@
   <div class="flex-none sticky bottom-0 p-4 bg-gray-900 border-t border-gray-800 shadow-lg">
     <div class="container mx-auto">
       <template v-if="diceNeeded">
-        <div class="w-full flex flex-col gap-4">
-          <!-- Dice Roll Request Card -->
-          <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
-            <!-- Roll Type -->
-            <div class="flex items-center gap-2 mb-3">
-              <div class="flex items-center gap-2 px-3 py-1.5 bg-gray-900/50 rounded-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M10 3.75l6.5 3.75v5l-6.5 3.75L3.5 12.5v-5L10 3.75zM10 1L2 5.75v8.5L10 19l8-4.75v-8.5L10 1z"/>
-                </svg>
-                <span class="font-mono text-lg text-amber-100">{{ diceType }}</span>
+        <!-- Dice Info Panel -->
+        <div v-if="diceRollRequest" 
+             class="bg-gray-800 rounded-lg p-4 shadow-lg border border-amber-500/20 max-w-sm mx-auto">
+          <div class="space-y-3">
+            <!-- Ability Check Info -->
+            <div v-if="diceRollRequest.ability_modifier" class="text-amber-100">
+              <div class="font-medium">{{diceRollRequest.ability_modifier}} Check</div>
+              <div class="flex items-center gap-2 text-sm mt-1">
+                <span class="text-gray-400">Modifier:</span>
+                <span>{{computeAbilityModifier(diceRollRequest.ability_modifier)}}</span>
+                <template v-if="diceRollRequest.dice_modifier?.proficient">
+                  <span class="text-gray-400">+</span>
+                  <span>2 (Proficient)</span>
+                </template>
               </div>
             </div>
-
-            <!-- Roll Details -->
-            <div v-if="diceReason || diceRollRequest" class="space-y-2 mb-3">
-              <!-- If it's an ability check -->
-              <div v-if="diceRollRequest && diceRollRequest.ability_modifier" class="text-gray-300">
-                <div class="mb-1">
-                  <span class="text-amber-200" data-trans="ability_check"></span>: 
-                  <span class="text-amber-100">{{ diceRollRequest.ability_modifier }}</span>
-                </div>
-                <div class="mb-1" v-if="diceRollRequest.dice_modifier">
-                  <span class="text-amber-200" data-trans="modifier"></span>: 
-                  <span class="text-amber-100">{{ diceRollRequest.dice_modifier.modifier }}</span>
-                  <span v-if="diceRollRequest.dice_modifier.proficient" class="text-amber-100"> (+2 proficiency)</span>
-                </div>
-              </div>
-              <!-- Roll Reason -->
-              <div v-if="diceReason" class="text-gray-400 text-sm">
-                <span data-trans="dice_reason"></span>: {{ diceReason }}
-              </div>
+            
+            <!-- Roll Reason -->
+            <div v-if="diceRollRequest.dice_modifier?.reason" class="text-sm">
+              <span class="text-gray-400">Reason:</span>
+              <span class="text-amber-100 ml-2">{{diceRollRequest.dice_modifier.reason}}</span>
             </div>
-
-            <!-- Roll Result -->
-            <div v-if="last_dice_roll" class="space-y-2">
-              <!-- Roll -->
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400" data-trans="roll"></span>
-                <span class="text-2xl font-bold text-amber-400">{{ last_dice_roll }}</span>
-              </div>
+            
+            <!-- Dice Type -->
+            <div class="text-sm">
+              <span class="text-gray-400">Dice:</span>
+              <span class="text-amber-100 ml-2">{{diceType}}</span>
             </div>
           </div>
-
-          <!-- Roll Button -->
-          <button @click="rollDice" 
-                  :disabled="diceRolling"
-                  class="w-full flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-700 rounded-lg transition-colors">
-            <span class="medieval text-lg text-amber-50">
-              <template v-if="diceRollRequest && diceRollRequest.ability_modifier">
-                {{ translate('roll') }} {{ diceType }} 
-                <span class="text-amber-200">({{ diceRollRequest.ability_modifier }} {{ translate('check') }}
-                  <template v-if="diceRollRequest.dice_modifier && diceRollRequest.dice_modifier.proficient">
-                    {{ translate('with_proficiency') }}
-                  </template>)
-                </span>
-              </template>
-              <template v-else>
-                {{ translate('roll') }} {{ diceType }}
-              </template>
-            </span>
-            <svg xmlns="http://www.w3.org/2000/svg" 
-                 class="h-6 w-6 text-amber-200" 
-                 :class="{'animate-spin': diceRolling}"
-                 viewBox="0 0 20 20" 
-                 fill="currentColor">
-              <path d="M10 3.75l6.5 3.75v5l-6.5 3.75L3.5 12.5v-5L10 3.75zM10 1L2 5.75v8.5L10 19l8-4.75v-8.5L10 1z"/>
-            </svg>
-          </button>
         </div>
       </template>
       <template v-else>
