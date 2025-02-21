@@ -7,7 +7,9 @@ const gameApp = Vue.createApp({
             userInput: '',
             isLoading: false,
             diceNeeded: false,
+            diceReason: '',
             diceType: 'd20',
+            diceRollRequest: null,
             room: {},
             diceRolling: false,
             showPlayers: false,
@@ -39,7 +41,12 @@ const gameApp = Vue.createApp({
     },
     methods: {
         translate(key) {
-            return translationManager.translate(key);
+            const translations = {
+                'roll': 'Roll',
+                'check': 'check',
+                'with_proficiency': 'with proficiency',
+            };
+            return translations[key] || translationManager.translate(key);
         },
         formatMessage(message) {
             if (!message) return '';
@@ -110,9 +117,11 @@ const gameApp = Vue.createApp({
                     if (data.dice_roll_required) {
                         this.diceNeeded = true;
                         this.diceType = (data.dice_roll_request && data.dice_roll_request.dice_type) || 'd20';
+                        this.diceReason = (data.dice_roll_request && data.dice_roll_request.reason) || '';
                         console.log('Dice roll request data:', data);
                     } else {
                         this.diceNeeded = false;
+                        this.diceReason = '';
                     }
                     if (data.messages) {
                         this.messages = data.messages;
@@ -137,7 +146,7 @@ const gameApp = Vue.createApp({
                 const rollResponse = await fetch('/roll_dice', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ dice_type: 'd20' })  // Always send d20
+                    body: JSON.stringify({ dice_type: this.diceType })  // Use selected dice type instead of hardcoded d20
                 });
                 const rollData = await rollResponse.json();
                 if (rollData.error) {
@@ -145,20 +154,23 @@ const gameApp = Vue.createApp({
                     return;
                 }
                 
-                // Add roll message immediately
+                // Add roll message immediately with detailed result
                 this.pendingMessage = {
                     id: 'pending-roll',
                     type: 'player',
-                    message: translationManager.translate('rolled_message')
-                        .replace('{roll}', rollData.roll)
-                        .replace('{dice}', 'd20'),
-                    player_name: this.gameState.name || this.translate('you')
+                    message: rollData.roll_details_message || `${this.translate('rolled_message').replace('{roll}', rollData.roll).replace('{dice}', this.diceType)}`,
+                    player_name: this.gameState.name || this.translate('you'),
+                    detailed_result: rollData.detailed_result
                 };
                 
                 const processResponse = await fetch('/process_roll', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ roll: rollData.roll, dice_type: 'd20' })
+                    body: JSON.stringify({ 
+                        roll: rollData.roll, 
+                        dice_type: this.diceType,
+                        detailed_result: rollData.detailed_result
+                    })
                 });
                 const processData = await processResponse.json();
                 if (processData.error) {
@@ -176,6 +188,7 @@ const gameApp = Vue.createApp({
                 this.diceNeeded = false;
                 this.pendingMessage = null;
                 this.isThinking = false;
+                this.diceRollRequest = null;
             }
         },
         async saveGame() {
@@ -238,6 +251,12 @@ const gameApp = Vue.createApp({
                     }
                     this.messages = data.messages || [];
                     this.room = data.room;
+                    if (data.dice_roll_required) {
+                        this.diceNeeded = true;
+                        this.diceType = data.dice_roll_request?.dice_type || 'd20';
+                        this.diceReason = data.dice_roll_request?.dice_modifier?.reason || '';
+                        this.diceRollRequest = data.dice_roll_request;
+                    }
                 }
             } catch (e) {
                 console.error(e);

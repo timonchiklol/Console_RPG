@@ -149,21 +149,38 @@ Response Format:
         if len(self.message_history) > self.context_limit:
             self.message_history.pop(0)
     
-    def roll_dice(self, dice_type, ability_modifier=None, modifier=0, proficient=False, reason=''):
-        """Roll a d20 regardless of requested dice type."""
+    def roll_dice(self, dice_type, ability_modifier=None, proficient=False, reason=''):
+        """Roll a d20 and apply ability check modifiers if provided."""
         try:
-            # Always use d20
-            roll = randint(1, 20)
-            self.last_dice_detail = {
-                "rolls": [roll],
-                "total": roll
-            }
-            self.logger.info(f"Rolling d20 (instead of {dice_type}): {roll}")
+            dice_sides = int(dice_type.split('d')[1])
+            base_roll = randint(1, dice_sides)
+            bonus = 0
+            is_ability_check = "No"
+            if ability_modifier is not None:
+                is_ability_check = "Yes"
+                bonus = ability_modifier
+                if proficient and self.level == 1:
+                    bonus += 2
+            total = base_roll + bonus
 
-            self.last_dice_roll = roll
+            self.last_dice_detail = {
+                "base_roll": base_roll,
+                "ability_modifier": ability_modifier if ability_modifier is not None else 0,
+                "proficient_bonus": 2 if (proficient and self.level == 1) else 0,
+                "total": total,
+                "reason": reason
+            }
+            self.logger.info(
+                f"Rolling a d{dice_sides}. Ability Check: {is_ability_check}; "
+                f"Received dice_type: {dice_type}; "
+                f"Ability Modifier: {ability_modifier if ability_modifier is not None else 0}; "
+                f"Proficiency applied: {('Yes' if proficient and self.level == 1 else 'No')}; "
+                f"Reason: '{reason}'; Base roll: {base_roll}; Bonus: {bonus}; Total: {total}."
+            )
+            self.last_dice_roll = total
             self.dice_roll_needed = False
             self.dice_type = None
-            return roll
+            return total
         except Exception as e:
             self.logger.error(f"Error rolling dice: {e}")
             return None

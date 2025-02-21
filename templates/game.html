@@ -93,7 +93,25 @@
                   <span class="w-2 h-2 bg-amber-200 rounded-full animate-bounce" style="animation-delay: 0.4s"></span>
                 </span>
               </span>
-              <span v-else class="text-amber-100">{{ msg.player_name }}: <span v-html="formatMessage(msg.message)"></span></span>
+              <span v-else class="text-amber-100">
+                {{ msg.player_name }}: 
+                <span v-if="msg.detailed_result" class="text-amber-200">
+                  <span v-if="msg.detailed_result.ability_modifier !== undefined">
+                    Rolled {{ msg.detailed_result.base_roll }} on {{ diceType }}
+                    <span v-if="msg.detailed_result.ability_modifier || msg.detailed_result.proficient_bonus">
+                      (modifier: {{ msg.detailed_result.ability_modifier }}
+                      <span v-if="msg.detailed_result.proficient_bonus">
+                        + {{ msg.detailed_result.proficient_bonus }} proficiency
+                      </span>
+                      = {{ msg.detailed_result.total }})
+                    </span>
+                  </span>
+                  <span v-else>
+                    {{ msg.message }}
+                  </span>
+                </span>
+                <span v-else v-html="formatMessage(msg.message)"></span>
+              </span>
             </div>
           </div>
         </div>
@@ -108,13 +126,33 @@
         <div class="w-full flex flex-col gap-4">
           <!-- Dice Roll Request Card -->
           <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
-            <!-- Dice Type -->
+            <!-- Roll Type -->
             <div class="flex items-center gap-2 mb-3">
               <div class="flex items-center gap-2 px-3 py-1.5 bg-gray-900/50 rounded-lg">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M10 3.75l6.5 3.75v5l-6.5 3.75L3.5 12.5v-5L10 3.75zM10 1L2 5.75v8.5L10 19l8-4.75v-8.5L10 1z"/>
                 </svg>
-                <span class="font-mono text-lg text-amber-100">d20</span>
+                <span class="font-mono text-lg text-amber-100">{{ diceType }}</span>
+              </div>
+            </div>
+
+            <!-- Roll Details -->
+            <div v-if="diceReason || diceRollRequest" class="space-y-2 mb-3">
+              <!-- If it's an ability check -->
+              <div v-if="diceRollRequest && diceRollRequest.ability_modifier" class="text-gray-300">
+                <div class="mb-1">
+                  <span class="text-amber-200" data-trans="ability_check"></span>: 
+                  <span class="text-amber-100">{{ diceRollRequest.ability_modifier }}</span>
+                </div>
+                <div class="mb-1" v-if="diceRollRequest.dice_modifier">
+                  <span class="text-amber-200" data-trans="modifier"></span>: 
+                  <span class="text-amber-100">{{ diceRollRequest.dice_modifier.modifier }}</span>
+                  <span v-if="diceRollRequest.dice_modifier.proficient" class="text-amber-100"> (+2 proficiency)</span>
+                </div>
+              </div>
+              <!-- Roll Reason -->
+              <div v-if="diceReason" class="text-gray-400 text-sm">
+                <span data-trans="dice_reason"></span>: {{ diceReason }}
               </div>
             </div>
 
@@ -132,7 +170,19 @@
           <button @click="rollDice" 
                   :disabled="diceRolling"
                   class="w-full flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-700 rounded-lg transition-colors">
-            <span class="medieval text-lg text-amber-50" data-trans="roll_dice"></span>
+            <span class="medieval text-lg text-amber-50">
+              <template v-if="diceRollRequest && diceRollRequest.ability_modifier">
+                {{ translate('roll') }} {{ diceType }} 
+                <span class="text-amber-200">({{ diceRollRequest.ability_modifier }} {{ translate('check') }}
+                  <template v-if="diceRollRequest.dice_modifier && diceRollRequest.dice_modifier.proficient">
+                    {{ translate('with_proficiency') }}
+                  </template>)
+                </span>
+              </template>
+              <template v-else>
+                {{ translate('roll') }} {{ diceType }}
+              </template>
+            </span>
             <svg xmlns="http://www.w3.org/2000/svg" 
                  class="h-6 w-6 text-amber-200" 
                  :class="{'animate-spin': diceRolling}"
@@ -202,21 +252,38 @@
         </div>
 
         <!-- Ability Scores -->
-        <div class="bg-gray-900/50 rounded-lg p-3">
+        <div class="bg-gray-900/50 rounded-lg p-3 mt-4">
           <div class="text-gray-400 text-sm mb-2" data-trans="ability_scores"></div>
           <div class="grid grid-cols-2 gap-x-8 gap-y-2">
-            <template v-if="currentPlayer.ability_scores">
-              <div v-for="(score, ability) in currentPlayer.ability_scores" :key="ability" 
-                   class="flex justify-between items-center">
-                <span class="text-gray-300">{{ translate(ability) }}</span>
-                <span class="text-amber-200">{{ score }}</span>
-              </div>
-            </template>
+            <div class="flex justify-between items-center">
+              <span class="text-gray-300" data-trans="strength"></span>
+              <span class="text-amber-200">{{ currentPlayer.ability_scores.strength }}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-gray-300" data-trans="dexterity"></span>
+              <span class="text-amber-200">{{ currentPlayer.ability_scores.dexterity }}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-gray-300" data-trans="constitution"></span>
+              <span class="text-amber-200">{{ currentPlayer.ability_scores.constitution }}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-gray-300" data-trans="intelligence"></span>
+              <span class="text-amber-200">{{ currentPlayer.ability_scores.intelligence }}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-gray-300" data-trans="wisdom"></span>
+              <span class="text-amber-200">{{ currentPlayer.ability_scores.wisdom }}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-gray-300" data-trans="charisma"></span>
+              <span class="text-amber-200">{{ currentPlayer.ability_scores.charisma }}</span>
+            </div>
           </div>
         </div>
 
         <!-- Magic -->
-        <div class="bg-gray-900/50 rounded-lg p-3">
+        <div class="bg-gray-900/50 rounded-lg p-3 mt-4">
           <div class="text-gray-400 text-sm mb-2" data-trans="magic"></div>
           <div class="grid grid-cols-2 gap-4">
             <div class="text-center">
