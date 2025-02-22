@@ -84,7 +84,7 @@
     "cannot_move_enemy": "Cannot move onto enemy's square!",
     "max_move_tiles": "Cannot move more than 5 tiles! Maximum allowed: 5.",
     "not_enough_speed": "Not enough speed for that move! Available: {speed}",
-    "rolled_message": "rolled {roll} on {dice}",
+    "rolled_message": "Rolled {roll} on {dice} (modifier: {modifier} + {proficiency} proficiency = {total}){difficulty}{success}",
 
     "enemy_goblin": "Goblin",
     "enemy_skeleton": "Skeleton",

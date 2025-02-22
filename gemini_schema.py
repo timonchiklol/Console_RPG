@@ -111,8 +111,26 @@ GAME_RESPONSE_SCHEMA = {
             "type": "object",
             "description": "Dice roll request details, only present if dice_roll_required is true.",
             "properties": {
-                "dice_type": { "type": "string", "description": "The type of dice to roll (e.g. 'd20', '2d6')." },
-                "reason": { "type": "string", "description": "The reason for the dice roll." }
+                "dice_type": { 
+                    "type": "string", 
+                    "description": "The type of dice to roll (e.g. 'd20', '2d6')." 
+                },
+                "reason": { 
+                    "type": "string", 
+                    "description": "The reason for the dice roll." 
+                },
+                "ability_modifier": {
+                    "type": "string",
+                    "description": "The ability to check (e.g. 'strength', 'dexterity', etc.)"
+                },
+                "proficient": {
+                    "type": "boolean",
+                    "description": "Whether to apply proficiency bonus"
+                },
+                "difficulty": {
+                    "type": "integer",
+                    "description": "The difficulty class (DC) that needs to be met or exceeded for success"
+                }
             },
             "required": ["dice_type"]
         }
@@ -140,7 +158,8 @@ DICE_ROLL_REQUEST_SCHEMA = {
         "dice_type": { "type": "string", "description": "The type of dice to roll (e.g. 'd20', '2d6'). Use 'd20' for ability check rolls." },
         "ability_modifier": { "type": "string", "description": "The ability to check, e.g., 'charisma', 'strength', etc., if applicable." },
         "proficient": { "type": "boolean", "description": "True if the character is proficient in the relevant ability." },
+        "difficulty": { "type": "integer", "description": "The difficulty threshold for the roll." },
         "reason": { "type": "string", "description": "The reason for the dice roll." }
     },
-    "required": ["dice_roll_needed", "dice_type", "ability_modifier", "proficient"]
+    "required": ["dice_roll_needed", "dice_type", "ability_modifier", "proficient", "difficulty"]
 } 

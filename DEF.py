@@ -149,7 +149,7 @@ Response Format:
         if len(self.message_history) > self.context_limit:
             self.message_history.pop(0)
     
-    def roll_dice(self, dice_type, ability_modifier=None, proficient=False, reason=''):
+    def roll_dice(self, dice_type, ability_modifier=None, proficient=False, reason='', difficulty=None):
         """Roll a d20 and apply ability check modifiers if provided."""
         try:
             dice_sides = int(dice_type.split('d')[1])
@@ -165,19 +165,26 @@ Response Format:
                     bonus += proficiency_bonus
             total = base_roll + bonus
 
+            success = None
+            if difficulty is not None:
+                success = total >= difficulty
+
             self.last_dice_detail = {
                 "base_roll": base_roll,
                 "ability_modifier": ability_modifier if ability_modifier is not None else 0,
                 "proficient_bonus": proficiency_bonus,
                 "total": total,
-                "reason": reason
+                "reason": reason,
+                "difficulty": difficulty,
+                "success": success
             }
             self.logger.info(
                 f"Rolling a d{dice_sides}. Ability Check: {is_ability_check}; "
                 f"Dice type: {dice_type}; "
                 f"Ability Modifier: {ability_modifier if ability_modifier is not None else 0}; "
                 f"Proficiency bonus applied: {proficiency_bonus}; "
-                f"Reason: '{reason}'; Base roll: {base_roll}; Total bonus: {bonus}; Final total: {total}."
+                f"Reason: '{reason}'; Base roll: {base_roll}; Total bonus: {bonus}; Final total: {total}; "
+                f"Difficulty: {difficulty}; Success: {success}"
             )
             self.last_dice_roll = total
             self.dice_roll_needed = False

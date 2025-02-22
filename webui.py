@@ -3,7 +3,6 @@ import random
 import math
 from dnd_spells import spells_1lvl, spells_2lvl, basic_attacks
 from gemini import Gemini  # Добавляем импорт Gemini
-from prompts import SYSTEM_PROMPTS
 from dotenv import load_dotenv
 import os
 
@@ -548,5 +547,5 @@ def api_enemy_attack():
         return jsonify({"error": f"Enemy logic error: {str(e)}"})
 
 if __name__ == "__main__":
-    # This web UI runs on port 8000.
+    # This web UI runs on port 5000.
     app.run(port=5000, debug=True) 
