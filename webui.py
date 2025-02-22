@@ -547,5 +547,5 @@ def api_enemy_attack():
         return jsonify({"error": f"Enemy logic error: {str(e)}"})
 
 if __name__ == "__main__":
-    # This web UI runs on port 8000.
+    # This web UI runs on port 5000.
     app.run(port=5000, debug=True) 

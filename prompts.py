@@ -88,6 +88,7 @@ When a dice roll is required, output a dice_roll_request object with the followi
 - dice_type (string): The base dice type to roll (e.g., 'd20', '2d6'). Do NOT include any prefixes like 'ability_check:' or 'saving_throw:' in this field.
 - ability_modifier (string): The name of the ability being tested: Charisma, Constitution, Dexterity, Intelligence, Strength or Wisdom. If not applicable, return an empty string.
 - proficient (boolean): True if the character is proficient with the ability, otherwise false.
+- difficulty (integer): пороговое значение сложности для броска.
 - reason (string, optional): A clear explanation for why the dice roll is required.
 
 Ensure that for ability checks or saving throws, dice_type contains only the dice specification (e.g., 'd20') and the ability is provided in ability_modifier.""",
@@ -100,6 +101,7 @@ Ensure that for ability checks or saving throws, dice_type contains only the dic
 - dice_type (string): Тип кубика для броска (например, 'd20', '2d6'). Не включайте префиксы, такие как 'ability_check:' или 'saving_throw:' в это поле.
 - ability_modifier (string): Название характеристики (например, 'persuasion', 'strength'), которая проверяется. Если не требуется, верните пустую строку.
 - proficient (boolean): true, если персонаж владеет соответствующей характеристикой, иначе false.
+- difficulty (integer): пороговое значение сложности для броска.
 - reason (string, опционально): Четкое объяснение, почему требуется бросок кубика.
 
 Обратите внимание, что для проверок характеристик или спасбросков поле dice_type должно содержать только тип кубика (например, 'd20'), а название характеристики указывайте в поле ability_modifier."""

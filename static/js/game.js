@@ -286,7 +286,24 @@ const gameApp = Vue.createApp({
                 this.pendingMessage = {
                     id: 'pending-roll',
                     type: 'player',
-                    message: rollData.roll_details_message || `${this.translate('rolled_message').replace('{roll}', rollData.roll).replace('{dice}', this.diceType)}`,
+                    message: rollData.roll_details_message || (() => {
+                        const detail = rollData.detailed_result || {};
+                        const baseRoll = detail.base_roll || rollData.roll;
+                        const modifier = detail.ability_modifier || 0;
+                        const proficiency = detail.proficient_bonus || 0;
+                        const total = detail.total || (baseRoll + modifier + proficiency);
+                        const difficulty = detail.difficulty ? ` against DC ${detail.difficulty}` : '';
+                        const success = detail.difficulty ? (detail.success ? ' Success!' : ' Failure!') : '';
+                        
+                        return this.translate('rolled_message')
+                            .replace('{roll}', baseRoll)
+                            .replace('{dice}', this.diceType)
+                            .replace('{modifier}', modifier)
+                            .replace('{proficiency}', proficiency)
+                            .replace('{total}', total)
+                            .replace('{difficulty}', difficulty)
+                            .replace('{success}', success);
+                    })(),
                     player_name: this.gameState.name || this.translate('you'),
                     detailed_result: rollData.detailed_result
                 };
@@ -297,6 +314,46 @@ const gameApp = Vue.createApp({
                     
                     // Set the face to match the base roll
                     this.currentFace = baseRoll;
+                    
+                    // Show success/failure popup if this was a check with difficulty
+                    if (rollData.show_success_popup) {
+                        const difficulty = rollData.difficulty;
+                        const success = rollData.success;
+                        const total = rollData.detailed_result.total;
+                        
+                        // Create and show the popup
+                        const popup = document.createElement('div');
+                        popup.className = 'dice-result-popup';
+                        popup.style.cssText = `
+                            position: fixed;
+                            top: 50%;
+                            left: 50%;
+                            transform: translate(-50%, -50%);
+                            background-color: ${success ? '#4CAF50' : '#f44336'};
+                            color: white;
+                            padding: 20px;
+                            border-radius: 10px;
+                            font-size: 24px;
+                            font-weight: bold;
+                            text-align: center;
+                            z-index: 1000;
+                            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+                            animation: fadeIn 0.5s;
+                        `;
+                        popup.innerHTML = `
+                            <div>${success ? 'SUCCESS!' : 'FAILURE!'}</div>
+                            <div style="font-size: 18px; margin-top: 10px;">
+                                Roll Total: ${total} vs DC ${difficulty}
+                            </div>
+                        `;
+                        document.body.appendChild(popup);
+                        
+                        // Remove popup after 2 seconds
+                        setTimeout(() => {
+                            popup.style.animation = 'fadeOut 0.5s';
+                            setTimeout(() => popup.remove(), 500);
+                        }, 2000);
+                    }
                     
                     // Process the roll after showing the result
                     setTimeout(async () => {
@@ -334,11 +391,7 @@ const gameApp = Vue.createApp({
             } catch (e) {
                 console.error(e);
                 this.diceRolling = false;
-                this.diceNeeded = false;
-                this.resetDice();
-                this.pendingMessage = null;
                 this.isThinking = false;
-                this.diceRollRequest = null;
             }
         },
         async saveGame() {

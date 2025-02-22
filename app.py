@@ -500,6 +500,7 @@ def game_action():
                 if dice_request.get('ability_modifier'):
                     ability_name = dice_request['ability_modifier']
                     proficient = dice_request.get('proficient', False)
+                    difficulty = dice_request.get('difficulty')
                     player.dice_type = 'd20'  # Always use d20 for ability checks
                     ability_score = 10
                     player_data = player.model_dump()
@@ -507,21 +508,25 @@ def game_action():
                     player.dice_modifier = {
                         'modifier': calculate_ability_modifier(ability_score),
                         'proficient': proficient,
-                        'reason': dice_request.get('reason', '')
+                        'reason': dice_request.get('reason', ''),
+                        'difficulty': difficulty
                     }
                     response['dice_roll_request'] = {
                         'dice_type': player.dice_type,
                         'dice_modifier': player.dice_modifier,
-                        'ability_modifier': ability_name
+                        'ability_modifier': ability_name,
+                        'difficulty': difficulty
                     }
                 else:
                     player.dice_type = dice_request.get('dice_type', 'd20')
                     player.dice_modifier = {
-                        'reason': dice_request.get('reason', '')
+                        'reason': dice_request.get('reason', ''),
+                        'difficulty': dice_request.get('difficulty')
                     }
                     response['dice_roll_request'] = {
                         'dice_type': player.dice_type,
-                        'dice_modifier': player.dice_modifier
+                        'dice_modifier': player.dice_modifier,
+                        'difficulty': dice_request.get('difficulty')
                     }
             else:
                 player.dice_roll_needed = False
@@ -579,15 +584,21 @@ def roll_dice():
         data = request.get_json()
         logging.info(f"Received dice roll request - Room: {room_id}, Player: {player_id}, Data: {data}")
         dice_type = data.get('dice_type', 'd20')
+        
+        # Get difficulty from dice roll request if it exists
+        difficulty = None
+        if hasattr(player, 'dice_modifier') and player.dice_modifier:
+            difficulty = player.dice_modifier.get('difficulty')
+        
         # Check if player has a dice_modifier (for ability check)
         if len(player.dice_modifier) > 1:
             modifier = player.dice_modifier.get('modifier', 0)
             proficient = player.dice_modifier.get('proficient', False)
             reason = player.dice_modifier.get('reason', '')
-            logging.info(f"Ability modifier: {modifier}, Proficient: {proficient}, Reason: {reason}")
-            roll_result = game.roll_dice(dice_type, ability_modifier=modifier, proficient=proficient, reason=reason)
+            logging.info(f"Ability modifier: {modifier}, Proficient: {proficient}, Reason: {reason}, Difficulty: {difficulty}")
+            roll_result = game.roll_dice(dice_type, ability_modifier=modifier, proficient=proficient, reason=reason, difficulty=difficulty)
         else:
-            roll_result = game.roll_dice(dice_type)
+            roll_result = game.roll_dice(dice_type, difficulty=difficulty)
         
         if roll_result is None:
             return jsonify({'error': 'Error rolling dice'}), 400
@@ -597,7 +608,13 @@ def roll_dice():
         room_manager.update_room(room)
         
         # Add dice roll to room messages with detailed_result
-        roll_message = f"rolled {roll_result}"
+        success_text = ""
+        difficulty_text = ""
+        if game.last_dice_detail.get('difficulty') is not None:
+            success_text = " Success!" if game.last_dice_detail.get('success') else " Failure!"
+            difficulty_text = f" against DC {game.last_dice_detail.get('difficulty')}"
+            
+        roll_message = f"I rolled a {dice_type}{difficulty_text}: base roll = {game.last_dice_detail.get('base_roll')}, ability modifier = {game.last_dice_detail.get('ability_modifier')}, proficiency bonus = {game.last_dice_detail.get('proficient_bonus')}, resulting in total = {game.last_dice_detail.get('total')}{success_text}"
         roll_message_id = add_room_message(room_id, roll_message, 'player', player.name, detailed_result=game.last_dice_detail)
         
         # Update player's last roll
@@ -609,10 +626,12 @@ def roll_dice():
         # Construct roll details message for Gemini along with debugging info
         detail = game.last_dice_detail
         bonus = detail.get('ability_modifier', 0) + detail.get('proficient_bonus', 0)
-        roll_details_message = (f"Rolled a {dice_type} with base roll = {detail.get('base_roll')}, "
+        difficulty_text = f" against DC {detail.get('difficulty')}" if detail.get('difficulty') is not None else ""
+        success_text = f" ({detail.get('success') and 'Success!' or 'Failure!'}" if detail.get('difficulty') is not None else ""
+        roll_details_message = (f"Rolled a {dice_type}{difficulty_text} with base roll = {detail.get('base_roll')}, "
                                 f"ability modifier = {detail.get('ability_modifier')} "
                                 f"(proficiency bonus: {detail.get('proficient_bonus')}), "
-                                f"total bonus = {bonus}, resulting in final total = {detail.get('total')}. "
+                                f"total bonus = {bonus}, resulting in final total = {detail.get('total')}{success_text}. "
                                 f"Reason: {detail.get('reason')}.")
         
         # Get the latest messages for this room
@@ -627,7 +646,10 @@ def roll_dice():
             'last_message_id': latest_messages[-1]['id'] if latest_messages else None,
             'roll_message_id': roll_message_id,
             'detailed_result': detail,
-            'roll_details_message': roll_details_message
+            'roll_details_message': roll_details_message,
+            'show_success_popup': detail.get('difficulty') is not None,
+            'success': detail.get('success'),
+            'difficulty': detail.get('difficulty')
         }
         
         return jsonify(response_data)
@@ -679,13 +701,22 @@ def process_roll():
             ability_mod = player.last_dice_detail.get('ability_modifier', 0)
             proficient_bonus = player.last_dice_detail.get('proficient_bonus', 0)
             total = player.last_dice_detail.get('total', roll_value)
-            if proficient_bonus:
-                mod_text = f"{ability_mod} (+{proficient_bonus})"
-            else:
-                mod_text = f"{ability_mod}"
-            detail_msg = f"I rolled a {dice_type}: base roll = {base_roll}, modifier = {mod_text}, total = {total}."
+            difficulty = player.last_dice_detail.get('difficulty')
+            success = player.last_dice_detail.get('success')
+            
+            difficulty_text = f" against DC {difficulty}" if difficulty is not None else ""
+            success_text = " Success!" if success else " Failure!" if difficulty is not None else ""
+            
+            detail_msg = f"I rolled a {dice_type}{difficulty_text}: base roll = {base_roll}, ability modifier = {ability_mod}, proficiency bonus = {proficient_bonus}, resulting in total = {total}{success_text}"
         else:
-            detail_msg = f"I rolled {roll_value} on {dice_type}."
+            # Check if we have difficulty and success information even without detailed roll info
+            difficulty = player.last_dice_detail.get('difficulty') if hasattr(player, 'last_dice_detail') else None
+            success = player.last_dice_detail.get('success') if hasattr(player, 'last_dice_detail') else None
+            
+            difficulty_text = f" against DC {difficulty}" if difficulty is not None else ""
+            success_text = " Success!" if success else " Failure!" if difficulty is not None else ""
+            
+            detail_msg = f"I rolled {roll_value} on {dice_type}{difficulty_text}{success_text}."
 
         response = game.send_message(
             detail_msg,

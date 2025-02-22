@@ -11,9 +11,9 @@
 <div id="game-app" v-cloak class="h-screen flex flex-col bg-gray-900">
   <!-- Dice Overlay -->
   <div class="dice-overlay" :class="{ 'active': diceNeeded }" @click="rollDice">
-    <div class="absolute top-3 left-3 right-3">
+    <div class="dice-info">
       <div v-if="diceRollRequest" class="text-sm text-amber-100 mb-2">
-        <div v-if="diceRollRequest.dice_modifier?.reason" class="font-medium">
+        <div v-if="diceRollRequest.dice_modifier?.reason" class="reason">
           {{diceRollRequest.dice_modifier.reason}}
         </div>
         <div v-if="diceRollRequest.ability_modifier" class="flex items-center gap-1 mt-1">
@@ -29,6 +29,9 @@
             <span class="text-blue-400">2 Prof</span>
           </template>
           <span class="text-gray-400">)</span>
+        </div>
+        <div v-if="diceRollRequest.dice_modifier?.difficulty" class="difficulty">
+          DC {{diceRollRequest.dice_modifier.difficulty}}
         </div>
         <div class="text-xs text-gray-400 mt-1">
           {{diceType}}
@@ -168,6 +171,13 @@
                         + {{ msg.detailed_result.proficient_bonus }} proficiency
                       </span>
                       = {{ msg.detailed_result.total }})
+                    </span>
+                    <span v-if="msg.detailed_result.difficulty !== undefined">
+                      against DC {{ msg.detailed_result.difficulty }}
+                      <span v-if="msg.detailed_result.success !== undefined" 
+                            :class="{'text-green-400': msg.detailed_result.success, 'text-red-400': !msg.detailed_result.success}">
+                        {{ msg.detailed_result.success ? 'Success!' : 'Failure!' }}
+                      </span>
                     </span>
                   </span>
                   <span v-else>
