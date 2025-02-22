@@ -155,27 +155,29 @@ Response Format:
             dice_sides = int(dice_type.split('d')[1])
             base_roll = randint(1, dice_sides)
             bonus = 0
+            proficiency_bonus = 0
             is_ability_check = "No"
             if ability_modifier is not None:
                 is_ability_check = "Yes"
                 bonus = ability_modifier
-                if proficient and self.level == 1:
-                    bonus += 2
+                if proficient:
+                    proficiency_bonus = 2
+                    bonus += proficiency_bonus
             total = base_roll + bonus
 
             self.last_dice_detail = {
                 "base_roll": base_roll,
                 "ability_modifier": ability_modifier if ability_modifier is not None else 0,
-                "proficient_bonus": 2 if (proficient and self.level == 1) else 0,
+                "proficient_bonus": proficiency_bonus,
                 "total": total,
                 "reason": reason
             }
             self.logger.info(
                 f"Rolling a d{dice_sides}. Ability Check: {is_ability_check}; "
-                f"Received dice_type: {dice_type}; "
+                f"Dice type: {dice_type}; "
                 f"Ability Modifier: {ability_modifier if ability_modifier is not None else 0}; "
-                f"Proficiency applied: {('Yes' if proficient and self.level == 1 else 'No')}; "
-                f"Reason: '{reason}'; Base roll: {base_roll}; Bonus: {bonus}; Total: {total}."
+                f"Proficiency bonus applied: {proficiency_bonus}; "
+                f"Reason: '{reason}'; Base roll: {base_roll}; Total bonus: {bonus}; Final total: {total}."
             )
             self.last_dice_roll = total
             self.dice_roll_needed = False

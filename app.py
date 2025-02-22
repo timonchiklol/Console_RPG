@@ -597,7 +597,7 @@ def roll_dice():
         room_manager.update_room(room)
         
         # Add dice roll to room messages with detailed_result
-        roll_message = f"rolled {roll_result}"
+        roll_message = f"I rolled a {dice_type}: base roll = {game.last_dice_detail.get('base_roll')}, ability modifier = {game.last_dice_detail.get('ability_modifier')}, proficiency bonus = {game.last_dice_detail.get('proficient_bonus')}, resulting in total = {game.last_dice_detail.get('total')}."
         roll_message_id = add_room_message(room_id, roll_message, 'player', player.name, detailed_result=game.last_dice_detail)
         
         # Update player's last roll
@@ -679,11 +679,7 @@ def process_roll():
             ability_mod = player.last_dice_detail.get('ability_modifier', 0)
             proficient_bonus = player.last_dice_detail.get('proficient_bonus', 0)
             total = player.last_dice_detail.get('total', roll_value)
-            if proficient_bonus:
-                mod_text = f"{ability_mod} (+{proficient_bonus})"
-            else:
-                mod_text = f"{ability_mod}"
-            detail_msg = f"I rolled a {dice_type}: base roll = {base_roll}, modifier = {mod_text}, total = {total}."
+            detail_msg = f"I rolled a {dice_type}: base roll = {base_roll}, ability modifier = {ability_mod}, proficiency bonus = {proficient_bonus}, resulting in total = {total}."
         else:
             detail_msg = f"I rolled {roll_value} on {dice_type}."
 
