@@ -74,7 +74,7 @@ spells_2lvl = {
 
     "Misty Step": {
         "damage": "0",
-        "range": 0,
+        "range": 100,
         "game_mechanics": "дает игроку бесконечную скорость перемещения на текущий ход."
     },
 

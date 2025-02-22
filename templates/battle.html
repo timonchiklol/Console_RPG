@@ -32,6 +32,18 @@
         </div>
     </div>
     
+    <!-- Add instruction for movement -->
+    <br>
+    <p id="instructions">Click and drag to plan movement. Click Apply Move to execute.</p>
+    
+    <!-- Add this HTML before the canvas -->
+    <div class="terrain-controls">
+        <button onclick="changeTerrain('CAVE')" class="terrain-btn">Cave</button>
+        <button onclick="changeTerrain('FOREST')" class="terrain-btn">Forest</button>
+        <button onclick="changeTerrain('DESERT')" class="terrain-btn">Desert</button>
+        <button onclick="changeTerrain('WINTER')" class="terrain-btn">Winter</button>
+    </div>
+    
     <!-- Canvas to draw a hexagonal battle grid -->
     <canvas id="hexCanvas" width="800" height="600"></canvas>
     <br>
@@ -94,10 +106,6 @@
         <h3>Battle Log:</h3>
         <div id="battleLog" style="border:1px solid #000; padding: 10px; width: 800px; height: 300px; overflow-y: scroll;"></div>
     </div>
-    
-    <!-- Add instruction for movement -->
-    <br>
-    <p id="instructions">Click and drag to plan movement. Click Apply Move to execute.</p>
     
     <style>
     .spell-level {
@@ -175,6 +183,22 @@
     h4 {
         margin: 15px 0 5px 0;
     }
+
+    .terrain-controls {
+        margin: 10px 0;
+    }
+    
+    .terrain-btn {
+        padding: 5px 15px;
+        margin: 0 5px;
+        cursor: pointer;
+        border: none;
+        border-radius: 4px;
+    }
+    
+    .terrain-btn:hover {
+        opacity: 0.8;
+    }
     </style>
     
     <script src="{{ url_for('static', filename='js/hexgrid.js') }}"></script>
@@ -191,10 +215,125 @@
                 });
             });
             updateEndTurnButton();
+            drawHexGrid();
         });
         
-        // Draw initial hex grid
-        drawHexGrid();
+        // Добавим константы для разных типов местности
+        const TERRAIN_TYPES = {
+            CAVE: {
+                gridColor: '#3d3d3d',   // Серые стены
+                hexFill: {
+                    colors: ['#4a4a4a', '#545454', '#404040', '#4d4d4d'],  // Разные оттенки камня
+                    frequency: 0.7  // Частота смены оттенков
+                }
+            },
+            FOREST: {
+                gridColor: '#2d5a27',   // Цвет тропинок
+                hexFill: {
+                    colors: ['#2d5a27', '#1e4d2b', '#386641', '#1b4332'],  // Разные оттенки зелени
+                    frequency: 0.8
+                }
+            },
+            DESERT: {
+                gridColor: '#b38b6d',   // Цвет барханов
+                hexFill: {
+                    colors: ['#deb887', '#d2aa7d', '#c4976f', '#b38b6d'],  // Разные оттенки песка
+                    frequency: 0.9
+                }
+            },
+            WINTER: {
+                gridColor: '#b3d4d6',   // Цвет снежных границ
+                hexFill: {
+                    colors: ['#ffffff', '#f0f8ff', '#e6f3ff', '#d6eaff'],  // Разные оттенки снега
+                    frequency: 0.6
+                }
+            }
+        };
+
+        let currentTerrain = TERRAIN_TYPES.FOREST; // По умолчанию лес
+
+        // Добавим массив для хранения цветов гексагонов
+        let hexColors = [];
+
+        function initializeHexColors() {
+            hexColors = [];
+            for (let col = 0; col < gridCols; col++) {
+                hexColors[col] = [];
+                for (let row = 0; row < gridRows; row++) {
+                    let colors = currentTerrain.hexFill.colors;
+                    let colorIndex = Math.random() < currentTerrain.hexFill.frequency ? 
+                        Math.floor(Math.random() * colors.length) : 0;
+                    hexColors[col][row] = colors[colorIndex];
+                }
+            }
+        }
+
+        function changeTerrain(terrainType) {
+            currentTerrain = TERRAIN_TYPES[terrainType];
+            initializeHexColors(); // Генерируем новые цвета при смене биома
+            drawHexGrid();
+        }
+
+        function drawHexGrid() {
+            let canvas = document.getElementById("hexCanvas");
+            let ctx = canvas.getContext("2d");
+            
+            // Очищаем канвас белым цветом
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Если цвета еще не сгенерированы
+            if (hexColors.length === 0) {
+                initializeHexColors();
+            }
+            
+            let hexSize = 30;
+            let hexWidth = hexSize * 2;
+            let hexHeight = Math.sqrt(3) * hexSize;
+            
+            // Рисуем гексагональную сетку
+            for (let col = 0; col < gridCols; col++) {
+                for (let row = 0; row < gridRows; row++) {
+                    let x = col * hexWidth * 0.75 + hexSize;
+                    let y = row * hexHeight + ((col % 2) * hexHeight / 2) + hexSize;
+                    
+                    // Рисуем гексагон
+                    ctx.beginPath();
+                    for (let i = 0; i < 6; i++) {
+                        let angle = Math.PI / 3 * i;
+                        let xi = x + hexSize * Math.cos(angle);
+                        let yi = y + hexSize * Math.sin(angle);
+                        if (i === 0) {
+                            ctx.moveTo(xi, yi);
+                        } else {
+                            ctx.lineTo(xi, yi);
+                        }
+                    }
+                    ctx.closePath();
+                    
+                    // Используем сохраненный цвет
+                    ctx.fillStyle = hexColors[col][row];
+                    ctx.fill();
+                    
+                    ctx.strokeStyle = currentTerrain.gridColor;
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+            }
+            
+            // Заменяем highlightCell на новые функции
+            if (playerPos) {
+                drawPlayer(playerPos.col, playerPos.row);
+            }
+            if (enemyPos) {
+                drawEnemy(enemyPos.col, enemyPos.row);
+            }
+            
+            // Рисуем путь если он есть
+            if (currentPath && currentPath.length > 1) {
+                drawPath(currentPath);
+            }
+        }
         
         // Global variables for attack options and state
         let playerActionTaken = false;
@@ -215,6 +354,65 @@
         // Define grid dimensions for the hex grid
         const gridCols = 10;
         const gridRows = 8;
+
+        // Добавим функции для отрисовки персонажей
+        function drawPlayer(col, row) {
+            let canvas = document.getElementById("hexCanvas");
+            let ctx = canvas.getContext("2d");
+            let hexSize = 30;
+            let x = col * hexSize * 2 * 0.75 + hexSize;
+            let y = row * hexSize * Math.sqrt(3) + ((col % 2) * hexSize * Math.sqrt(3) / 2) + hexSize;
+            
+            // Рисуем круг для игрока
+            ctx.beginPath();
+            ctx.arc(x, y, hexSize/2, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
+            ctx.fill();
+            
+            // Добавляем свечение
+            ctx.shadowColor = '#00ff00';
+            ctx.shadowBlur = 15;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            
+            // Добавляем символ игрока
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('P', x, y);
+        }
+
+        function drawEnemy(col, row) {
+            let canvas = document.getElementById("hexCanvas");
+            let ctx = canvas.getContext("2d");
+            let hexSize = 30;
+            let x = col * hexSize * 2 * 0.75 + hexSize;
+            let y = row * hexSize * Math.sqrt(3) + ((col % 2) * hexSize * Math.sqrt(3) / 2) + hexSize;
+            
+            // Рисуем круг для врага
+            ctx.beginPath();
+            ctx.arc(x, y, hexSize/2, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+            ctx.fill();
+            
+            // Добавляем свечение
+            ctx.shadowColor = '#ff0000';
+            ctx.shadowBlur = 15;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            
+            // Добавляем символ врага
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('E', x, y);
+        }
 
         // Добавим функцию для удаления обработчиков
         function removeMouseMoveHandlers() {
@@ -356,26 +554,22 @@
         }
 
         // Updated selectAttack function already calls highlightRange or highlightSpellArea as needed
-        function selectAttack(type, range, spellName = null) {
-            console.log("Selected attack:", type, range, spellName); // Для отладки
-            
+        function selectAttack(type, range, spellName) {
             selectedAttack = type;
             attackRange = range;
             selectedSpellName = spellName;
             
-            // Только для заклинаний
-            selectedSpellData = {
-                name: spellName,
-                range: range
-            };
-            highlightSpellArea(spellName, range);
-            document.getElementById("castSpellButton").disabled = true;
-            document.getElementById("attackButton").disabled = true;
+            // Включаем режим выбора цели
             waitingForSpellTarget = true;
-            document.getElementById("attackPreview").innerText = 
-                `Selected spell: ${spellName} (Range: ${range} tiles). Click on target location.`;
             
-            document.getElementById("attackPreview").style.display = "block";
+            // Добавляем обработчик движения мыши для предпросмотра
+            canvas.addEventListener("mousemove", handleSpellAreaPreview);
+            
+            // Активируем кнопку каста
+            document.getElementById("castSpellButton").disabled = true;
+            
+            // Показываем подсказку
+            addToBattleLog(`Select target for ${spellName}`);
         }
 
         function highlightAllExceptPlayer() {
@@ -511,41 +705,11 @@
 
         // Cast Spell button handler
         document.getElementById("castSpellButton").addEventListener("click", function() {
-            if (playerActionTaken) {
-                addToBattleLog("You have already acted this turn!");
+            if (!selectedSpellName || !selectedSpellTarget) {
+                addToBattleLog("No spell or target selected!");
                 return;
             }
-            
-            if (selectedSpellName === "Misty Step" && selectedSpellTarget) {
-                // Телепортация
-                playerPos.col = selectedSpellTarget.col;
-                playerPos.row = selectedSpellTarget.row;
-                updateGrid();
-                
-                fetch("/api/cast_spell", {
-                    method: "POST",
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        spell_name: selectedSpellName,
-                        target: selectedSpellTarget
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        addToBattleLog(data.error);
-                        return;
-                    }
-                    addToBattleLog("Successfully teleported with Misty Step!");
-                    playerActionTaken = true;
-                    clearAttackSelection();
-                    updateEndTurnButton();
-                });
-                return;
-            }
-            
+
             fetch("/api/cast_spell", {
                 method: "POST",
                 headers: {
@@ -553,10 +717,9 @@
                 },
                 body: JSON.stringify({
                     spell_name: selectedSpellName,
-                    spell_data: selectedSpellData,
-                    target: selectedSpellTarget || {
-                        col: enemyPos.col,
-                        row: enemyPos.row
+                    target: {
+                        col: selectedSpellTarget.col,
+                        row: selectedSpellTarget.row
                     }
                 })
             })
@@ -566,71 +729,63 @@
                     addToBattleLog(data.error);
                     return;
                 }
+                
+                // Обновляем состояние игры
                 updateBattleStatus(data);
                 
-                // Обновляем позицию игрока если это был Misty Step
-                if (data.player_pos) {
-                    playerPos.col = data.player_pos.col;
-                    playerPos.row = data.player_pos.row;
-                    updateGrid();
-                }
+                // Очищаем выбор заклинания
+                selectedSpellName = null;
+                selectedSpellTarget = null;
+                waitingForSpellTarget = false;
                 
-                playerActionTaken = true;
-                clearAttackSelection();
-                updateEndTurnButton();
+                // Обновляем отображение
+                drawHexGrid();
+                
+                // Отключаем кнопку
+                document.getElementById("castSpellButton").disabled = true;
             });
         });
 
         // End Turn button handler
         document.getElementById("endTurnButton").addEventListener("click", function() {
-            clearAttackSelection();
-            playerSpeed = 30;
-            updateSpeedDisplay();
-            playerActionTaken = false;
+            // Сбрасываем все флаги хода
             movementTaken = false;
+            playerActionTaken = false;
+            currentPath = [];
+            selectedSpellName = null;
+            selectedSpellTarget = null;
+            waitingForSpellTarget = false;
             
-            let formData = new FormData();
-            formData.append("player_col", playerPos.col);
-            formData.append("player_row", playerPos.row);
+            // Обновляем отображение
+            drawHexGrid();
+            addToBattleLog("Turn ended");
             
+            // Делаем ход противника
             fetch("/api/enemy_attack", {
-                method: "POST", 
-                body: formData
+                method: "POST",
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `player_col=${playerPos.col}&player_row=${playerPos.row}`
             })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data => {
-                if (data.error) {
-                    addToBattleLog("Error: " + data.error);
-                    return;
+                if (data.combat_log) {
+                    addToBattleLog(data.combat_log);
                 }
-                
-                updateBattleStatus(data);
                 if (data.enemy_pos) {
-                    enemyPos.col = data.enemy_pos.col;
-                    enemyPos.row = data.enemy_pos.row;
-                    updateGrid();
+                    enemyPos = data.enemy_pos;
+                    drawHexGrid();
                 }
-                
-                // Добавляем сообщение в лог
-                addToBattleLog("Your turn ended. Enemy's turn completed.");
-                updateEndTurnButton();
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                addToBattleLog("Error during enemy turn: " + error.message);
+                if (data.character_hp !== undefined) {
+                    document.getElementById("char_hp").innerText = data.character_hp;
+                }
             });
         });
 
-        // Добавим функцию для проверки состояния кнопки End Turn
+        // Обновим функцию updateEndTurnButton
         function updateEndTurnButton() {
-            const endTurnButton = document.getElementById("endTurnButton");
-            // Кнопка активна всегда
-            endTurnButton.disabled = false;
+            document.getElementById("endTurnButton").disabled = false;
         }
 
         // Обновляем функцию updateBattleStatus
@@ -638,22 +793,28 @@
             if (data.combat_log) {
                 addToBattleLog(data.combat_log);
             }
+            
+            // Обновляем HP игрока
             if (data.character_hp !== undefined) {
-                let hp = Number(data.character_hp);
-                document.getElementById("char_hp").innerText = hp;
-                if (hp <= 0) {
-                    addToBattleLog("You have been defeated!");
-                    endBattle(false);
-                }
+                document.getElementById("char_hp").innerText = data.character_hp;
             }
+            
+            // Обновляем HP врага
             if (data.enemy_hp !== undefined) {
-                let hp = Number(data.enemy_hp);
-                document.getElementById("enemy_hp").innerText = hp;
-                if (hp <= 0) {
-                    addToBattleLog("Enemy defeated!");
-                    endBattle(true);
-                }
+                document.getElementById("enemy_hp").innerText = data.enemy_hp;
             }
+            
+            // Проверяем условия победы/поражения только если HP явно равно 0
+            if (data.character_hp === 0) {
+                addToBattleLog("You have been defeated!");
+                endBattle(false);
+            }
+            if (data.enemy_hp === 0) {
+                addToBattleLog("Enemy defeated!");
+                endBattle(true);
+            }
+            
+            // Обновляем spell slots если они изменились
             if (data.spell_slots !== undefined) {
                 document.getElementById("spell_slots").innerText = data.spell_slots;
             }
@@ -685,147 +846,155 @@
             }
         }
 
-        // Replace call in the canvas mousemove handler
+        // Добавьте эти функции после объявления глобальных переменных
+
+        // Функция для вычисления пути между двумя точками
+        function computePath(start, end) {
+            let path = [start];
+            let current = {col: start.col, row: start.row};
+            
+            while (current.col !== end.col || current.row !== end.row) {
+                if (current.col < end.col) current.col++;
+                else if (current.col > end.col) current.col--;
+                
+                if (current.row < end.row) current.row++;
+                else if (current.row > end.row) current.row--;
+                
+                path.push({col: current.col, row: current.row});
+            }
+            
+            return path;
+        }
+
+        // Добавьте обработчики для движения
+        canvas.addEventListener("mousedown", function(e) {
+            if (waitingForSpellTarget) return; // Не рисуем путь если выбираем цель для заклинания
+            
+            drawingPath = true;
+            let cell = getCellFromPixel(e.clientX, e.clientY);
+            if (cell) {
+                currentPath = [playerPos];
+                drawHexGrid();
+            }
+        });
+
         canvas.addEventListener("mousemove", function(e) {
-            if (!drawingPath) return;
+            if (!drawingPath || waitingForSpellTarget) return;
+            
             let cell = getCellFromPixel(e.clientX, e.clientY);
             if (cell) {
                 currentPath = computePath(playerPos, cell);
-                updateGrid();
-                // Показываем только длину пути без проверки скорости
+                drawHexGrid();
+                drawPath(currentPath);
+                
+                // Показываем длину пути
                 let steps = currentPath.length - 1;
                 let canvas = document.getElementById("hexCanvas");
                 let ctx = canvas.getContext("2d");
-                ctx.fillStyle = "green";
+                ctx.fillStyle = steps > 6 ? "red" : "green";
                 ctx.font = "14px Arial";
                 ctx.fillText(`Path: ${steps} tiles`, 10, 20);
             }
         });
 
-        // In the applyMove function, replace drawHexGrid() with updateGrid()
+        canvas.addEventListener("mouseup", function() {
+            drawingPath = false;
+        });
+
+        // Добавьте кнопке Apply Move обработчик
+        document.getElementById("applyMoveButton").addEventListener("click", function() {
+            applyMove();
+        });
+
+        function drawPath(path) {
+            if (!path || path.length < 2) return;
+            
+            let ctx = canvas.getContext("2d");
+            let hexSize = 30;
+            
+            // Рисуем линию пути
+            ctx.beginPath();
+            ctx.moveTo(
+                path[0].col * hexSize * 2 * 0.75 + hexSize,
+                path[0].row * hexSize * Math.sqrt(3) + ((path[0].col % 2) * hexSize * Math.sqrt(3) / 2) + hexSize
+            );
+            
+            for (let i = 1; i < path.length; i++) {
+                let x = path[i].col * hexSize * 2 * 0.75 + hexSize;
+                let y = path[i].row * hexSize * Math.sqrt(3) + ((path[i].col % 2) * hexSize * Math.sqrt(3) / 2) + hexSize;
+                ctx.lineTo(x, y);
+            }
+            
+            ctx.strokeStyle = "rgba(0, 255, 0, 0.6)";
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // Рисуем точки на пути
+            for (let i = 0; i < path.length; i++) {
+                let x = path[i].col * hexSize * 2 * 0.75 + hexSize;
+                let y = path[i].row * hexSize * Math.sqrt(3) + ((path[i].col % 2) * hexSize * Math.sqrt(3) / 2) + hexSize;
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 4, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(0, 255, 0, 0.8)";
+                ctx.fill();
+            }
+        }
+
         function applyMove() {
             if (movementTaken) {
                 addToBattleLog("You have already moved this turn!");
                 return;
             }
             if (currentPath.length < 2) {
-                alert("No path selected!");
+                addToBattleLog("No path selected!");
                 return;
             }
             let dest = currentPath[currentPath.length - 1];
             if (dest.col === enemyPos.col && dest.row === enemyPos.row) {
-                alert("Cannot move onto enemy's square!");
+                addToBattleLog("Cannot move onto enemy's square!");
                 return;
             }
+            
             let steps = currentPath.length - 1;
-            
-            // Проверяем активен ли Misty Step
-            if (selectedSpellName === "Misty Step") {
-                // Если Misty Step активен - двигаемся без ограничений
-                playerPos.col = dest.col;
-                playerPos.row = dest.row;
-                currentPath = [];
-                movementTaken = true;
-                updateGrid();
-                addToBattleLog(`Teleported ${steps} tiles with Misty Step!`);
-            } else {
-                // Обычное движение с ограничением скорости
-                let maxSteps = Math.floor(playerSpeed / 5);
-                if (steps > maxSteps) {
-                    alert(`Cannot move more than ${maxSteps} tiles with current speed (${playerSpeed})!`);
-                    return;
-                }
-                let moveCost = steps * 5;
-                playerSpeed -= moveCost;
-                playerPos.col = dest.col;
-                playerPos.row = dest.row;
-                currentPath = [];
-                movementTaken = true;
-                updateGrid();
-                updateSpeedDisplay();
-                addToBattleLog(`Moved ${steps} tiles. Speed remaining: ${playerSpeed}`);
+            if (steps > 6) {
+                addToBattleLog("Cannot move more than 6 tiles!");
+                return;
             }
+
+            // Применяем движение
+            playerPos = {col: dest.col, row: dest.row};
+            movementTaken = true;
+            currentPath = [];
             
-            // Обновляем состояние кнопки End Turn
-            updateEndTurnButton();
+            // Обновляем отображение
+            drawHexGrid();
+            addToBattleLog(`Moved ${steps} tiles`);
         }
 
-        function highlightRange(range) {
-            clearHighlight();
-            // Подсвечиваем все клетки в пределах радиуса действия
-            for (let col = 0; col < gridCols; col++) {
-                for (let row = 0; row < gridRows; row++) {
-                    if (isInRange(col, row, range)) {
-                        highlightCell(col, row);
-                    }
-                }
-            }
-        }
-
-        // Обновим обработчик клика по canvas
         canvas.addEventListener("click", function(e) {
             if (waitingForSpellTarget) {
                 let cell = getCellFromPixel(e.clientX, e.clientY);
                 if (cell) {
-                    if (selectedSpellName === "Misty Step") {
-                        // Проверяем, что клетка не занята врагом
-                        if (cell.col === enemyPos.col && cell.row === enemyPos.row) {
-                            addToBattleLog("Cannot teleport onto enemy!");
-                            return;
+                    let distanceToTarget = Math.sqrt(
+                        Math.pow(cell.col - playerPos.col, 2) + 
+                        Math.pow(cell.row - playerPos.row, 2)
+                    );
+                    
+                    if (distanceToTarget <= attackRange) {
+                        if (selectedSpellName === "Healing Word") {
+                            selectedSpellTarget = playerPos;
+                        } else {
+                            selectedSpellTarget = cell;
                         }
-                        selectedSpellTarget = cell;
                         document.getElementById("castSpellButton").disabled = false;
-                    } else {
-                        selectedSpellTarget = cell;
                         addToBattleLog(`Target selected at (${cell.col}, ${cell.row})`);
-                        highlightTargetEffect(cell);
-                        document.getElementById("castSpellButton").disabled = false;
+                    } else {
+                        addToBattleLog("Target is out of range!");
                     }
                 }
             }
         });
-
-        // New function to highlight the target effect area based on the selected spell
-        function highlightTargetEffect(cell) {
-            if (!selectedSpellName) return;
-            switch(selectedSpellName) {
-                case "Ice Knife":
-                case "Cloud of Daggers":
-                case "Burning Hands":
-                    highlightArea3x3(cell, 'rgba(255, 0, 0, 0.5)');
-                    break;
-                case "Chromatic Orb":
-                case "Dragon's Breath":
-                    highlightRadius(cell, 2, 'rgba(255, 0, 0, 0.5)');
-                    break;
-                case "Shatter":
-                    highlightRadius(cell, 1, 'rgba(255, 0, 0, 0.5)');
-                    break;
-                case "Magic Missile":
-                case "Hold Person":
-                case "Scorching Ray":
-                    highlightCell(cell.col, cell.row, 'rgba(255, 0, 0, 0.5)');
-                    break;
-                default:
-                    highlightCell(cell.col, cell.row, 'rgba(255, 0, 0, 0.5)');
-            }
-        }
-
-        // Добавим функцию для рисования линии прицеливания
-        function drawTargetingLine(start, end) {
-            ctx.beginPath();
-            ctx.moveTo(
-                start.col * CELL_SIZE + CELL_SIZE / 2,
-                start.row * CELL_SIZE + CELL_SIZE / 2
-            );
-            ctx.lineTo(
-                end.col * CELL_SIZE + CELL_SIZE / 2,
-                end.row * CELL_SIZE + CELL_SIZE / 2
-            );
-            ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)';  // Полупрозрачная голубая линия
-            ctx.lineWidth = 2;
-            ctx.stroke();
-        }
     </script>
 </body>
 </html> 

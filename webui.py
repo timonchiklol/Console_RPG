@@ -3,7 +3,6 @@ import random
 import math
 from dnd_spells import spells_1lvl, spells_2lvl, basic_attacks
 from gemini import Gemini  # Добавляем импорт Gemini
-from prompts import SYSTEM_PROMPTS
 from dotenv import load_dotenv
 import os
 
