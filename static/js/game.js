@@ -235,10 +235,15 @@ const gameApp = Vue.createApp({
                         this.diceNeeded = true;
                         this.diceType = (data.dice_roll_request && data.dice_roll_request.dice_type) || 'd20';
                         this.diceReason = (data.dice_roll_request && data.dice_roll_request.reason) || '';
+                        this.diceRollRequest = data.dice_roll_request;
+                        // Reset dice state for new roll
+                        this.currentFace = null;
+                        this.diceRolling = false;
                         console.log('Dice roll request data:', data);
                     } else {
                         this.diceNeeded = false;
                         this.diceReason = '';
+                        this.diceRollRequest = null;
                     }
                     if (data.messages) {
                         this.messages = data.messages;
@@ -253,6 +258,7 @@ const gameApp = Vue.createApp({
             }
         },
         async rollDice() {
+            // Prevent rolling if already rolling
             if (this.diceRolling) return;
             
             // Start dice animation
@@ -269,6 +275,7 @@ const gameApp = Vue.createApp({
                 
                 if (rollData.error) {
                     alert(rollData.error);
+                    this.diceRolling = false;
                     return;
                 }
                 
@@ -287,6 +294,7 @@ const gameApp = Vue.createApp({
                 // Show dice animation and then process the roll
                 this.timeoutId = setTimeout(async () => {
                     this.diceRolling = false;
+                    
                     // Set the face to match the base roll
                     this.currentFace = baseRoll;
                     

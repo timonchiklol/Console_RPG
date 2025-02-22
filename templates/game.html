@@ -11,28 +11,60 @@
 <div id="game-app" v-cloak class="h-screen flex flex-col bg-gray-900">
   <!-- Dice Overlay -->
   <div class="dice-overlay" :class="{ 'active': diceNeeded }" @click="rollDice">
+    <div class="absolute top-3 left-3 right-3">
+      <div v-if="diceRollRequest" class="text-sm text-amber-100 mb-2">
+        <div v-if="diceRollRequest.dice_modifier?.reason" class="font-medium">
+          {{diceRollRequest.dice_modifier.reason}}
+        </div>
+        <div v-if="diceRollRequest.ability_modifier" class="flex items-center gap-1 mt-1">
+          <span>{{diceRollRequest.ability_modifier}} Check</span>
+          <span class="text-gray-400">(</span>
+          <span v-if="diceRollRequest.dice_modifier?.modifier">
+            <span :class="{'text-green-400': diceRollRequest.dice_modifier.modifier > 0, 'text-red-400': diceRollRequest.dice_modifier.modifier < 0}">
+              {{diceRollRequest.dice_modifier.modifier >= 0 ? '+' : ''}}{{diceRollRequest.dice_modifier.modifier}}
+            </span>
+          </span>
+          <template v-if="diceRollRequest.dice_modifier?.proficient">
+            <span class="text-gray-400">+</span>
+            <span class="text-blue-400">2 Prof</span>
+          </template>
+          <span class="text-gray-400">)</span>
+        </div>
+        <div class="text-xs text-gray-400 mt-1">
+          {{diceType}}
+        </div>
+      </div>
+    </div>
     <div class="content">
       <div class="die" :class="{ 'rolling': diceRolling }" :data-face="currentFace">
+        <!-- Top faces (1-5) -->
         <figure class="face face-1" data-number="1"></figure>
         <figure class="face face-2" data-number="2"></figure>
         <figure class="face face-3" data-number="3"></figure>
         <figure class="face face-4" data-number="4"></figure>
         <figure class="face face-5" data-number="5"></figure>
-        <figure class="face face-6" data-number="6"></figure>
-        <figure class="face face-7" data-number="7"></figure>
-        <figure class="face face-8" data-number="8"></figure>
-        <figure class="face face-9" data-number="9"></figure>
-        <figure class="face face-10" data-number="10"></figure>
-        <figure class="face face-11" data-number="11"></figure>
-        <figure class="face face-12" data-number="12"></figure>
-        <figure class="face face-13" data-number="13"></figure>
-        <figure class="face face-14" data-number="14"></figure>
-        <figure class="face face-15" data-number="15"></figure>
+        <!-- Middle faces (6-15) - Reordered to match visual positions -->
+        <figure class="face face-6" data-number="11"></figure>
+        <figure class="face face-7" data-number="12"></figure>
+        <figure class="face face-8" data-number="13"></figure>
+        <figure class="face face-9" data-number="14"></figure>
+        <figure class="face face-10" data-number="15"></figure>
+        <figure class="face face-11" data-number="6"></figure>
+        <figure class="face face-12" data-number="7"></figure>
+        <figure class="face face-13" data-number="8"></figure>
+        <figure class="face face-14" data-number="9"></figure>
+        <figure class="face face-15" data-number="10"></figure>
+        <!-- Bottom faces (16-20) -->
         <figure class="face face-16" data-number="16"></figure>
         <figure class="face face-17" data-number="17"></figure>
         <figure class="face face-18" data-number="18"></figure>
         <figure class="face face-19" data-number="19"></figure>
         <figure class="face face-20" data-number="20"></figure>
+      </div>
+    </div>
+    <div class="absolute bottom-3 left-3 right-3 text-center">
+      <div class="text-amber-100 text-sm">
+        Click to roll {{diceType}}
       </div>
     </div>
   </div>
@@ -155,36 +187,8 @@
   <div class="flex-none sticky bottom-0 p-4 bg-gray-900 border-t border-gray-800 shadow-lg">
     <div class="container mx-auto">
       <template v-if="diceNeeded">
-        <!-- Dice Info Panel -->
-        <div v-if="diceRollRequest" 
-             class="bg-gray-800 rounded-lg p-4 shadow-lg border border-amber-500/20 max-w-sm mx-auto">
-          <div class="space-y-3">
-            <!-- Ability Check Info -->
-            <div v-if="diceRollRequest.ability_modifier" class="text-amber-100">
-              <div class="font-medium">{{diceRollRequest.ability_modifier}} Check</div>
-              <div class="flex items-center gap-2 text-sm mt-1">
-                <span class="text-gray-400">Modifier:</span>
-                <span>{{computeAbilityModifier(diceRollRequest.ability_modifier)}}</span>
-                <template v-if="diceRollRequest.dice_modifier?.proficient">
-                  <span class="text-gray-400">+</span>
-                  <span>2 (Proficient)</span>
-                </template>
-              </div>
-            </div>
-            
-            <!-- Roll Reason -->
-            <div v-if="diceRollRequest.dice_modifier?.reason" class="text-sm">
-              <span class="text-gray-400">Reason:</span>
-              <span class="text-amber-100 ml-2">{{diceRollRequest.dice_modifier.reason}}</span>
-            </div>
-            
-            <!-- Dice Type -->
-            <div class="text-sm">
-              <span class="text-gray-400">Dice:</span>
-              <span class="text-amber-100 ml-2">{{diceType}}</span>
-            </div>
-          </div>
-        </div>
+        <!-- Empty space when dice is needed -->
+        <div class="h-12"></div>
       </template>
       <template v-else>
         <div class="w-full flex gap-2">
