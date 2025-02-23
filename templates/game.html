@@ -10,7 +10,12 @@
 {% raw %}
 <div id="game-app" v-cloak class="h-screen flex flex-col bg-gray-900">
   <!-- Dice Overlay -->
-  <div class="dice-overlay" :class="{ 'active': diceNeeded }" @click="rollDice">
+  <div class="dice-overlay" 
+       :class="{ 
+         'active': diceNeeded, 
+         'disabled': !canRollDice || diceRolling 
+       }" 
+       @click="rollDice">
     <div class="dice-info">
       <div v-if="diceRollRequest" class="text-sm text-amber-100 mb-2">
         <div v-if="diceRollRequest.dice_modifier?.reason" class="reason">

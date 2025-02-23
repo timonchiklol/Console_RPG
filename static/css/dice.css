@@ -14,10 +14,19 @@
   cursor: pointer;
   flex-direction: column;
   padding: 20px;
+  transition: opacity 0.3s ease, filter 0.3s ease;
 }
 
 .dice-overlay.active {
   display: flex;
+}
+
+.dice-overlay.disabled {
+  cursor: not-allowed;
+}
+
+.dice-overlay.disabled .die {
+  pointer-events: none;
 }
 
 .dice-info {
@@ -83,7 +92,7 @@
   margin: 0 -50px;
   border-left: 50px solid transparent;
   border-right: 50px solid transparent;
-  border-bottom: 86px solid rgba(30, 180, 20, 0.75);
+  border-bottom: 86px solid rgba(251, 191, 36, 0.75);
   width: 0px;
   height: 0px;
   transform-style: preserve-3d;
@@ -96,7 +105,7 @@
   top: 21.5px;
   left: -100px;
   color: #fff;
-  text-shadow: 1px 1px 3px #000;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
   font-size: 43px;
   text-align: center;
   line-height: 77.4px;
