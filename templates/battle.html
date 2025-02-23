@@ -12,7 +12,11 @@
             <h2>Character: {{ character.name }}</h2>
             <p>HP: <span id="char_hp">{{ character.hp }}</span></p>
             <p>Speed: <span id="char_speed">30</span></p>
-            <p>Spell Slots: <span id="spell_slots">{{ character.spell_slots }}</span></p>
+            <div class="spell-slots">
+                <p>Spell Slots:</p>
+                <p>Level 1: <span id="spell_slots_1">{{ character.spell_slots['1'] }}</span></p>
+                <p>Level 2: <span id="spell_slots_2">{{ character.spell_slots['2'] }}</span></p>
+            </div>
             <!-- Ability Scores Section -->
             <div class="ability-scores mt-2 text-sm text-gray-400">
                 <h3>Ability Scores</h3>
@@ -71,9 +75,10 @@
                     {% for spell_name, spell_data in spells_1lvl.items() %}
                     <button 
                         data-spell-type="spell"
+                        data-spell-level="1"
                         data-range="{{ spell_data.range }}"
                         data-spell-name="{{ spell_name }}"
-                        class="attack-button spell-btn">
+                        class="attack-button spell-btn level-1">
                         {{ spell_name }} (Range: {{ spell_data.range }} tiles)
                     </button>
                     {% endfor %}
@@ -82,9 +87,10 @@
                     {% for spell_name, spell_data in spells_2lvl.items() %}
                     <button 
                         data-spell-type="spell"
+                        data-spell-level="2"
                         data-range="{{ spell_data.range }}"
                         data-spell-name="{{ spell_name }}"
-                        class="attack-button spell-btn">
+                        class="attack-button spell-btn level-2">
                         {{ spell_name }} (Range: {{ spell_data.range }} tiles)
                     </button>
                     {% endfor %}
@@ -198,6 +204,26 @@
     
     .terrain-btn:hover {
         opacity: 0.8;
+    }
+
+    .spell-slots {
+        background-color: #f5f5f5;
+        padding: 10px;
+        border-radius: 5px;
+        margin: 10px 0;
+    }
+
+    .level-1 {
+        background-color: #4CAF50;
+    }
+
+    .level-2 {
+        background-color: #2196F3;
+    }
+
+    .spell-btn[disabled] {
+        background-color: #cccccc !important;
+        cursor: not-allowed;
     }
     </style>
     
@@ -589,122 +615,56 @@
             logDiv.scrollTop = logDiv.scrollHeight;
         }
         
-        // Update the speed display
-        function updateSpeedDisplay() {
-            document.getElementById("char_speed").innerText = playerSpeed;
-        }
+        // Добавляем глобальные переменные для скорости
+        let maxSpeed = 30;
+        let currentSpeed = 30;
 
-        // Clear attack selection and reset controls
-        function clearAttackSelection() {
-            selectedAttack = null;
-            selectedSpellName = null;
-            selectedSpellData = null;
-            selectedSpellTarget = null;
-            waitingForSpellTarget = false;
-            attackRange = 0;
-            removeMouseMoveHandlers();
-            document.getElementById("attackPreview").style.display = "none";
-            document.getElementById("diceControls").style.display = "none";
-            document.getElementById("attackButton").disabled = true;
-            document.getElementById("castSpellButton").disabled = true;
-            document.getElementById("rollHitButton").disabled = false;
-            document.getElementById("rollDamageButton").disabled = false;
-            clearHighlight();
-        }
-
-        // Roll Hit button handler
-        document.getElementById("rollHitButton").addEventListener("click", function() {
-            if (this.disabled) return;
+        // Обновляем функцию applyMove
+        function applyMove() {
+            if (currentPath.length < 2) {
+                addToBattleLog("No path selected!");
+                return;
+            }
+            let dest = currentPath[currentPath.length - 1];
+            if (dest.col === enemyPos.col && dest.row === enemyPos.row) {
+                addToBattleLog("Cannot move onto enemy's square!");
+                return;
+            }
             
-            fetch("/api/roll_dice", {
-                method: "POST",
-                body: new URLSearchParams({sides: 20})
-            })
-            .then(response => response.json())
-            .then(data => {
-                pendingHitRoll = data.result;
-                addToBattleLog("Hit roll: " + pendingHitRoll);
-                this.disabled = true;
-                if (pendingHitRoll >= 10) {
-                    document.getElementById("rollDamageButton").style.display = "inline-block";
-                } else {
-                    addToBattleLog("Your attack would miss.");
-                    setTimeout(() => {
-                        clearAttackSelection();
-                    }, 1500);
-                }
-            });
-        });
-
-        // Roll Damage button handler
-        document.getElementById("rollDamageButton").addEventListener("click", function() {
-            if (this.disabled) return;
+            let steps = currentPath.length - 1;
+            let moveCost = steps * 5;
             
-            fetch("/api/roll_dice", {
-                method: "POST",
-                body: new URLSearchParams({sides: 6})
-            })
-            .then(response => response.json())
-            .then(data => {
-                pendingDamageRoll = data.result;
-                addToBattleLog("Damage roll: " + pendingDamageRoll);
-                this.disabled = true;
-                
-                // Automatically perform the attack after rolling damage
-                let formData = new FormData();
-                formData.append("hit_roll", pendingHitRoll);
-                formData.append("damage_roll", pendingDamageRoll);
-                
-                if (selectedAttack === 'melee') {
-                    fetch("/api/attack", {method: "POST", body: formData})
-                    .then(response => response.json())
-                    .then(data => {
-                        updateBattleStatus(data);
-                        playerActionTaken = true;
-                        clearAttackSelection();
-                    });
-                } else if (selectedAttack === 'magic') {
-                    formData.append("spell", "Magic Missile");
-                    fetch("/api/cast_spell", {method: "POST", body: formData})
-                    .then(response => response.json())
-                    .then(data => {
-                        updateBattleStatus(data);
-                        playerActionTaken = true;
-                        clearAttackSelection();
-                    });
-                }
-            });
-        });
+            if (moveCost > currentSpeed) {
+                addToBattleLog(`Not enough speed! Need ${moveCost}, but have ${currentSpeed}`);
+                return;
+            }
 
-        // Apply Move button handler
-        document.getElementById("applyMoveButton").addEventListener("click", function() {
-            clearAttackSelection();
-            applyMove();
+            // Применяем движение
+            playerPos = {col: dest.col, row: dest.row};
+            currentSpeed -= moveCost;
+            currentPath = [];
+            
+            // Обновляем отображение
+            drawHexGrid();
             updateSpeedDisplay();
-        });
+            addToBattleLog(`Moved ${steps} tiles. Speed remaining: ${currentSpeed}`);
+        }
 
-        // Attack button handler
-        document.getElementById("attackButton").addEventListener("click", function() {
-            if (playerActionTaken) {
-                addToBattleLog("You have already attacked this turn!");
-                return;
-            }
-            if (!isInRange(enemyPos.col, enemyPos.row, attackRange)) {
-                addToBattleLog("Enemy is not in range!");
+        // Добавляем функцию обновления отображения скорости
+        function updateSpeedDisplay() {
+            document.getElementById("char_speed").innerText = currentSpeed;
+        }
+
+        // Добавим глобальную переменную для отслеживания использования заклинаний
+        let spellUsedThisTurn = false;
+
+        // Обновим обработчик кнопки Cast Spell
+        document.getElementById("castSpellButton").addEventListener("click", function() {
+            if (spellUsedThisTurn) {
+                addToBattleLog("You have already cast a spell this turn!");
                 return;
             }
             
-            if (selectedAttack === 'melee') {
-                // Show dice controls for melee attack
-                document.getElementById("diceControls").style.display = "block";
-                document.getElementById("rollHitButton").style.display = "inline-block";
-                document.getElementById("rollDamageButton").style.display = "none";
-                document.getElementById("attackButton").disabled = true;
-            }
-        });
-
-        // Cast Spell button handler
-        document.getElementById("castSpellButton").addEventListener("click", function() {
             if (!selectedSpellName || !selectedSpellTarget) {
                 addToBattleLog("No spell or target selected!");
                 return;
@@ -730,8 +690,17 @@
                     return;
                 }
                 
+                // Помечаем, что заклинание использовано в этом ходу
+                spellUsedThisTurn = true;
+                
                 // Обновляем состояние игры
                 updateBattleStatus(data);
+                
+                // Если это был Misty Step, обновляем позицию игрока
+                if (selectedSpellName === "Misty Step") {
+                    playerPos = {col: selectedSpellTarget.col, row: selectedSpellTarget.row};
+                    addToBattleLog("Teleported successfully!");
+                }
                 
                 // Очищаем выбор заклинания
                 selectedSpellName = null;
@@ -746,19 +715,22 @@
             });
         });
 
-        // End Turn button handler
+        // Обновляем обработчик End Turn, чтобы сбрасывать флаг использования заклинания
         document.getElementById("endTurnButton").addEventListener("click", function() {
             // Сбрасываем все флаги хода
-            movementTaken = false;
-            playerActionTaken = false;
             currentPath = [];
             selectedSpellName = null;
             selectedSpellTarget = null;
             waitingForSpellTarget = false;
+            spellUsedThisTurn = false; // Сбрасываем флаг использования заклинания
+            
+            // Восстанавливаем скорость
+            currentSpeed = maxSpeed;
+            updateSpeedDisplay();
             
             // Обновляем отображение
             drawHexGrid();
-            addToBattleLog("Turn ended");
+            addToBattleLog("Turn ended. Speed restored to " + maxSpeed);
             
             // Делаем ход противника
             fetch("/api/enemy_attack", {
@@ -783,7 +755,7 @@
             });
         });
 
-        // Обновим функцию updateEndTurnButton
+        // Обновляем функцию updateEndTurnButton
         function updateEndTurnButton() {
             document.getElementById("endTurnButton").disabled = false;
         }
@@ -794,14 +766,16 @@
                 addToBattleLog(data.combat_log);
             }
             
-            // Обновляем HP игрока
             if (data.character_hp !== undefined) {
                 document.getElementById("char_hp").innerText = data.character_hp;
             }
             
-            // Обновляем HP врага
             if (data.enemy_hp !== undefined) {
                 document.getElementById("enemy_hp").innerText = data.enemy_hp;
+            }
+            
+            if (data.spell_slots !== undefined) {
+                updateSpellSlots(data.spell_slots);
             }
             
             // Проверяем условия победы/поражения только если HP явно равно 0
@@ -812,11 +786,6 @@
             if (data.enemy_hp === 0) {
                 addToBattleLog("Enemy defeated!");
                 endBattle(true);
-            }
-            
-            // Обновляем spell slots если они изменились
-            if (data.spell_slots !== undefined) {
-                document.getElementById("spell_slots").innerText = data.spell_slots;
             }
             
             // Обновляем состояние кнопки End Turn
@@ -850,20 +819,65 @@
 
         // Функция для вычисления пути между двумя точками
         function computePath(start, end) {
-            let path = [start];
-            let current = {col: start.col, row: start.row};
+            // Получаем соседей для гексагональной клетки
+            function getHexNeighbors(cell) {
+                let neighbors = [];
+                let directions = cell.col % 2 === 0 ? [
+                    {col: 0, row: -1}, {col: 1, row: -1}, {col: 1, row: 0},
+                    {col: 0, row: 1}, {col: -1, row: 0}, {col: -1, row: -1}
+                ] : [
+                    {col: 0, row: -1}, {col: 1, row: 0}, {col: 1, row: 1},
+                    {col: 0, row: 1}, {col: -1, row: 1}, {col: -1, row: 0}
+                ];
+                
+                for (let dir of directions) {
+                    let newCol = cell.col + dir.col;
+                    let newRow = cell.row + dir.row;
+                    if (newCol >= 0 && newCol < gridCols && newRow >= 0 && newRow < gridRows) {
+                        neighbors.push({col: newCol, row: newRow});
+                    }
+                }
+                return neighbors;
+            }
+
+            // Вычисляем расстояние между двумя гексами
+            function hexDistance(a, b) {
+                let dx = Math.abs(a.col - b.col);
+                let dy = Math.abs(a.row - b.row);
+                return dx + Math.max(0, (dy - dx) / 2);
+            }
+
+            let queue = [{
+                pos: start,
+                path: [start],
+                cost: 0
+            }];
+            let visited = new Set();
             
-            while (current.col !== end.col || current.row !== end.row) {
-                if (current.col < end.col) current.col++;
-                else if (current.col > end.col) current.col--;
+            while (queue.length > 0) {
+                queue.sort((a, b) => 
+                    (a.cost + hexDistance(a.pos, end)) - (b.cost + hexDistance(b.pos, end))
+                );
+                let current = queue.shift();
                 
-                if (current.row < end.row) current.row++;
-                else if (current.row > end.row) current.row--;
+                let posKey = `${current.pos.col},${current.pos.row}`;
+                if (visited.has(posKey)) continue;
+                visited.add(posKey);
                 
-                path.push({col: current.col, row: current.row});
+                if (current.pos.col === end.col && current.pos.row === end.row) {
+                    return current.path;
+                }
+                
+                for (let neighbor of getHexNeighbors(current.pos)) {
+                    queue.push({
+                        pos: neighbor,
+                        path: [...current.path, neighbor],
+                        cost: current.cost + 1
+                    });
+                }
             }
             
-            return path;
+            return [start]; // Возвращаем только начальную позицию, если путь не найден
         }
 
         // Добавьте обработчики для движения
@@ -941,37 +955,6 @@
             }
         }
 
-        function applyMove() {
-            if (movementTaken) {
-                addToBattleLog("You have already moved this turn!");
-                return;
-            }
-            if (currentPath.length < 2) {
-                addToBattleLog("No path selected!");
-                return;
-            }
-            let dest = currentPath[currentPath.length - 1];
-            if (dest.col === enemyPos.col && dest.row === enemyPos.row) {
-                addToBattleLog("Cannot move onto enemy's square!");
-                return;
-            }
-            
-            let steps = currentPath.length - 1;
-            if (steps > 6) {
-                addToBattleLog("Cannot move more than 6 tiles!");
-                return;
-            }
-
-            // Применяем движение
-            playerPos = {col: dest.col, row: dest.row};
-            movementTaken = true;
-            currentPath = [];
-            
-            // Обновляем отображение
-            drawHexGrid();
-            addToBattleLog(`Moved ${steps} tiles`);
-        }
-
         canvas.addEventListener("click", function(e) {
             if (waitingForSpellTarget) {
                 let cell = getCellFromPixel(e.clientX, e.clientY);
@@ -995,6 +978,19 @@
                 }
             }
         });
+
+        function updateSpellSlots(spellSlots) {
+            document.getElementById('spell_slots_1').textContent = spellSlots['1'];
+            document.getElementById('spell_slots_2').textContent = spellSlots['2'];
+            
+            // Отключаем кнопки заклинаний, если нет доступных ячеек
+            document.querySelectorAll('.spell-btn').forEach(btn => {
+                const level = btn.dataset.spellLevel;
+                if (spellSlots[level] <= 0) {
+                    btn.disabled = true;
+                }
+            });
+        }
     </script>
 </body>
 </html> 
