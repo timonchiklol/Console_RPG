@@ -124,6 +124,7 @@ const gameApp = Vue.createApp({
             diceRollRequest: null,
             room: {},
             diceRolling: false,
+            canRollDice: false,
             showPlayers: false,
             showStats: false,
             codeCopied: false,
@@ -233,6 +234,7 @@ const gameApp = Vue.createApp({
                     }
                     if (data.dice_roll_required) {
                         this.diceNeeded = true;
+                        this.canRollDice = true;
                         this.diceType = (data.dice_roll_request && data.dice_roll_request.dice_type) || 'd20';
                         this.diceReason = (data.dice_roll_request && data.dice_roll_request.reason) || '';
                         this.diceRollRequest = data.dice_roll_request;
@@ -242,6 +244,7 @@ const gameApp = Vue.createApp({
                         console.log('Dice roll request data:', data);
                     } else {
                         this.diceNeeded = false;
+                        this.canRollDice = false;
                         this.diceReason = '';
                         this.diceRollRequest = null;
                     }
@@ -258,8 +261,11 @@ const gameApp = Vue.createApp({
             }
         },
         async rollDice() {
-            // Prevent rolling if already rolling
-            if (this.diceRolling) return;
+            // Check if rolling is allowed
+            if (!this.canRollDice || this.diceRolling) return;
+            
+            // Disable rolling immediately
+            this.canRollDice = false;
             
             // Start dice animation
             this.diceRolling = true;
