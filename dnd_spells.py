@@ -1,55 +1,39 @@
 spells_1lvl = {
     "Chromatic Orb": {
-        "damage": "2d7",
+        "damage": "2d4",
         "range": 4,
-        "area_radius": 2,
-        "effect": "blind",  # Ослепление на 1 ход
-        "effect_duration": 1,
-        "game_mechanics": "наносит урон в радиусе 2 клетки и ослепляет цель на 1 ход"
+        "area_radius": 2
     },
     
     "Magic Missile": {
-        "damage": "3d3",
-        "range": 4,
-        "area_radius": 0,
-        "effect": "stagger",  # Замедление на 1 ход
-        "effect_duration": 1,
-        "game_mechanics": "выпускает 3 пули и замедляет цель на 1 ход"
+        "damage": "d3",
+        "range": 6,
+        "area_radius": 0
     },
     
     "Ice Knife": {
-        "damage": "1d10",
+        "damage": "1d8",
         "range": 4,
-        "area_radius": 1,
-        "effect": "frozen",
-        "effect_duration": 1,  # Уменьшили длительность заморозки до 1 хода
-        "game_mechanics": "наносит урон и замораживает цель"
+        "area_radius": 1
     },
     
     "Healing Word": {
         "healing": "1d4+3",
-        "range": 0,
-        "area_radius": 0,
-        "game_mechanics": "восстанавливает здоровье"
+        "range": 1,
+        "area_radius": 1
     },
     
     "Burning Hands": {
-        "damage": "2d7",
+        "damage": "3d4",
         "range": 0,
-        "area_radius": 1,
-        "effect": "burn",  # Горение 2 урона в ход
-        "effect_duration": 2,
-        "game_mechanics": "наносит урон и поджигает цели"
+        "area_radius": 1
     },
     
     "Thunderwave": {
-        "damage": "2d5",
-        "range": 0,
-        "area_radius": 2,
-        "effect": "push",  # Отталкивание на 2 клетки
-        "effect_duration": 1,
-        "game_mechanics": "наносит урон и отталкивает цели"
-    },
+        "damage": "2d4",
+        "range": 100,
+        "area_radius": 100
+    }
 }
 
 # Словарь с заклинаниями второго уровня
@@ -58,41 +42,28 @@ spells_2lvl = {
         "damage": "3d6",
         "range": 5,
         "area_radius": 0,
-        "effect": "weakness",  # Уменьшение урона цели на 50%
-        "effect_duration": 2,
-        "game_mechanics": "выпускает 3 луча и ослабляет цель"
     },
 
     "Dragon's Breath": {
-        "damage": "2d7",
-        "range": 4,
+        "damage": "2d6",
+        "range": 6,
         "area_radius": 2,
-        "effect": "fear",  # Страх: цель не может приближаться к игроку
-        "effect_duration": 2,
-        "game_mechanics": "наносит урон и вызывает страх"
     },
 
     "Misty Step": {
         "damage": "0",
         "range": 100,
-        "game_mechanics": "дает игроку бесконечную скорость перемещения на текущий ход."
     },
 
     "Cloud of Daggers": {
-        "damage": "8d2",
+        "damage": "6d2",
         "range": 3,
         "area_radius": 1,
-        "effect": "bleed",  # Кровотечение 3 урона в ход
-        "effect_duration": 3,
-        "game_mechanics": "создает зону с уроном и вызывает кровотечение"
     },
 
     "Hold Person": {
         "damage": "0",
         "range": 5,
-        "effect": "paralyze",  # Паралич: цель не может двигаться и атаковать
-        "effect_duration": 3,
-        "game_mechanics": "парализует цель на 3 хода"
     }
 }
 
