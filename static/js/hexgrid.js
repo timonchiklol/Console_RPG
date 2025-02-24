@@ -1,5 +1,6 @@
-let playerPos = { col: 0, row: 0 };
-let enemyPos = { col: 5, row: 4 };
+// Initialize game state
+let playerPos = BATTLEFIELD_CONFIG.dimensions.starting_position || { col: 0, row: 0 };
+let enemyPos = { col: 5, row: 4 };  // This will be set by the server
 
 // player's current speed, default 30
 let playerSpeed = 30;
@@ -14,10 +15,38 @@ let currentRange = 0;
 // Add TranslationManager initialization at the top
 let translationManager;
 
+// Grid dimensions from config
+const gridCols = BATTLEFIELD_CONFIG.dimensions.cols;
+const gridRows = BATTLEFIELD_CONFIG.dimensions.rows;
+const hexSize = BATTLEFIELD_CONFIG.dimensions.hex_size;
+
+// Current terrain settings
+let currentTerrain = BATTLEFIELD_CONFIG.terrain_types[CURRENT_TERRAIN];
+let hexColors = [];
+
 document.addEventListener('DOMContentLoaded', async () => {
     translationManager = new TranslationManager();
     await translationManager.loadTranslations();
 });
+
+function initializeHexColors() {
+    hexColors = [];
+    for (let col = 0; col < gridCols; col++) {
+        hexColors[col] = [];
+        for (let row = 0; row < gridRows; row++) {
+            let colors = currentTerrain.hex_fill.colors;
+            let colorIndex = Math.random() < currentTerrain.hex_fill.frequency ? 
+                Math.floor(Math.random() * colors.length) : 0;
+            hexColors[col][row] = colors[colorIndex];
+        }
+    }
+}
+
+function changeTerrain(terrainType) {
+    currentTerrain = BATTLEFIELD_CONFIG.terrain_types[terrainType];
+    initializeHexColors();
+    drawHexGrid();
+}
 
 function drawHexGrid() {
     let canvas = document.getElementById("hexCanvas");
@@ -27,15 +56,17 @@ function drawHexGrid() {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    let hexSize = 30;
-    let cols = 10;
-    let rows = 8;
     let hexWidth = hexSize * 2;
     let hexHeight = Math.sqrt(3) * hexSize;
     
-    // Draw all hexagons first
-    for (let col = 0; col < cols; col++) {
-        for (let row = 0; row < rows; row++) {
+    // Initialize hex colors if needed
+    if (hexColors.length === 0) {
+        initializeHexColors();
+    }
+    
+    // Draw hexagons
+    for (let col = 0; col < gridCols; col++) {
+        for (let row = 0; row < gridRows; row++) {
             let x = col * hexWidth * 0.75 + hexSize;
             let y = row * hexHeight + ((col % 2) * hexHeight / 2) + hexSize;
             
@@ -50,59 +81,103 @@ function drawHexGrid() {
     
     // Draw path if exists
     if (currentPath.length > 1) {
-        drawPath(ctx, hexSize);
+        drawPath(ctx);
     }
     
     // Draw tokens
-    drawTokens(ctx, hexSize, hexWidth, hexHeight);
+    drawTokens(ctx);
 }
 
-function drawPath(ctx, hexSize) {
+function drawPath(ctx) {
     ctx.beginPath();
     ctx.strokeStyle = "green";
     ctx.lineWidth = 3;
+    
+    let hexWidth = hexSize * 2;
+    let hexHeight = Math.sqrt(3) * hexSize;
+    
     for (let i = 0; i < currentPath.length; i++) {
         let cell = currentPath[i];
-        let x = cell.col * (hexSize * 2) * 0.75 + hexSize;
-        let hexHeight = Math.sqrt(3) * hexSize;
+        let x = cell.col * hexWidth * 0.75 + hexSize;
         let y = cell.row * hexHeight + ((cell.col % 2) * hexHeight / 2) + hexSize;
+        
         if (i === 0) {
             ctx.moveTo(x, y);
         } else {
             ctx.lineTo(x, y);
         }
     }
+    
     ctx.stroke();
+    
+    // Draw movement cost
+    let steps = currentPath.length - 1;
+    let moveCost = steps * GAME_RULES.movement.base_cost;
+    let terrainMultiplier = currentTerrain.movement_cost || 1;
+    let totalCost = Math.floor(moveCost * terrainMultiplier);
+    
+    ctx.fillStyle = totalCost > playerSpeed ? "red" : "green";
+    ctx.font = "14px Arial";
+    ctx.fillText(`Movement Cost: ${totalCost} speed`, 10, 20);
+    
+    // Reset styles
     ctx.strokeStyle = "black";
     ctx.lineWidth = 1;
 }
 
-function drawTokens(ctx, hexSize, hexWidth, hexHeight) {
+function drawTokens(ctx) {
+    let hexWidth = hexSize * 2;
+    let hexHeight = Math.sqrt(3) * hexSize;
+    
     // Draw player token (blue circle)
-    let col = playerPos.col;
-    let row = playerPos.row;
-    let x = col * hexWidth * 0.75 + hexSize;
-    let y = row * hexHeight + ((col % 2) * hexHeight / 2) + hexSize;
+    let x = playerPos.col * hexWidth * 0.75 + hexSize;
+    let y = playerPos.row * hexHeight + ((playerPos.col % 2) * hexHeight / 2) + hexSize;
+    
     ctx.beginPath();
     ctx.arc(x, y, hexSize / 3, 0, 2 * Math.PI);
-    ctx.fillStyle = "blue";
+    ctx.fillStyle = "rgba(0, 255, 0, 0.8)";
     ctx.fill();
-
+    ctx.shadowColor = '#00ff00';
+    ctx.shadowBlur = 15;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    
+    // Add player symbol
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 20px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('P', x, y);
+    
     // Draw enemy token (red circle)
-    col = enemyPos.col;
-    row = enemyPos.row;
-    x = col * hexWidth * 0.75 + hexSize;
-    y = row * hexHeight + ((col % 2) * hexHeight / 2) + hexSize;
+    x = enemyPos.col * hexWidth * 0.75 + hexSize;
+    y = enemyPos.row * hexHeight + ((enemyPos.col % 2) * hexHeight / 2) + hexSize;
+    
     ctx.beginPath();
     ctx.arc(x, y, hexSize / 3, 0, 2 * Math.PI);
-    ctx.fillStyle = "red";
+    ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
     ctx.fill();
+    ctx.shadowColor = '#ff0000';
+    ctx.shadowBlur = 15;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    
+    // Add enemy symbol
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 20px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('E', x, y);
 }
 
 function drawHexagon(ctx, x, y, size, isHighlighted) {
     ctx.beginPath();
     for (let i = 0; i < 6; i++) {
-        let angle = Math.PI / 180 * (60 * (i + 1));
+        let angle = Math.PI / 180 * (60 * i);
         let x_i = x + size * Math.cos(angle);
         let y_i = y + size * Math.sin(angle);
         if (i === 0) {
@@ -113,11 +188,17 @@ function drawHexagon(ctx, x, y, size, isHighlighted) {
     }
     ctx.closePath();
     
+    // Fill with terrain color
+    ctx.fillStyle = hexColors[Math.floor(x / (size * 1.5))][Math.floor(y / (size * Math.sqrt(3)))];
+    ctx.fill();
+    
+    // Add highlight if needed
     if (isHighlighted) {
         ctx.fillStyle = 'rgba(255, 255, 0, 0.2)';
         ctx.fill();
     }
     
+    ctx.strokeStyle = currentTerrain.grid_color;
     ctx.stroke();
 }
 
@@ -126,21 +207,21 @@ function getCellFromPixel(x, y) {
     let rect = canvas.getBoundingClientRect();
     let mx = x - rect.left;
     let my = y - rect.top;
-    let hexSize = 30;
+    
     let hexWidth = hexSize * 2;
     let hexHeight = Math.sqrt(3) * hexSize;
-    let found = null;
-    for (let col = 0; col < 10; col++) {
-        for (let row = 0; row < 8; row++) {
+    
+    for (let col = 0; col < gridCols; col++) {
+        for (let row = 0; row < gridRows; row++) {
             let cx = col * hexWidth * 0.75 + hexSize;
             let cy = row * hexHeight + ((col % 2) * hexHeight / 2) + hexSize;
             let dist = Math.sqrt((mx - cx) ** 2 + (my - cy) ** 2);
             if (dist < hexSize) {
-                found = { col: col, row: row };
+                return { col: col, row: row };
             }
         }
     }
-    return found;
+    return null;
 }
 
 function computePath(start, end) {
@@ -152,12 +233,12 @@ function computePath(start, end) {
         return path;
     }
     
-    // Calculate max steps based on remaining speed
-    let maxSteps = Math.floor(playerSpeed / 5);
+    // Calculate max steps based on remaining speed and terrain
+    let terrainMultiplier = currentTerrain.movement_cost || 1;
+    let maxSteps = Math.floor(playerSpeed / (GAME_RULES.movement.base_cost * terrainMultiplier));
     
     while (current.col !== end.col || current.row !== end.row) {
-        // Check if we've already reached the maximum path length based on speed
-        if (path.length > maxSteps) { // +1 because path includes start position
+        if (path.length > maxSteps) {
             return path;
         }
         
@@ -166,7 +247,6 @@ function computePath(start, end) {
         let bestDist = Infinity;
         
         for (let n of neighbors) {
-            // Skip if this neighbor is enemy's position
             if (n.col === enemyPos.col && n.row === enemyPos.row) {
                 continue;
             }
@@ -190,6 +270,7 @@ function getNeighbors(cell) {
     let col = cell.col;
     let row = cell.row;
     let neighbors = [];
+    
     if (col % 2 === 0) {
         neighbors.push({ col: col, row: row - 1 });       // up
         neighbors.push({ col: col, row: row + 1 });       // down
@@ -205,48 +286,53 @@ function getNeighbors(cell) {
         neighbors.push({ col: col - 1, row: row });       // upper left
         neighbors.push({ col: col - 1, row: row + 1 });   // lower left
     }
-    return neighbors.filter(n => n.col >= 0 && n.col < 10 && n.row >= 0 && n.row < 8);
+    
+    return neighbors.filter(n => 
+        n.col >= 0 && n.col < gridCols && 
+        n.row >= 0 && n.row < gridRows
+    );
 }
 
 function checkAdjacent() {
     let neighbors = getNeighbors(playerPos);
-    for (let n of neighbors) {
-        if (n.col === enemyPos.col && n.row === enemyPos.row) {
-            return true;
-        }
-    }
-    return false;
+    return neighbors.some(n => n.col === enemyPos.col && n.row === enemyPos.row);
 }
 
 function applyMove() {
     if (currentPath.length < 2) {
-        alert(translationManager.translate("no_path_selected"));
+        addToBattleLog("No path selected!");
         return;
     }
+    
     let dest = currentPath[currentPath.length - 1];
     if (dest.col === enemyPos.col && dest.row === enemyPos.row) {
-        alert(translationManager.translate("cannot_move_enemy"));
+        addToBattleLog("Cannot move onto enemy's square!");
         return;
     }
+    
     let steps = currentPath.length - 1;
-    if (steps > 5) {
-        alert(translationManager.translate("max_move_tiles"));
+    let moveCost = steps * GAME_RULES.movement.base_cost;
+    let terrainMultiplier = currentTerrain.movement_cost || 1;
+    let totalCost = Math.floor(moveCost * terrainMultiplier);
+    
+    if (totalCost > playerSpeed) {
+        addToBattleLog(`Not enough speed! Need ${totalCost}, but have ${playerSpeed}`);
         return;
     }
-    let moveCost = steps * 5;
-    if (moveCost > playerSpeed) {
-        alert(translationManager.translate("not_enough_speed").replace("{speed}", playerSpeed));
-        return;
-    }
-    playerSpeed -= moveCost;
-    playerPos.col = dest.col;
-    playerPos.row = dest.row;
+    
+    playerSpeed -= totalCost;
+    playerPos = dest;
     currentPath = [];
     drawHexGrid();
+    
+    // Update UI
+    document.getElementById('char_speed').textContent = playerSpeed;
+    addToBattleLog(`Moved ${steps} tiles. Cost: ${totalCost} speed. Remaining: ${playerSpeed}`);
 }
 
-// Mouse event handlers for path drawing
+// Mouse event handlers
 let canvas = document.getElementById("hexCanvas");
+
 canvas.addEventListener("mousedown", function(e) {
     let cell = getCellFromPixel(e.clientX, e.clientY);
     if (cell && cell.col === playerPos.col && cell.row === playerPos.row) {
@@ -258,29 +344,23 @@ canvas.addEventListener("mousedown", function(e) {
 
 canvas.addEventListener("mousemove", function(e) {
     if (!drawingPath) return;
+    
     let cell = getCellFromPixel(e.clientX, e.clientY);
     if (cell) {
         currentPath = computePath(playerPos, cell);
         drawHexGrid();
-        
-        // Show feedback about path length and speed cost
-        let steps = currentPath.length - 1;
-        let maxSteps = Math.floor(playerSpeed / 5);
-        let moveCost = steps * 5;
-        let canvas = document.getElementById("hexCanvas");
-        let ctx = canvas.getContext("2d");
-        ctx.fillStyle = moveCost > playerSpeed ? "red" : "green";
-        ctx.font = "14px Arial";
-        ctx.fillText(`Path: ${steps} tiles (Cost: ${moveCost} speed, Available: ${playerSpeed})`, 10, 20);
     }
 });
 
-canvas.addEventListener("mouseup", function(e) {
+canvas.addEventListener("mouseup", function() {
     drawingPath = false;
 });
 
-// Initial draw on load
-window.addEventListener("load", drawHexGrid);
+// Initialize
+window.addEventListener("load", function() {
+    initializeHexColors();
+    drawHexGrid();
+});
 
 // Add this function to get cells within range using BFS
 function getCellsInRange(startCell, range) {

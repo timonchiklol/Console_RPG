@@ -10,8 +10,8 @@
     <div class="status-panel">
         <div class="character-status">
             <h2>Character: {{ character.name }}</h2>
-            <p>HP: <span id="char_hp">{{ character.hp }}</span></p>
-            <p>Speed: <span id="char_speed">30</span></p>
+            <p>HP: <span id="char_hp">{{ character.hp }}/{{ character.max_hp }}</span></p>
+            <p>Speed: <span id="char_speed">{{ character.movement_left }}/{{ character.speed }}</span></p>
             <div class="spell-slots">
                 <p>Spell Slots:</p>
                 <p>Level 1: <span id="spell_slots_1">{{ character.spell_slots['1'] }}</span></p>
@@ -32,78 +32,85 @@
         </div>
         <div class="enemy-status">
             <h2>Enemy: {{ enemy.name }}</h2>
-            <p>HP: <span id="enemy_hp">{{ enemy.hp }}</span></p>
+            <p>HP: <span id="enemy_hp">{{ enemy.hp }}/{{ enemy.max_hp }}</span></p>
+            <p>Speed: {{ enemy.speed }}</p>
         </div>
     </div>
     
-    <!-- Add instruction for movement -->
+    <!-- Movement instructions -->
     <br>
-    <p id="instructions">Click and drag to plan movement. Click Apply Move to execute.</p>
+    <p id="instructions">Click and drag to plan movement. Movement cost: {{ game_rules.movement.base_cost }} speed per hex.</p>
     
-    <!-- Add this HTML before the canvas -->
+    <!-- Terrain controls -->
     <div class="terrain-controls">
-        <button onclick="changeTerrain('CAVE')" class="terrain-btn">Cave</button>
-        <button onclick="changeTerrain('FOREST')" class="terrain-btn">Forest</button>
-        <button onclick="changeTerrain('DESERT')" class="terrain-btn">Desert</button>
-        <button onclick="changeTerrain('WINTER')" class="terrain-btn">Winter</button>
+        {% for terrain_type in battlefield_config.terrain_types %}
+        <button onclick="changeTerrain('{{ terrain_type }}')" class="terrain-btn" 
+                {% if terrain_type == current_terrain %}data-active="true"{% endif %}>
+            {{ terrain_type.title() }}
+        </button>
+        {% endfor %}
     </div>
     
-    <!-- Canvas to draw a hexagonal battle grid -->
+    <!-- Battle grid canvas -->
     <canvas id="hexCanvas" width="800" height="600"></canvas>
     <br>
     
-    <!-- Unified controls section -->
+    <!-- Controls section -->
     <div class="controls">
         <div class="movement-controls">
-            <button id="applyMoveButton">Apply Move</button>
+            <button id="applyMoveButton">Apply Move (Cost: <span id="moveCost">0</span>)</button>
             <button id="endTurnButton">End Turn</button>
         </div>
         <div class="combat-controls">
             <div class="attack-options">
-                <h3>Choose Attack:</h3>
+                <h3>Basic Attacks:</h3>
+                {% for attack_name, attack in character.abilities.items() %}
                 <button 
-                    data-spell-type="spell"
-                    data-range="1"
-                    data-spell-name="Melee Attack"
-                    class="attack-button spell-btn">
-                    Melee Attack (Range: 1)
+                    data-attack-type="{{ attack_name }}"
+                    data-range="{{ attack.range }}"
+                    data-damage="{{ attack.damage }}"
+                    class="attack-button basic-attack">
+                    {{ attack.name }} (Range: {{ attack.range }}, Damage: {{ attack.damage }})
                 </button>
+                {% endfor %}
                 
                 <h3>Available Spells:</h3>
                 <div class="spell-buttons">
-                    <h4>Level 1 Spells</h4>
+                    <h4>Level 1 Spells (Cost: {{ game_rules.combat.spell_cost }} speed)</h4>
                     {% for spell_name, spell_data in spells_1lvl.items() %}
                     <button 
                         data-spell-type="spell"
                         data-spell-level="1"
                         data-range="{{ spell_data.range }}"
                         data-spell-name="{{ spell_name }}"
-                        class="attack-button spell-btn level-1">
+                        class="attack-button spell-btn level-1"
+                        {% if character.spell_slots['1'] < 1 %}disabled{% endif %}>
                         {{ spell_name }} (Range: {{ spell_data.range }} tiles)
                     </button>
                     {% endfor %}
                     
-                    <h4>Level 2 Spells</h4>
+                    <h4>Level 2 Spells (Cost: {{ game_rules.combat.spell_cost }} speed)</h4>
                     {% for spell_name, spell_data in spells_2lvl.items() %}
                     <button 
                         data-spell-type="spell"
                         data-spell-level="2"
                         data-range="{{ spell_data.range }}"
                         data-spell-name="{{ spell_name }}"
-                        class="attack-button spell-btn level-2">
+                        class="attack-button spell-btn level-2"
+                        {% if character.spell_slots['2'] < 1 %}disabled{% endif %}>
                         {{ spell_name }} (Range: {{ spell_data.range }} tiles)
                     </button>
                     {% endfor %}
                 </div>
             </div>
             <div class="action-buttons">
-                <button id="attackButton" disabled>Attack</button>
+                <button id="attackButton" disabled>Attack (Cost: {{ game_rules.combat.attack_cost }} speed)</button>
                 <button id="castSpellButton" disabled>Cast Spell</button>
             </div>
             <div id="attackPreview" style="display:none;"></div>
             <div id="diceControls" style="display:none;">
                 <button id="rollHitButton">Roll Hit (d20)</button>
-                <button id="rollDamageButton" style="display:none;">Roll Damage (d6)</button>
+                <button id="rollDamageButton" style="display:none;">Roll Damage</button>
             </div>
         </div>
     </div>
@@ -186,10 +193,6 @@
         cursor: not-allowed;
     }
 
-    h4 {
-        margin: 15px 0 5px 0;
-    }
-
     .terrain-controls {
         margin: 10px 0;
     }
@@ -202,6 +205,10 @@
         border-radius: 4px;
     }
     
+    .terrain-btn[data-active="true"] {
+        border: 2px solid #000;
+    }
+    
     .terrain-btn:hover {
         opacity: 0.8;
     }
@@ -212,785 +219,34 @@
         border-radius: 5px;
         margin: 10px 0;
     }
-
-    .level-1 {
-        background-color: #4CAF50;
-    }
-
-    .level-2 {
-        background-color: #2196F3;
-    }
-
-    .spell-btn[disabled] {
-        background-color: #cccccc !important;
-        cursor: not-allowed;
-    }
     </style>
     
+    <script>
+    // Pass configuration to JavaScript
+    const BATTLEFIELD_CONFIG = {{ battlefield_config|tojson|safe }};
+    const GAME_RULES = {{ game_rules|tojson|safe }};
+    const CURRENT_TERRAIN = "{{ current_terrain }}";
+    </script>
     <script src="{{ url_for('static', filename='js/hexgrid.js') }}"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Обработчик только для кнопок заклинаний
-            document.querySelectorAll('.spell-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    selectAttack(
-                        this.dataset.spellType,
-                        parseInt(this.dataset.range),
-                        this.dataset.spellName
-                    );
-                });
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize with current terrain
+        changeTerrain(CURRENT_TERRAIN);
+        
+        // Attack button handlers
+        document.querySelectorAll('.attack-button').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const attackType = this.dataset.attackType;
+                const range = parseInt(this.dataset.range);
+                const spellName = this.dataset.spellName;
+                
+                selectAttack(attackType, range, spellName);
             });
-            updateEndTurnButton();
-            drawHexGrid();
         });
         
-        // Добавим константы для разных типов местности
-        const TERRAIN_TYPES = {
-            CAVE: {
-                gridColor: '#3d3d3d',   // Серые стены
-                hexFill: {
-                    colors: ['#4a4a4a', '#545454', '#404040', '#4d4d4d'],  // Разные оттенки камня
-                    frequency: 0.7  // Частота смены оттенков
-                }
-            },
-            FOREST: {
-                gridColor: '#2d5a27',   // Цвет тропинок
-                hexFill: {
-                    colors: ['#2d5a27', '#1e4d2b', '#386641', '#1b4332'],  // Разные оттенки зелени
-                    frequency: 0.8
-                }
-            },
-            DESERT: {
-                gridColor: '#b38b6d',   // Цвет барханов
-                hexFill: {
-                    colors: ['#deb887', '#d2aa7d', '#c4976f', '#b38b6d'],  // Разные оттенки песка
-                    frequency: 0.9
-                }
-            },
-            WINTER: {
-                gridColor: '#b3d4d6',   // Цвет снежных границ
-                hexFill: {
-                    colors: ['#ffffff', '#f0f8ff', '#e6f3ff', '#d6eaff'],  // Разные оттенки снега
-                    frequency: 0.6
-                }
-            }
-        };
-
-        let currentTerrain = TERRAIN_TYPES.FOREST; // По умолчанию лес
-
-        // Добавим массив для хранения цветов гексагонов
-        let hexColors = [];
-
-        function initializeHexColors() {
-            hexColors = [];
-            for (let col = 0; col < gridCols; col++) {
-                hexColors[col] = [];
-                for (let row = 0; row < gridRows; row++) {
-                    let colors = currentTerrain.hexFill.colors;
-                    let colorIndex = Math.random() < currentTerrain.hexFill.frequency ? 
-                        Math.floor(Math.random() * colors.length) : 0;
-                    hexColors[col][row] = colors[colorIndex];
-                }
-            }
-        }
-
-        function changeTerrain(terrainType) {
-            currentTerrain = TERRAIN_TYPES[terrainType];
-            initializeHexColors(); // Генерируем новые цвета при смене биома
-            drawHexGrid();
-        }
-
-        function drawHexGrid() {
-            let canvas = document.getElementById("hexCanvas");
-            let ctx = canvas.getContext("2d");
-            
-            // Очищаем канвас белым цветом
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Если цвета еще не сгенерированы
-            if (hexColors.length === 0) {
-                initializeHexColors();
-            }
-            
-            let hexSize = 30;
-            let hexWidth = hexSize * 2;
-            let hexHeight = Math.sqrt(3) * hexSize;
-            
-            // Рисуем гексагональную сетку
-            for (let col = 0; col < gridCols; col++) {
-                for (let row = 0; row < gridRows; row++) {
-                    let x = col * hexWidth * 0.75 + hexSize;
-                    let y = row * hexHeight + ((col % 2) * hexHeight / 2) + hexSize;
-                    
-                    // Рисуем гексагон
-                    ctx.beginPath();
-                    for (let i = 0; i < 6; i++) {
-                        let angle = Math.PI / 3 * i;
-                        let xi = x + hexSize * Math.cos(angle);
-                        let yi = y + hexSize * Math.sin(angle);
-                        if (i === 0) {
-                            ctx.moveTo(xi, yi);
-                        } else {
-                            ctx.lineTo(xi, yi);
-                        }
-                    }
-                    ctx.closePath();
-                    
-                    // Используем сохраненный цвет
-                    ctx.fillStyle = hexColors[col][row];
-                    ctx.fill();
-                    
-                    ctx.strokeStyle = currentTerrain.gridColor;
-                    ctx.lineWidth = 1;
-                    ctx.stroke();
-                }
-            }
-            
-            // Заменяем highlightCell на новые функции
-            if (playerPos) {
-                drawPlayer(playerPos.col, playerPos.row);
-            }
-            if (enemyPos) {
-                drawEnemy(enemyPos.col, enemyPos.row);
-            }
-            
-            // Рисуем путь если он есть
-            if (currentPath && currentPath.length > 1) {
-                drawPath(currentPath);
-            }
-        }
-        
-        // Global variables for attack options and state
-        let playerActionTaken = false;
-        let selectedAttack = null;
-        let attackRange = 0;
-        let pendingHitRoll = null;
-        let pendingDamageRoll = null;
-        let movementTaken = false;
-
-        // Global variables for storing selected spell
-        let selectedSpellName = null;
-        let selectedSpellData = null;
-
-        // Global variables for target selection
-        let selectedSpellTarget = null;
-        let waitingForSpellTarget = false;
-
-        // Define grid dimensions for the hex grid
-        const gridCols = 10;
-        const gridRows = 8;
-
-        // Добавим функции для отрисовки персонажей
-        function drawPlayer(col, row) {
-            let canvas = document.getElementById("hexCanvas");
-            let ctx = canvas.getContext("2d");
-            let hexSize = 30;
-            let x = col * hexSize * 2 * 0.75 + hexSize;
-            let y = row * hexSize * Math.sqrt(3) + ((col % 2) * hexSize * Math.sqrt(3) / 2) + hexSize;
-            
-            // Рисуем круг для игрока
-            ctx.beginPath();
-            ctx.arc(x, y, hexSize/2, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
-            ctx.fill();
-            
-            // Добавляем свечение
-            ctx.shadowColor = '#00ff00';
-            ctx.shadowBlur = 15;
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-            
-            // Добавляем символ игрока
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 20px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('P', x, y);
-        }
-
-        function drawEnemy(col, row) {
-            let canvas = document.getElementById("hexCanvas");
-            let ctx = canvas.getContext("2d");
-            let hexSize = 30;
-            let x = col * hexSize * 2 * 0.75 + hexSize;
-            let y = row * hexSize * Math.sqrt(3) + ((col % 2) * hexSize * Math.sqrt(3) / 2) + hexSize;
-            
-            // Рисуем круг для врага
-            ctx.beginPath();
-            ctx.arc(x, y, hexSize/2, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
-            ctx.fill();
-            
-            // Добавляем свечение
-            ctx.shadowColor = '#ff0000';
-            ctx.shadowBlur = 15;
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-            
-            // Добавляем символ врага
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 20px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('E', x, y);
-        }
-
-        // Добавим функцию для удаления обработчиков
-        function removeMouseMoveHandlers() {
-            canvas.removeEventListener("mousemove", handleSpellAreaPreview);
-        }
-
-        // Создадим отдельную функцию для обработки перемещения мыши
-        function handleSpellAreaPreview(e) {
-            let cell = getCellFromPixel(e.clientX, e.clientY);
-            if (cell) {
-                clearHighlight();
-                
-                if (selectedSpellName === "Misty Step") {
-                    // Проверяем, что клетка не занята врагом
-                    if (cell.col === enemyPos.col && cell.row === enemyPos.row) {
-                        return;
-                    }
-                    // Подсвечиваем точку телепортации
-                    highlightCell(cell.col, cell.row, 'rgba(0, 255, 255, 0.3)');  // Голубая подсветка
-                    drawTargetingLine(playerPos, cell);  // Добавляем линию от игрока до точки телепортации
-                    selectedSpellTarget = cell;
-                    return;
-                }
-                
-                let distanceToTarget = Math.sqrt(
-                    Math.pow(cell.col - playerPos.col, 2) + 
-                    Math.pow(cell.row - playerPos.row, 2)
-                );
-                
-                if (distanceToTarget <= attackRange) {
-                    switch(selectedSpellName) {
-                        case "Ice Knife":
-                        case "Cloud of Daggers":
-                        case "Burning Hands":
-                            highlightArea3x3(cell, 'rgba(255, 0, 0, 0.3)');
-                            break;
-                            
-                        case "Chromatic Orb":
-                        case "Dragon's Breath":
-                            highlightRadius(cell, 2, 'rgba(255, 0, 0, 0.3)');
-                            break;
-                            
-                        case "Shatter":
-                            highlightRadius(cell, 1, 'rgba(255, 0, 0, 0.3)');
-                            break;
-                            
-                        case "Magic Missile":
-                        case "Hold Person":
-                        case "Scorching Ray":
-                            highlightCell(cell.col, cell.row, 'rgba(255, 0, 0, 0.3)');
-                            break;
-                        case "Melee Attack":
-                            highlightCell(cell.col, cell.row, 'rgba(255, 0, 0, 0.3)');
-                            selectedSpellTarget = cell;
-                            document.getElementById("castSpellButton").disabled = false;
-                            break;
-                    }
-                }
-            }
-        }
-
-        // Updated highlightCell function to draw a hexagon overlay with given color
-        function highlightCell(col, row, color = 'rgba(255, 255, 0, 0.3)') {
-            let ctx = canvas.getContext("2d");
-            let hexSize = 30;
-            let hexWidth = hexSize * 2;
-            let hexHeight = Math.sqrt(3) * hexSize;
-            let x = col * hexWidth * 0.75 + hexSize;
-            let y = row * hexHeight + ((col % 2) * hexHeight / 2) + hexSize;
-            ctx.beginPath();
-            for (let i = 0; i < 6; i++) {
-                let angle = Math.PI / 3 * i; // 60 degree intervals
-                let xi = x + hexSize * Math.cos(angle);
-                let yi = y + hexSize * Math.sin(angle);
-                if (i === 0) {
-                    ctx.moveTo(xi, yi);
-                } else {
-                    ctx.lineTo(xi, yi);
-                }
-            }
-            ctx.closePath();
-            ctx.fillStyle = color;
-            ctx.fill();
-            ctx.strokeStyle = 'black';
-            ctx.stroke();
-        }
-
-        function highlightArea3x3(center, color = 'rgba(255, 255, 0, 0.3)') {
-            for (let col = center.col - 1; col <= center.col + 1; col++) {
-                for (let row = center.row - 1; row <= center.row + 1; row++) {
-                    if (col >= 0 && col < gridCols && row >= 0 && row < gridRows) {
-                        highlightCell(col, row, color);
-                    }
-                }
-            }
-        }
-
-        function highlightRadius(center, radius, color = 'rgba(255, 255, 0, 0.3)') {
-            for (let col = 0; col < gridCols; col++) {
-                for (let row = 0; row < gridRows; row++) {
-                    let distance = Math.sqrt(
-                        Math.pow(col - center.col, 2) + 
-                        Math.pow(row - center.row, 2)
-                    );
-                    if (distance <= radius) {
-                        highlightCell(col, row, color);
-                    }
-                }
-            }
-        }
-
-        // Обновим функцию highlightSpellArea
-        function highlightSpellArea(spellName, range) {
-            clearHighlight();
-            removeMouseMoveHandlers();
-            
-            // Для Healing Word сразу активируем кнопку
-            if (spellName === "Healing Word") {
-                document.getElementById("castSpellButton").disabled = false;
-                return;
-            }
-            
-            // Для всех заклинаний, требующих выбора цели, добавляем обработчик
-            if (["Ice Knife", "Cloud of Daggers", "Chromatic Orb", "Scorching Ray", 
-                 "Shatter", "Dragon's Breath", "Hold Person", 
-                 "Magic Missile", "Burning Hands", "Thunderwave", "Melee Attack"].includes(spellName)) {
-                canvas.addEventListener("mousemove", handleSpellAreaPreview);
-            } else {
-                // Для заклинаний с фиксированной областью
-                switch(spellName) {
-                    case "Thunderwave":
-                        highlightArea3x3({col: playerPos.col, row: playerPos.row}, 'rgba(255, 0, 0, 0.3)');
-                        document.getElementById("castSpellButton").disabled = false;
-                        break;
-                    default:
-                        highlightRange(range);
-                }
-            }
-        }
-
-        // Updated selectAttack function already calls highlightRange or highlightSpellArea as needed
-        function selectAttack(type, range, spellName) {
-            selectedAttack = type;
-            attackRange = range;
-            selectedSpellName = spellName;
-            
-            // Включаем режим выбора цели
-            waitingForSpellTarget = true;
-            
-            // Добавляем обработчик движения мыши для предпросмотра
-            canvas.addEventListener("mousemove", handleSpellAreaPreview);
-            
-            // Активируем кнопку каста
-            document.getElementById("castSpellButton").disabled = true;
-            
-            // Показываем подсказку
-            addToBattleLog(`Select target for ${spellName}`);
-        }
-
-        function highlightAllExceptPlayer() {
-            for (let col = 0; col < gridCols; col++) {
-                for (let row = 0; row < gridRows; row++) {
-                    if (col !== playerPos.col || row !== playerPos.row) {
-                        highlightCell(col, row);
-                    }
-                }
-            }
-        }
-
-        // Add message to battle log
-        function addToBattleLog(message) {
-            let logDiv = document.getElementById("battleLog");
-            logDiv.innerHTML += "<p>" + message + "</p>";
-            logDiv.scrollTop = logDiv.scrollHeight;
-        }
-        
-        // Добавляем глобальные переменные для скорости
-        let maxSpeed = 30;
-        let currentSpeed = 30;
-
-        // Обновляем функцию applyMove
-        function applyMove() {
-            if (currentPath.length < 2) {
-                addToBattleLog("No path selected!");
-                return;
-            }
-            let dest = currentPath[currentPath.length - 1];
-            if (dest.col === enemyPos.col && dest.row === enemyPos.row) {
-                addToBattleLog("Cannot move onto enemy's square!");
-                return;
-            }
-            
-            let steps = currentPath.length - 1;
-            let moveCost = steps * 5;
-            
-            if (moveCost > currentSpeed) {
-                addToBattleLog(`Not enough speed! Need ${moveCost}, but have ${currentSpeed}`);
-                return;
-            }
-
-            // Применяем движение
-            playerPos = {col: dest.col, row: dest.row};
-            currentSpeed -= moveCost;
-            currentPath = [];
-            
-            // Обновляем отображение
-            drawHexGrid();
-            updateSpeedDisplay();
-            addToBattleLog(`Moved ${steps} tiles. Speed remaining: ${currentSpeed}`);
-        }
-
-        // Добавляем функцию обновления отображения скорости
-        function updateSpeedDisplay() {
-            document.getElementById("char_speed").innerText = currentSpeed;
-        }
-
-        // Добавим глобальную переменную для отслеживания использования заклинаний
-        let spellUsedThisTurn = false;
-
-        // Обновим обработчик кнопки Cast Spell
-        document.getElementById("castSpellButton").addEventListener("click", function() {
-            if (spellUsedThisTurn) {
-                addToBattleLog("You have already cast a spell this turn!");
-                return;
-            }
-            
-            if (!selectedSpellName || !selectedSpellTarget) {
-                addToBattleLog("No spell or target selected!");
-                return;
-            }
-
-            fetch("/api/cast_spell", {
-                method: "POST",
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    spell_name: selectedSpellName,
-                    target: {
-                        col: selectedSpellTarget.col,
-                        row: selectedSpellTarget.row
-                    }
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    addToBattleLog(data.error);
-                    return;
-                }
-                
-                // Помечаем, что заклинание использовано в этом ходу
-                spellUsedThisTurn = true;
-                
-                // Обновляем состояние игры
-                updateBattleStatus(data);
-                
-                // Если это был Misty Step, обновляем позицию игрока
-                if (selectedSpellName === "Misty Step") {
-                    playerPos = {col: selectedSpellTarget.col, row: selectedSpellTarget.row};
-                    addToBattleLog("Teleported successfully!");
-                }
-                
-                // Очищаем выбор заклинания
-                selectedSpellName = null;
-                selectedSpellTarget = null;
-                waitingForSpellTarget = false;
-                
-                // Обновляем отображение
-                drawHexGrid();
-                
-                // Отключаем кнопку
-                document.getElementById("castSpellButton").disabled = true;
-            });
-        });
-
-        // Обновляем обработчик End Turn, чтобы сбрасывать флаг использования заклинания
-        document.getElementById("endTurnButton").addEventListener("click", function() {
-            // Сбрасываем все флаги хода
-            currentPath = [];
-            selectedSpellName = null;
-            selectedSpellTarget = null;
-            waitingForSpellTarget = false;
-            spellUsedThisTurn = false; // Сбрасываем флаг использования заклинания
-            
-            // Восстанавливаем скорость
-            currentSpeed = maxSpeed;
-            updateSpeedDisplay();
-            
-            // Обновляем отображение
-            drawHexGrid();
-            addToBattleLog("Turn ended. Speed restored to " + maxSpeed);
-            
-            // Делаем ход противника
-            fetch("/api/enemy_attack", {
-                method: "POST",
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `player_col=${playerPos.col}&player_row=${playerPos.row}`
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.combat_log) {
-                    addToBattleLog(data.combat_log);
-                }
-                if (data.enemy_pos) {
-                    enemyPos = data.enemy_pos;
-                    drawHexGrid();
-                }
-                if (data.character_hp !== undefined) {
-                    document.getElementById("char_hp").innerText = data.character_hp;
-                }
-            });
-        });
-
-        // Обновляем функцию updateEndTurnButton
-        function updateEndTurnButton() {
-            document.getElementById("endTurnButton").disabled = false;
-        }
-
-        // Обновляем функцию updateBattleStatus
-        function updateBattleStatus(data) {
-            if (data.combat_log) {
-                addToBattleLog(data.combat_log);
-            }
-            
-            if (data.character_hp !== undefined) {
-                document.getElementById("char_hp").innerText = data.character_hp;
-            }
-            
-            if (data.enemy_hp !== undefined) {
-                document.getElementById("enemy_hp").innerText = data.enemy_hp;
-            }
-            
-            if (data.spell_slots !== undefined) {
-                updateSpellSlots(data.spell_slots);
-            }
-            
-            // Проверяем условия победы/поражения только если HP явно равно 0
-            if (data.character_hp === 0) {
-                addToBattleLog("You have been defeated!");
-                endBattle(false);
-            }
-            if (data.enemy_hp === 0) {
-                addToBattleLog("Enemy defeated!");
-                endBattle(true);
-            }
-            
-            // Обновляем состояние кнопки End Turn
-            updateEndTurnButton();
-        }
-
-        function endBattle(victory) {
-            // Disable all controls
-            document.querySelectorAll('button').forEach(btn => btn.disabled = true);
-            
-            // Show victory/defeat message
-            const message = victory ? "Victory! Battle ended." : "Defeat! Battle ended.";
-            addToBattleLog(message);
-            
-            // Optional: Add a button to return to main screen
-            const returnButton = document.createElement('button');
-            returnButton.innerText = "Return to Main Screen";
-            returnButton.onclick = () => window.location.href = '/';
-            document.body.appendChild(returnButton);
-        }
-
-        // New function to update the grid and persistently highlight the selected target
-        function updateGrid() {
-            drawHexGrid();
-            if (selectedSpellTarget) {
-                highlightTargetEffect(selectedSpellTarget);
-            }
-        }
-
-        // Добавьте эти функции после объявления глобальных переменных
-
-        // Функция для вычисления пути между двумя точками
-        function computePath(start, end) {
-            // Получаем соседей для гексагональной клетки
-            function getHexNeighbors(cell) {
-                let neighbors = [];
-                let directions = cell.col % 2 === 0 ? [
-                    {col: 0, row: -1}, {col: 1, row: -1}, {col: 1, row: 0},
-                    {col: 0, row: 1}, {col: -1, row: 0}, {col: -1, row: -1}
-                ] : [
-                    {col: 0, row: -1}, {col: 1, row: 0}, {col: 1, row: 1},
-                    {col: 0, row: 1}, {col: -1, row: 1}, {col: -1, row: 0}
-                ];
-                
-                for (let dir of directions) {
-                    let newCol = cell.col + dir.col;
-                    let newRow = cell.row + dir.row;
-                    if (newCol >= 0 && newCol < gridCols && newRow >= 0 && newRow < gridRows) {
-                        neighbors.push({col: newCol, row: newRow});
-                    }
-                }
-                return neighbors;
-            }
-
-            // Вычисляем расстояние между двумя гексами
-            function hexDistance(a, b) {
-                let dx = Math.abs(a.col - b.col);
-                let dy = Math.abs(a.row - b.row);
-                return dx + Math.max(0, (dy - dx) / 2);
-            }
-
-            let queue = [{
-                pos: start,
-                path: [start],
-                cost: 0
-            }];
-            let visited = new Set();
-            
-            while (queue.length > 0) {
-                queue.sort((a, b) => 
-                    (a.cost + hexDistance(a.pos, end)) - (b.cost + hexDistance(b.pos, end))
-                );
-                let current = queue.shift();
-                
-                let posKey = `${current.pos.col},${current.pos.row}`;
-                if (visited.has(posKey)) continue;
-                visited.add(posKey);
-                
-                if (current.pos.col === end.col && current.pos.row === end.row) {
-                    return current.path;
-                }
-                
-                for (let neighbor of getHexNeighbors(current.pos)) {
-                    queue.push({
-                        pos: neighbor,
-                        path: [...current.path, neighbor],
-                        cost: current.cost + 1
-                    });
-                }
-            }
-            
-            return [start]; // Возвращаем только начальную позицию, если путь не найден
-        }
-
-        // Добавьте обработчики для движения
-        canvas.addEventListener("mousedown", function(e) {
-            if (waitingForSpellTarget) return; // Не рисуем путь если выбираем цель для заклинания
-            
-            drawingPath = true;
-            let cell = getCellFromPixel(e.clientX, e.clientY);
-            if (cell) {
-                currentPath = [playerPos];
-                drawHexGrid();
-            }
-        });
-
-        canvas.addEventListener("mousemove", function(e) {
-            if (!drawingPath || waitingForSpellTarget) return;
-            
-            let cell = getCellFromPixel(e.clientX, e.clientY);
-            if (cell) {
-                currentPath = computePath(playerPos, cell);
-                drawHexGrid();
-                drawPath(currentPath);
-                
-                // Показываем длину пути
-                let steps = currentPath.length - 1;
-                let canvas = document.getElementById("hexCanvas");
-                let ctx = canvas.getContext("2d");
-                ctx.fillStyle = steps > 6 ? "red" : "green";
-                ctx.font = "14px Arial";
-                ctx.fillText(`Path: ${steps} tiles`, 10, 20);
-            }
-        });
-
-        canvas.addEventListener("mouseup", function() {
-            drawingPath = false;
-        });
-
-        // Добавьте кнопке Apply Move обработчик
-        document.getElementById("applyMoveButton").addEventListener("click", function() {
-            applyMove();
-        });
-
-        function drawPath(path) {
-            if (!path || path.length < 2) return;
-            
-            let ctx = canvas.getContext("2d");
-            let hexSize = 30;
-            
-            // Рисуем линию пути
-            ctx.beginPath();
-            ctx.moveTo(
-                path[0].col * hexSize * 2 * 0.75 + hexSize,
-                path[0].row * hexSize * Math.sqrt(3) + ((path[0].col % 2) * hexSize * Math.sqrt(3) / 2) + hexSize
-            );
-            
-            for (let i = 1; i < path.length; i++) {
-                let x = path[i].col * hexSize * 2 * 0.75 + hexSize;
-                let y = path[i].row * hexSize * Math.sqrt(3) + ((path[i].col % 2) * hexSize * Math.sqrt(3) / 2) + hexSize;
-                ctx.lineTo(x, y);
-            }
-            
-            ctx.strokeStyle = "rgba(0, 255, 0, 0.6)";
-            ctx.lineWidth = 3;
-            ctx.stroke();
-            
-            // Рисуем точки на пути
-            for (let i = 0; i < path.length; i++) {
-                let x = path[i].col * hexSize * 2 * 0.75 + hexSize;
-                let y = path[i].row * hexSize * Math.sqrt(3) + ((path[i].col % 2) * hexSize * Math.sqrt(3) / 2) + hexSize;
-                
-                ctx.beginPath();
-                ctx.arc(x, y, 4, 0, Math.PI * 2);
-                ctx.fillStyle = "rgba(0, 255, 0, 0.8)";
-                ctx.fill();
-            }
-        }
-
-        canvas.addEventListener("click", function(e) {
-            if (waitingForSpellTarget) {
-                let cell = getCellFromPixel(e.clientX, e.clientY);
-                if (cell) {
-                    let distanceToTarget = Math.sqrt(
-                        Math.pow(cell.col - playerPos.col, 2) + 
-                        Math.pow(cell.row - playerPos.row, 2)
-                    );
-                    
-                    if (distanceToTarget <= attackRange) {
-                        if (selectedSpellName === "Healing Word") {
-                            selectedSpellTarget = playerPos;
-                        } else {
-                            selectedSpellTarget = cell;
-                        }
-                        document.getElementById("castSpellButton").disabled = false;
-                        addToBattleLog(`Target selected at (${cell.col}, ${cell.row})`);
-                    } else {
-                        addToBattleLog("Target is out of range!");
-                    }
-                }
-            }
-        });
-
-        function updateSpellSlots(spellSlots) {
-            document.getElementById('spell_slots_1').textContent = spellSlots['1'];
-            document.getElementById('spell_slots_2').textContent = spellSlots['2'];
-            
-            // Отключаем кнопки заклинаний, если нет доступных ячеек
-            document.querySelectorAll('.spell-btn').forEach(btn => {
-                const level = btn.dataset.spellLevel;
-                if (spellSlots[level] <= 0) {
-                    btn.disabled = true;
-                }
-            });
-        }
+        updateEndTurnButton();
+        drawHexGrid();
+    });
     </script>
 </body>
 </html> 

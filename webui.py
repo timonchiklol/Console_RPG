@@ -2,41 +2,24 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 import random
 import math
 from dnd_spells import spells_1lvl, spells_2lvl, basic_attacks
-from gemini import Gemini  # Добавляем импорт Gemini
+from gemini import Gemini
 from dotenv import load_dotenv
 import os
+from config import BATTLEFIELD, PLAYER, ENEMIES, GAME_RULES  # Import our new config
 
 app = Flask(__name__)
 app.secret_key = 'secret-key-for-session'
 
-# Загружаем переменные окружения из .env файла
+# Load environment variables
 load_dotenv()
 
-# Добавим в начало файла константы для атак противника
-ENEMY_ATTACKS = {
-    "Bow Attack": {
-        "damage": "1d6",
-        "range": 4,
-        "description": "shoots an arrow"
-    },
-    "Melee Attack": {
-        "damage": "1d8",
-        "range": 1,
-        "description": "strikes with fists"
-    }
-}
-
-# Добавим константу для скорости противника
-ENEMY_SPEED = 25  # 5 клеток в ход
-hp = 100
-# Получаем API ключ из переменных окружения
+# Initialize Gemini AI with updated enemy configuration
 gemini = Gemini(
     API_KEY=os.getenv('GEMINI_API_KEY'),
-    system_instruction="""You are a D&D combat AI controlling a enemy.
+    system_instruction=f"""You are a D&D combat AI controlling a enemy.
 Your goal is to make tactical decisions based on position and range.
-The goblin has two attacks:
-1. Bow Attack (1d6 damage, 4 tiles range)
-2. Melee Attack (1d8 damage, 1 tile range)
+The enemy has these attacks:
+{ENEMIES['goblin']['abilities']}
 
 Choose the best action based on:
 1. Distance to player
@@ -44,13 +27,14 @@ Choose the best action based on:
 3. Tactical advantage
 
 Respond with a JSON object containing:
-{
-    "action": "move/bow_attack/melee_attack",
-    "target_position": {"col": x, "row": y},
-    "attack_type": "Bow Attack/Melee Attack",
+{{
+    "action": "move/attack",
+    "target_position": {{"col": x, "row": y}},
+    "attack_type": "attack_name",
     "combat_log": "Description of enemy's actions"
-}
-""")
+}}
+"""
+)
 
 def get_neighbors(cell):
     """Get neighboring cells. Accepts either a tuple (col, row) or a dict with col/row keys"""
@@ -64,7 +48,7 @@ def get_neighbors(cell):
         neighbors = [(col, row-1), (col, row+1), (col+1, row-1), (col+1, row), (col-1, row-1), (col-1, row)]
     else:
         neighbors = [(col, row-1), (col, row+1), (col+1, row), (col+1, row+1), (col-1, row), (col-1, row+1)]
-    return [(c, r) for (c, r) in neighbors if 0 <= c < 10 and 0 <= r < 8]
+    return [(c, r) for (c, r) in neighbors if 0 <= c < BATTLEFIELD['dimensions']['cols'] and 0 <= r < BATTLEFIELD['dimensions']['rows']]
 
 def compute_path(start_col, start_row, target_col, target_row, max_steps=None):
     """Compute path from start to target using BFS, limited by max_steps"""
@@ -98,57 +82,57 @@ def compute_path(start_col, start_row, target_col, target_row, max_steps=None):
                 new_path = path + [(next_col, next_row)]
                 queue.append((next_col, next_row, new_path))
     
-    # Return the path that gets closest to target
     return best_path
 
-# Route for character creation – collects basic DnD-like attributes.
 @app.route("/", methods=["GET", "POST"])
 def character_creation():
     if request.method == "POST":
         name = request.form.get("name", "Adventurer")
-        strength = int(request.form.get("strength", 10))
-        dexterity = int(request.form.get("dexterity", 10))
-        constitution = int(request.form.get("constitution", 10))
-        intelligence = int(request.form.get("intelligence", 10))
-        wisdom = int(request.form.get("wisdom", 10))
-        charisma = int(request.form.get("charisma", 10))
-        # Save character in session
-        session['character'] = {
+        
+        # Initialize character from config
+        character = {
             'name': name,
-            'strength': strength,
-            'dexterity': dexterity,
-            'constitution': constitution,
-            'intelligence': intelligence,
-            'wisdom': wisdom,
-            'charisma': charisma,
-            'hp': hp,
-            'max_hp': hp,
-            'spell_slots': {
-                '1': 4,  # 4 ячейки 1-го уровня
-                '2': 2   # 2 ячейки 2-го уровня
-            },
-            'pos': {'col': 5, 'row': 1},
-            'speed': 30,
-            'movement_left': 30,
+            'hp': PLAYER['stats']['hp'],
+            'max_hp': PLAYER['stats']['max_hp'],
+            'speed': PLAYER['stats']['speed'],
+            'movement_left': PLAYER['stats']['speed'],
+            'spell_slots': PLAYER['spell_slots'].copy(),
+            'pos': PLAYER['starting_position'].copy(),
+            'abilities': PLAYER['abilities'].copy(),  # Add abilities from config
+            'ability_scores': {
+                'strength': int(request.form.get('strength', PLAYER['stats']['strength'])),
+                'dexterity': int(request.form.get('dexterity', PLAYER['stats']['dexterity'])),
+                'constitution': int(request.form.get('constitution', PLAYER['stats']['constitution'])),
+                'intelligence': int(request.form.get('intelligence', PLAYER['stats']['intelligence'])),
+                'wisdom': int(request.form.get('wisdom', PLAYER['stats']['wisdom'])),
+                'charisma': int(request.form.get('charisma', PLAYER['stats']['charisma']))
+            }
         }
-        # Create a simple enemy for demonstration with position
-        session['enemy'] = {
-            'name': 'Goblin',
-            'hp': 75,
-            'attack': 4,
-            'pos': {'col': 5, 'row': 4},
-            'speed': ENEMY_SPEED,
-            'movement_left': ENEMY_SPEED
+        
+        # Initialize enemy from config (using goblin as default)
+        enemy_type = 'goblin'
+        enemy = {
+            'name': ENEMIES[enemy_type]['name'],
+            'hp': ENEMIES[enemy_type]['stats']['hp'],
+            'max_hp': ENEMIES[enemy_type]['stats']['max_hp'],
+            'speed': ENEMIES[enemy_type]['stats']['speed'],
+            'movement_left': ENEMIES[enemy_type]['stats']['speed'],
+            'pos': ENEMIES[enemy_type]['position'].copy(),
+            'abilities': ENEMIES[enemy_type]['abilities'].copy()
         }
-        # Добавляем словарь для отслеживания эффектов
+        
+        # Save to session
+        session['character'] = character
+        session['enemy'] = enemy
         session['effects'] = {
-            'enemy': {},  # эффекты на враге
-            'player': {}  # эффекты на игроке
+            'enemy': {},  # effects on enemy
+            'player': {}  # effects on player
         }
+        session['current_terrain'] = BATTLEFIELD['default_terrain']
+        
         return redirect(url_for("battle"))
     return render_template("create.html")
 
-# Route for battle – shows the character and enemy status and a hexagonal battle field.
 @app.route("/battle", methods=["GET"])
 def battle():
     if 'character' not in session:
@@ -156,40 +140,38 @@ def battle():
     
     # Initialize enemy if not exists
     if 'enemy' not in session:
+        enemy_type = 'goblin'
         session['enemy'] = {
-            'name': 'Goblin',
-            'hp': hp,
-            'pos': {'col': 5, 'row': 4},
-            'speed': ENEMY_SPEED,
-            'movement_left': ENEMY_SPEED
+            'name': ENEMIES[enemy_type]['name'],
+            'hp': ENEMIES[enemy_type]['stats']['hp'],
+            'max_hp': ENEMIES[enemy_type]['stats']['max_hp'],
+            'speed': ENEMIES[enemy_type]['stats']['speed'],
+            'movement_left': ENEMIES[enemy_type]['stats']['speed'],
+            'pos': ENEMIES[enemy_type]['position'].copy(),
+            'abilities': ENEMIES[enemy_type]['abilities'].copy()
         }
     
-    # Инициализируем эффекты, если их нет
+    # Initialize effects if not exists
     if 'effects' not in session:
         session['effects'] = {
             'enemy': {},
             'player': {}
         }
     
-    # Добавляем ability_scores в character, если их нет
-    if 'ability_scores' not in session['character']:
-        session['character']['ability_scores'] = {
-            'strength': session['character'].get('strength', 10),
-            'dexterity': session['character'].get('dexterity', 10),
-            'constitution': session['character'].get('constitution', 10),
-            'intelligence': session['character'].get('intelligence', 10),
-            'wisdom': session['character'].get('wisdom', 10),
-            'charisma': session['character'].get('charisma', 10)
-        }
+    # Initialize terrain if not exists
+    if 'current_terrain' not in session:
+        session['current_terrain'] = BATTLEFIELD['default_terrain']
     
-    # Добавляем переменную lang для шаблона
     return render_template('battle.html', 
-        character=session['character'], 
+        character=session['character'],
         enemy=session['enemy'],
         spells_1lvl=spells_1lvl,
         spells_2lvl=spells_2lvl,
         basic_attacks=basic_attacks,
-        lang='en'  # Добавляем язык по умолчанию
+        battlefield_config=BATTLEFIELD,
+        current_terrain=session['current_terrain'],
+        game_rules=GAME_RULES,
+        lang='en'
     )
 
 # Add new roll_dice endpoint
@@ -208,34 +190,55 @@ def api_attack():
     character = session['character']
     enemy = session['enemy']
     
+    # Get attack type from request
+    attack_type = request.form.get("attack_type", "melee_attack")
+    
+    # Get the attack configuration
+    if attack_type in PLAYER['abilities']:
+        attack_config = PLAYER['abilities'][attack_type]
+    else:
+        return jsonify({"error": "Invalid attack type"})
+    
+    # Check if we have enough speed for the attack
+    attack_cost = GAME_RULES['combat']['attack_cost']
+    if character['movement_left'] < attack_cost:
+        return jsonify({"error": "Not enough speed for attack"})
+    
     hit_roll = request.form.get("hit_roll")
     damage_roll = request.form.get("damage_roll")
     
     if hit_roll is not None and damage_roll is not None:
         hit_roll = int(hit_roll)
         damage_roll = int(damage_roll)
-        if hit_roll >= 10:
+        if hit_roll >= 10:  # TODO: Use proper AC calculation
             enemy['hp'] -= damage_roll
-            combat_log = f"You attacked and dealt {damage_roll} damage."
+            combat_log = f"You used {attack_config['name']} and dealt {damage_roll} damage."
         else:
-            combat_log = "Your attack missed!"
+            combat_log = f"Your {attack_config['name']} missed!"
     else:
-        # fallback auto-roll if manual roll not provided
+        # Fallback auto-roll if manual roll not provided
         roll = random.randint(1, 20)
-        if roll >= 10:
-            damage = random.randint(1, 6)
+        if roll >= 10:  # TODO: Use proper AC calculation
+            # Parse damage dice (e.g., "1d6")
+            dice_count, dice_sides = map(int, attack_config['damage'].split('d'))
+            damage = sum(random.randint(1, dice_sides) for _ in range(dice_count))
             enemy['hp'] -= damage
-            combat_log = f"You attacked and dealt {damage} damage."
+            combat_log = f"You used {attack_config['name']} and dealt {damage} damage."
         else:
-            combat_log = "Your attack missed!"
+            combat_log = f"Your {attack_config['name']} missed!"
+    
+    # Deduct speed cost
+    character['movement_left'] -= attack_cost
     
     session['character'] = character
     session['enemy'] = enemy
+    
     return jsonify({
         "combat_log": combat_log,
         "character_hp": character['hp'],
         "enemy_hp": enemy['hp'],
-        "enemy_defeated": enemy['hp'] <= 0
+        "enemy_defeated": enemy['hp'] <= 0,
+        "movement_left": character['movement_left']
     })
 
 # Обновляем функцию api_enemy_attack, добавляем обработку новых эффектов
@@ -247,32 +250,38 @@ def api_enemy_attack():
         effects = session.get('effects', {'enemy': {}, 'player': {}})
         combat_log = ""
         
-        # Проверяем эффекты на противнике
+        # Check effects on enemy
         enemy_effects = effects['enemy']
         
-        # Обработка урона от эффектов
+        # Process damage from effects
         if 'burning' in enemy_effects:
-            enemy['hp'] -= 2
-            combat_log += "Enemy takes 2 damage from burning! "
+            damage = GAME_RULES['effects']['burning']['damage']
+            enemy['hp'] -= damage
+            combat_log += f"Enemy takes {damage} damage from burning! "
             
-            # Проверяем, нужно ли снять эффект Hold Person
-            if 'paralyze' in enemy_effects and enemy_effects['paralyze'].get('breaks_on_damage'):
-                del enemy_effects['paralyze']
-                combat_log += "Hold Person effect breaks from damage! "
-            
-        if 'bleeding' in enemy_effects:
-            enemy['hp'] -= 1
-            combat_log += "Enemy takes 1 damage from bleeding! "
-            
-            # Также проверяем Hold Person
-            if 'paralyze' in enemy_effects and enemy_effects['paralyze'].get('breaks_on_damage'):
+            # Check if Hold Person effect should break
+            if 'paralyze' in enemy_effects and GAME_RULES['effects']['paralyze']['breaks_on_damage']:
                 del enemy_effects['paralyze']
                 combat_log += "Hold Person effect breaks from damage! "
         
-        # Если противник парализован, заморожен, испуган или оглушен
+        if 'bleeding' in enemy_effects:
+            damage = GAME_RULES['effects'].get('bleeding', {}).get('damage', 1)
+            enemy['hp'] -= damage
+            combat_log += f"Enemy takes {damage} damage from bleeding! "
+            
+            # Check Hold Person
+            if 'paralyze' in enemy_effects and GAME_RULES['effects']['paralyze']['breaks_on_damage']:
+                del enemy_effects['paralyze']
+                combat_log += "Hold Person effect breaks from damage! "
+        
+        # Check if enemy is under control effects
         if any(effect in enemy_effects for effect in ['paralyze', 'frozen', 'fear', 'stunned']):
             if 'fear' in enemy_effects:
-                damage = random.randint(1, 8)
+                # Use enemy's own attack against itself
+                enemy_type = enemy.get('name', 'goblin').lower()
+                attack = list(ENEMIES[enemy_type]['abilities'].values())[0]
+                dice_count, dice_sides = map(int, attack['damage'].split('d'))
+                damage = sum(random.randint(1, dice_sides) for _ in range(dice_count))
                 enemy['hp'] -= damage
                 combat_log += f"Enemy is feared and attacks itself for {damage} damage! "
             elif 'frozen' in enemy_effects:
@@ -282,13 +291,13 @@ def api_enemy_attack():
             else:
                 combat_log += "Enemy is paralyzed and cannot move or attack! "
             
-            # Уменьшаем длительность эффектов
+            # Reduce effect durations
             for effect_name in list(enemy_effects.keys()):
                 effect = enemy_effects[effect_name]
                 effect['duration'] -= 1
                 if effect['duration'] <= 0:
                     del enemy_effects[effect_name]
-                    combat_log += f"\nEnemy is no longer {effect_name}! "
+                    combat_log += f"Enemy is no longer {effect_name}! "
             
             effects['enemy'] = enemy_effects
             session['effects'] = effects
@@ -302,12 +311,44 @@ def api_enemy_attack():
                 "enemy_pos": enemy['pos']
             })
         
-        # Обычная атака если нет эффектов
-        damage = random.randint(1, 8)
-        character['hp'] -= damage
-        combat_log += f"Enemy attacks and deals {damage} damage!"
+        # Normal attack if no control effects
+        enemy_type = enemy.get('name', 'goblin').lower()
+        available_attacks = ENEMIES[enemy_type]['abilities']
+        
+        # Choose attack based on range to player
+        player_pos = character['pos']
+        enemy_pos = enemy['pos']
+        distance = math.sqrt((player_pos['col'] - enemy_pos['col'])**2 + 
+                           (player_pos['row'] - enemy_pos['row'])**2)
+        
+        # Select best attack based on range
+        selected_attack = None
+        for attack in available_attacks.values():
+            if attack['range'] >= distance:
+                selected_attack = attack
+                break
+        
+        if not selected_attack:
+            combat_log += "Enemy is too far to attack!"
+            return jsonify({
+                "combat_log": combat_log,
+                "character_hp": character['hp'],
+                "enemy_hp": enemy['hp'],
+                "enemy_pos": enemy['pos']
+            })
+        
+        # Roll attack
+        roll = random.randint(1, 20)
+        if roll >= 10:  # TODO: Use proper AC calculation
+            dice_count, dice_sides = map(int, selected_attack['damage'].split('d'))
+            damage = sum(random.randint(1, dice_sides) for _ in range(dice_count))
+            character['hp'] -= damage
+            combat_log += f"Enemy uses {selected_attack['name']} and deals {damage} damage! "
+        else:
+            combat_log += f"Enemy's {selected_attack['name']} missed! "
         
         session['character'] = character
+        session['enemy'] = enemy
         session['effects'] = effects
         session.modified = True
         
@@ -317,7 +358,7 @@ def api_enemy_attack():
             "enemy_hp": enemy['hp'],
             "enemy_pos": enemy['pos']
         })
-
+        
     except Exception as e:
         print(f"Error in enemy attack: {e}")
         return jsonify({"error": f"Enemy attack error: {str(e)}"})
