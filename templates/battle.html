@@ -6,59 +6,54 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="game-container">
-        <div class="status-panel">
-            <div class="character-status">
-                <h2>Character: <span id="char_name">{{ character.name }}</span></h2>
-                <p>HP: <span id="char_hp">{{ character.hp }}/{{ character.max_hp }}</span></p>
-                <p>Speed: <span id="char_speed">{{ character.movement_left }}/{{ character.speed }}</span></p>
-                <div class="spell-slots">
-                    <p>Spell Slots:</p>
-                    <p>Level 1: <span id="spell_slots_1">{{ character.spell_slots['1'] }}</span></p>
-                    <p>Level 2: <span id="spell_slots_2">{{ character.spell_slots['2'] }}</span></p>
-                </div>
-                <div class="ability-scores">
-                    <h3>Ability Scores</h3>
-                    <div class="scores-grid">
-                        <div>STR: <span id="ability_strength">{{ character.ability_scores.strength }}</span></div>
-                        <div>DEX: <span id="ability_dexterity">{{ character.ability_scores.dexterity }}</span></div>
-                        <div>CON: <span id="ability_constitution">{{ character.ability_scores.constitution }}</span></div>
-                        <div>INT: <span id="ability_intelligence">{{ character.ability_scores.intelligence }}</span></div>
-                        <div>WIS: <span id="ability_wisdom">{{ character.ability_scores.wisdom }}</span></div>
-                        <div>CHA: <span id="ability_charisma">{{ character.ability_scores.charisma }}</span></div>
+    <div class="game-container bg-gray-900">
+        <header class="bg-gray-800 border-b border-gray-700 p-4">
+            <div class="container mx-auto">
+                <div class="status-panel">
+                    <div class="character-status">
+                        <h2>{{ character.name }}</h2>
+                        <p>HP: <span id="char_hp">{{ character.hp }}/{{ character.max_hp }}</span></p>
+                        <p>Speed: <span id="char_speed">{{ character.movement_left }}/{{ character.speed }}</span></p>
+                        <div class="spell-slots">
+                            <p>Spell Slots:</p>
+                            <p>Level 1: <span id="spell_slots_1">{{ character.spell_slots['1'] }}</span></p>
+                            <p>Level 2: <span id="spell_slots_2">{{ character.spell_slots['2'] }}</span></p>
+                        </div>
+                        <div class="ability-scores">
+                            <h3>Ability Scores</h3>
+                            <div class="scores-grid">
+                                <div>STR: <span id="ability_strength">{{ character.ability_scores.strength }}</span></div>
+                                <div>DEX: <span id="ability_dexterity">{{ character.ability_scores.dexterity }}</span></div>
+                                <div>CON: <span id="ability_constitution">{{ character.ability_scores.constitution }}</span></div>
+                                <div>INT: <span id="ability_intelligence">{{ character.ability_scores.intelligence }}</span></div>
+                                <div>WIS: <span id="ability_wisdom">{{ character.ability_scores.wisdom }}</span></div>
+                                <div>CHA: <span id="ability_charisma">{{ character.ability_scores.charisma }}</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="enemy-status">
+                        <h2>Enemy: {{ enemy.name }}</h2>
+                        <p>HP: <span id="enemy_hp">{{ enemy.hp }}/{{ enemy.max_hp }}</span></p>
+                        <p>Speed: <span id="enemy_speed">{{ enemy.speed }}</span></p>
                     </div>
                 </div>
             </div>
-            <div class="enemy-status">
-                <h2>Enemy: <span id="enemy_name">{{ enemy.name }}</span></h2>
-                <p>HP: <span id="enemy_hp">{{ enemy.hp }}/{{ enemy.max_hp }}</span></p>
-                <p>Speed: <span id="enemy_speed">{{ enemy.speed }}</span></p>
-            </div>
-        </div>
+        </header>
         
         <div class="game-area">
-            <p id="instructions">Click and drag to plan movement. Movement cost: {{ game_rules.movement.base_cost }} speed per hex.</p>
-            
-            <div class="terrain-controls">
-                {% for terrain_type in battlefield_config.terrain_types %}
-                <button class="terrain-btn" data-terrain="{{ terrain_type }}" 
-                        {% if terrain_type == current_terrain %}data-active="true"{% endif %}>
-                    {{ terrain_type.title() }}
-                </button>
-                {% endfor %}
-            </div>
+            <p id="instructions" class="text-amber-100">Click and drag from your character to plan movement. Movement cost: {{ game_rules.movement.base_cost }} speed per hex.</p>
             
             <canvas id="hexCanvas" width="800" height="600"></canvas>
             
             <div class="controls">
                 <div class="movement-controls">
-                    <button id="applyMoveButton">Apply Move (<span id="moveCost">0</span>)</button>
-                    <button id="endTurnButton">End Turn</button>
+                    <button id="applyMoveButton" class="action-button">Apply Move (<span id="moveCost">0</span>)</button>
+                    <button id="endTurnButton" class="action-button">End Turn</button>
                 </div>
                 
                 <div class="combat-controls">
                     <div class="attack-options">
-                        <h3>Basic Attacks</h3>
+                        <h3 class="text-amber-100">Basic Attacks</h3>
                         <div class="basic-attacks">
                             {% for attack_name, attack in character.abilities.items() %}
                             <button class="attack-button basic-attack" 
@@ -71,10 +66,10 @@
                             {% endfor %}
                         </div>
                         
-                        <h3>Spells</h3>
+                        <h3 class="text-amber-100">Spells</h3>
                         <div class="spell-list">
                             <div class="level-1-spells">
-                                <h4>Level 1 Spells</h4>
+                                <h4 class="text-amber-200">Level 1 Spells</h4>
                                 {% for spell_name, spell_data in spells_1lvl.items() %}
                                 <button class="attack-button spell-btn level-1"
                                         data-spell-name="{{ spell_name }}"
@@ -88,7 +83,7 @@
                             </div>
                             
                             <div class="level-2-spells">
-                                <h4>Level 2 Spells</h4>
+                                <h4 class="text-amber-200">Level 2 Spells</h4>
                                 {% for spell_name, spell_data in spells_2lvl.items() %}
                                 <button class="attack-button spell-btn level-2"
                                         data-spell-name="{{ spell_name }}"
@@ -101,24 +96,24 @@
                                 {% endfor %}
                             </div>
                         </div>
-                    </div>
-                    
-                    <div class="action-buttons">
-                        <button id="attackButton" disabled>Attack</button>
-                        <button id="castSpellButton" disabled>Cast Spell</button>
-                    </div>
-                    
-                    <div id="attackPreview" class="hidden"></div>
-                    <div id="diceControls" class="hidden">
-                        <button id="rollHitButton">Roll Hit (d20)</button>
-                        <button id="rollDamageButton">Roll Damage</button>
+                        
+                        <div class="action-buttons">
+                            <button id="attackButton" class="action-button" disabled>Attack</button>
+                            <button id="castSpellButton" class="action-button" disabled>Cast Spell</button>
+                        </div>
+                        
+                        <div id="attackPreview" class="hidden"></div>
+                        <div id="diceControls" class="hidden">
+                            <button id="rollHitButton" class="action-button">Roll Hit (d20)</button>
+                            <button id="rollDamageButton" class="action-button">Roll Damage</button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
         
         <div class="battle-log">
-            <h3>Battle Log</h3>
+            <h3 class="text-amber-100">Battle Log</h3>
             <div id="battleLog"></div>
         </div>
     </div>

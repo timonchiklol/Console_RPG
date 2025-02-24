@@ -482,7 +482,13 @@ canvas.addEventListener("mousedown", function(e) {
     if (hasMoved) {
         return;  // Don't allow path drawing if already moved
     }
-    let cell = getCellFromPixel(e.clientX, e.clientY);
+    
+    let rect = canvas.getBoundingClientRect();
+    let x = e.clientX - rect.left;
+    let y = e.clientY - rect.top;
+    let cell = getCellFromPixel(x, y);
+    
+    // Only start drawing if clicking on player position
     if (cell && cell.col === playerPos.col && cell.row === playerPos.row) {
         drawingPath = true;
         currentPath = [playerPos];
@@ -491,18 +497,22 @@ canvas.addEventListener("mousedown", function(e) {
 });
 
 canvas.addEventListener("mousemove", function(e) {
-    if (drawingPath) {
-        let cell = getCellFromPixel(e.clientX, e.clientY);
-        if (cell) {
-            currentPath = computePath(playerPos, cell);
-            drawHexGrid();
+    if (!drawingPath) return;
+    
+    let rect = canvas.getBoundingClientRect();
+    let x = e.clientX - rect.left;
+    let y = e.clientY - rect.top;
+    let cell = getCellFromPixel(x, y);
+    
+    if (cell) {
+        // Don't allow moving to enemy position
+        if (cell.col === enemyPos.col && cell.row === enemyPos.row) {
+            return;
         }
-    } else if (currentRange > 0) {
-        let cell = getCellFromPixel(e.clientX, e.clientY);
-        if (cell && isInRange(cell.col, cell.row, currentRange)) {
-            selectedCell = cell;
-            drawHexGrid();
-        }
+        
+        // Calculate path to current cell
+        currentPath = computePath(playerPos, cell);
+        drawHexGrid();
     }
 });
 
@@ -510,14 +520,8 @@ canvas.addEventListener("mouseup", function() {
     drawingPath = false;
 });
 
-canvas.addEventListener("click", function(e) {
-    if (currentRange > 0 && !drawingPath) {
-        let cell = getCellFromPixel(e.clientX, e.clientY);
-        if (cell && isInRange(cell.col, cell.row, currentRange)) {
-            selectedCell = cell;
-            drawHexGrid();
-        }
-    }
+canvas.addEventListener("mouseleave", function() {
+    drawingPath = false;
 });
 
 // Initialize

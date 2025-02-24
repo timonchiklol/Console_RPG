@@ -149,9 +149,9 @@ ENEMIES = {
 # Game Rules Configuration
 GAME_RULES = {
     "movement": {
-        "base_cost": 5,  # Cost per hex of movement
-        "diagonal_cost": 5,  # Cost for diagonal movement
-        "min_movement": 5,  # Minimum movement allowed
+        "base_cost": 4,  # Cost per hex of movement
+        "diagonal_cost": 4,  # Cost for diagonal movement
+        "min_movement": 4,  # Minimum movement allowed
     },
     "combat": {
         "attack_cost": 0,

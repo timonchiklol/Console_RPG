@@ -291,4 +291,109 @@ h1, h2 {
 
 .dice-result-popup {
     opacity: 1;
+}
+
+/* Form sections */
+.form-section {
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-group input[type="text"],
+.form-group select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+/* Battlefield selection */
+.battlefield-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-top: 15px;
+}
+
+.battlefield-option {
+    position: relative;
+}
+
+.battlefield-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+}
+
+.battlefield-option label {
+    display: block;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.battlefield-option input[type="radio"]:checked + label {
+    border-color: #4CAF50;
+    background-color: #e8f5e9;
+}
+
+.battlefield-option h3 {
+    margin: 0 0 10px 0;
+    color: #2c3e50;
+}
+
+.battlefield-option .description {
+    font-size: 14px;
+    color: #666;
+    margin: 5px 0;
+}
+
+.battlefield-option .difficulty {
+    font-weight: bold;
+    color: #2c3e50;
+    margin: 5px 0;
+}
+
+.battlefield-option .dimensions {
+    font-size: 14px;
+    color: #666;
+    margin: 5px 0;
+}
+
+/* Form actions */
+.form-actions {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.create-button {
+    padding: 12px 24px;
+    font-size: 16px;
+    font-weight: bold;
+    color: white;
+    background-color: #4CAF50;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.create-button:hover {
+    background-color: #45a049;
 } 

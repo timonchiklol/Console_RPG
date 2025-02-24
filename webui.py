@@ -6,6 +6,8 @@ from gemini import Gemini
 from dotenv import load_dotenv
 import os
 from config import BATTLEFIELD, PLAYER, ENEMIES, GAME_RULES  # Import our new config
+from battlefield_configs import BATTLEFIELD_CONFIGS
+from character_config import CLASS_CONFIGS
 
 app = Flask(__name__)
 app.secret_key = 'secret-key-for-session'
@@ -87,84 +89,83 @@ def compute_path(start_col, start_row, target_col, target_row, max_steps=None):
 @app.route("/", methods=["GET", "POST"])
 def character_creation():
     if request.method == "POST":
-        name = request.form.get("name", "Adventurer")
+        # Get selected battlefield configuration
+        battlefield_id = request.form.get('battlefield', 'forest_ambush')
+        selected_config = BATTLEFIELD_CONFIGS[battlefield_id]
         
-        # Initialize character from config
-        character = {
-            'name': name,
+        # Get character class and use its default stats
+        char_class = request.form.get('class')
+        default_stats = PLAYER['stats'].copy()  # Default fallback stats
+        if char_class in CLASS_CONFIGS:
+            default_stats = CLASS_CONFIGS[char_class]['default_stats']
+        
+        # Store character info in session
+        session['character'] = {
+            'name': request.form.get('name'),
+            'race': request.form.get('race'),
+            'class': char_class,
+            'stats': PLAYER['stats'].copy(),  # Copy default stats
             'hp': PLAYER['stats']['hp'],
             'max_hp': PLAYER['stats']['max_hp'],
             'speed': PLAYER['stats']['speed'],
             'movement_left': PLAYER['stats']['speed'],
-            'spell_slots': PLAYER['spell_slots'].copy(),
-            'pos': PLAYER['starting_position'].copy(),
-            'abilities': PLAYER['abilities'].copy(),  # Add abilities from config
+            'pos': selected_config['player_start'].copy(),  # Use battlefield-specific starting position
+            'spell_slots': PLAYER['spell_slots'].copy(),  # Add spell slots
+            'abilities': PLAYER['abilities'].copy(),  # Add abilities
             'ability_scores': {
-                'strength': int(request.form.get('strength', PLAYER['stats']['strength'])),
-                'dexterity': int(request.form.get('dexterity', PLAYER['stats']['dexterity'])),
-                'constitution': int(request.form.get('constitution', PLAYER['stats']['constitution'])),
-                'intelligence': int(request.form.get('intelligence', PLAYER['stats']['intelligence'])),
-                'wisdom': int(request.form.get('wisdom', PLAYER['stats']['wisdom'])),
-                'charisma': int(request.form.get('charisma', PLAYER['stats']['charisma']))
+                'strength': default_stats['strength'],
+                'dexterity': default_stats['dexterity'],
+                'constitution': default_stats['constitution'],
+                'intelligence': default_stats['intelligence'],
+                'wisdom': default_stats['wisdom'],
+                'charisma': default_stats['charisma']
             }
         }
         
-        # Initialize enemy from config (using goblin as default)
-        enemy_type = 'goblin'
-        enemy = {
-            'name': ENEMIES[enemy_type]['name'],
-            'hp': ENEMIES[enemy_type]['stats']['hp'],
-            'max_hp': ENEMIES[enemy_type]['stats']['max_hp'],
-            'speed': ENEMIES[enemy_type]['stats']['speed'],
-            'movement_left': ENEMIES[enemy_type]['stats']['speed'],
-            'pos': ENEMIES[enemy_type]['position'].copy(),
-            'abilities': ENEMIES[enemy_type]['abilities'].copy()
-        }
-        
-        # Save to session
-        session['character'] = character
-        session['enemy'] = enemy
-        session['effects'] = {
-            'enemy': {},  # effects on enemy
-            'player': {}  # effects on player
-        }
-        session['current_terrain'] = BATTLEFIELD['default_terrain']
-        
-        return redirect(url_for("battle"))
-    return render_template("create.html")
-
-@app.route("/battle", methods=["GET"])
-def battle():
-    if 'character' not in session:
-        return redirect(url_for('character_creation'))
-    
-    # Initialize enemy if not exists
-    if 'enemy' not in session:
-        enemy_type = 'goblin'
+        # Store enemy info
+        enemy_type = 'goblin'  # You could randomize this based on battlefield
         session['enemy'] = {
             'name': ENEMIES[enemy_type]['name'],
             'hp': ENEMIES[enemy_type]['stats']['hp'],
             'max_hp': ENEMIES[enemy_type]['stats']['max_hp'],
             'speed': ENEMIES[enemy_type]['stats']['speed'],
             'movement_left': ENEMIES[enemy_type]['stats']['speed'],
-            'pos': ENEMIES[enemy_type]['position'].copy(),
+            'pos': selected_config['enemy_start'].copy(),  # Use battlefield-specific starting position
             'abilities': ENEMIES[enemy_type]['abilities'].copy()
         }
-    
-    # Initialize effects if not exists
-    if 'effects' not in session:
+        
+        # Store battlefield configuration
+        session['battlefield_config'] = selected_config
+        session['current_terrain'] = selected_config['default_terrain']
+        
+        # Initialize effects
         session['effects'] = {
             'enemy': {},
             'player': {}
         }
+        
+        return redirect(url_for("battle"))
+        
+    # For GET request, render the template with battlefield configurations
+    return render_template("create.html",
+                         races=['Human', 'Elf', 'Dwarf', 'Orc', 'Halfling'],
+                         classes=['Warrior', 'Mage', 'Ranger', 'Rogue', 'Paladin'],
+                         battlefield_configs=BATTLEFIELD_CONFIGS)
+
+@app.route("/battle", methods=["GET"])
+def battle():
+    if 'character' not in session:
+        return redirect(url_for('character_creation'))
     
-    # Initialize terrain if not exists
-    if 'current_terrain' not in session:
-        session['current_terrain'] = BATTLEFIELD['default_terrain']
+    # Use the stored battlefield configuration
+    battlefield_config = session.get('battlefield_config', BATTLEFIELD_CONFIGS['forest_ambush'])
     
     # Prepare config data
     config_data = {
-        'battlefield': BATTLEFIELD,
+        'battlefield': {
+            **battlefield_config,
+            'terrain_types': BATTLEFIELD['terrain_types']  # Keep the terrain types from main config
+        },
         'player': session['character'],
         'enemy': session['enemy'],
         'rules': GAME_RULES,
@@ -179,7 +180,7 @@ def battle():
     return render_template('battle.html', 
         character=session['character'],
         enemy=session['enemy'],
-        battlefield_config=BATTLEFIELD,
+        battlefield_config=battlefield_config,
         current_terrain=session['current_terrain'],
         game_rules=GAME_RULES,
         spells_1lvl=spells_1lvl,

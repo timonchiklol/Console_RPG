@@ -6,16 +6,57 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h1>Create Your Character</h1>
-    <form method="post">
-        <label>Name: <input type="text" name="name" required></label><br>
-        <label>Strength: <input type="number" name="strength" min="1" max="20" value="10" required></label><br>
-        <label>Dexterity: <input type="number" name="dexterity" min="1" max="20" value="10" required></label><br>
-        <label>Constitution: <input type="number" name="constitution" min="1" max="20" value="10" required></label><br>
-        <label>Intelligence: <input type="number" name="intelligence" min="1" max="20" value="10" required></label><br>
-        <label>Wisdom: <input type="number" name="wisdom" min="1" max="20" value="10" required></label><br>
-        <label>Charisma: <input type="number" name="charisma" min="1" max="20" value="10" required></label><br>
-        <button type="submit">Start Adventure</button>
-    </form>
+    <div class="game-container">
+        <h1>Character Creation</h1>
+        <form method="POST">
+            <div class="form-section">
+                <h2>Character Details</h2>
+                <div class="form-group">
+                    <label for="name">Character Name:</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="race">Race:</label>
+                    <select id="race" name="race" required>
+                        {% for race in races %}
+                        <option value="{{ race }}">{{ race }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="class">Class:</label>
+                    <select id="class" name="class" required>
+                        {% for class in classes %}
+                        <option value="{{ class }}">{{ class }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2>Battlefield Selection</h2>
+                <div class="battlefield-options">
+                    {% for config_id, config in battlefield_configs.items() %}
+                    <div class="battlefield-option">
+                        <input type="radio" id="{{ config_id }}" name="battlefield" value="{{ config_id }}" required 
+                               {% if loop.first %}checked{% endif %}>
+                        <label for="{{ config_id }}">
+                            <h3>{{ config.name }}</h3>
+                            <p class="description">{{ config.description }}</p>
+                            <p class="difficulty">Difficulty: {{ config.difficulty }}</p>
+                            <p class="dimensions">Size: {{ config.dimensions.cols }}x{{ config.dimensions.rows }}</p>
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="create-button">Create Character</button>
+            </div>
+        </form>
+    </div>
 </body>
 </html> 
