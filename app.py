@@ -258,8 +258,8 @@ def get_room_state():
 
     if session['room_id'] in room_messages:
         if last_message_id is None:
-            # First time getting messages, only get the last few
-            messages = room_messages[session['room_id']][-5:]
+            # First time getting messages, get more message history (50 instead of 5)
+            messages = room_messages[session['room_id']][-50:]
         else:
             # Get only new messages since last_message_id
             try:
@@ -268,7 +268,7 @@ def get_room_state():
                           if msg.get('id', 0) > last_id]
             except ValueError:
                 logging.error(f"Invalid last_message_id: {last_message_id}")
-                messages = room_messages[session['room_id']][-5:]
+                messages = room_messages[session['room_id']][-50:]
 
     # Convert player states to dict with proper translation
     players_dict = {}
@@ -395,7 +395,7 @@ def choose_character():
         player.charisma = game.charisma
         if player.__pydantic_extra__ is None:
             object.__setattr__(player, "__pydantic_extra__", {})
-        object.__setattr__(player, "ability_scores", game.get_ability_scores())
+        player.ability_scores = game.get_ability_scores()
         
         # Only generate opening scene if this is the host and game hasn't started
         response = None
@@ -543,9 +543,14 @@ def game_action():
             # Get the latest messages for this room
             latest_messages = get_new_messages(room_id)
             
+            # Create player data with preserved ability scores
+            player_data = player.model_dump()
+            if not player_data.get('ability_scores') and hasattr(player, 'ability_scores'):
+                player_data['ability_scores'] = player.ability_scores
+            
             return jsonify({
                 'message': response.get('message', ''),
-                'player': player.model_dump(),
+                'player': player_data,
                 'room': room.model_dump(),
                 'dice_roll_required': response.get('dice_roll_required', False),
                 'dice_roll_request': response.get('dice_roll_request', {}),
@@ -637,11 +642,16 @@ def roll_dice():
         # Get the latest messages for this room
         latest_messages = get_new_messages(room_id)
         
+        # Create player data with preserved ability scores
+        player_data = player.model_dump()
+        if not player_data.get('ability_scores') and hasattr(player, 'ability_scores'):
+            player_data['ability_scores'] = player.ability_scores
+        
         response_data = {
             'roll': roll_result,
             'base_roll': detail.get('base_roll'),
             'dice_type': dice_type,
-            'player': player.model_dump(),
+            'player': player_data,
             'messages': latest_messages,
             'last_message_id': latest_messages[-1]['id'] if latest_messages else None,
             'roll_message_id': roll_message_id,
@@ -770,9 +780,14 @@ def process_roll():
         # Get the latest messages for this room
         latest_messages = get_new_messages(room_id)
         
+        # Create player data with preserved ability scores
+        player_data = player.model_dump()
+        if not player_data.get('ability_scores') and hasattr(player, 'ability_scores'):
+            player_data['ability_scores'] = player.ability_scores
+        
         return jsonify({
             'message': response.get('message', ''),
-            'player': player.model_dump(),
+            'player': player_data,
             'room': room.model_dump(),
             'messages': latest_messages,
             'last_message_id': latest_messages[-1]['id'] if latest_messages else None,
@@ -879,7 +894,7 @@ def get_new_messages(room_id: str, last_message_id: str = None):
         return []
     
     if last_message_id is None:
-        return room_messages[room_id][-50:]  # Return last 50 messages
+        return room_messages[room_id][-50:]  # Return last 50 messages instead of limited amount
     
     try:
         last_id = int(last_message_id)

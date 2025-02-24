@@ -4,11 +4,12 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dice.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/game.css') }}">
 {% endblock %}
 
 {% block content %}
 {% raw %}
-<div id="game-app" v-cloak class="h-screen flex flex-col bg-gray-900">
+<div id="game-app" v-cloak class="game-container">
   <!-- Dice Overlay -->
   <div class="dice-overlay" 
        :class="{ 
@@ -25,7 +26,7 @@
           <span>{{diceRollRequest.ability_modifier}} Check</span>
           <span class="text-gray-400">(</span>
           <span v-if="diceRollRequest.dice_modifier?.modifier">
-            <span :class="{'text-green-400': diceRollRequest.dice_modifier.modifier > 0, 'text-red-400': diceRollRequest.dice_modifier.modifier < 0}">
+            <span :class="{'text-success': diceRollRequest.dice_modifier.modifier > 0, 'text-error': diceRollRequest.dice_modifier.modifier < 0}">
               {{diceRollRequest.dice_modifier.modifier >= 0 ? '+' : ''}}{{diceRollRequest.dice_modifier.modifier}}
             </span>
           </span>
@@ -77,147 +78,138 @@
     </div>
   </div>
 
-  <!-- Header Bar - Fixed at top -->
-  <header class="flex-none bg-gray-800 border-b border-gray-700 p-4">
-    <div class="container mx-auto flex justify-between items-center">
-      <!-- Room Code -->
-      <button @click="copyRoomCode" 
-              @mouseleave="resetCopyState"
-              class="group flex items-center gap-2 text-amber-100 hover:text-amber-50 transition-colors">
-        <span class="medieval text-lg" data-trans="room_code_label"></span>
-        <div class="relative">
-          <span v-if="!codeCopied && !wasJustCopied" 
-                class="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs text-amber-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                data-trans="click_to_copy">
-          </span>
-          <span v-if="codeCopied" 
-                class="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs text-amber-200 transition-opacity"
-                :class="{ 'opacity-100': codeCopied, 'opacity-0': !codeCopied }"
-                data-trans="copied">
-          </span>
-          <span class="font-mono text-lg text-amber-300">{{ room.room_id }}</span>
-        </div>
-      </button>
+  <!-- Header Bar -->
+  <header class="game-header">
+    <div class="container">
+      <div class="header-content">
+        <!-- Room Code -->
+        <button @click="copyRoomCode" 
+                @mouseleave="resetCopyState"
+                class="room-code">
+          <span class="room-code-label medieval" data-trans="room_code_label"></span>
+          <div class="relative">
+            <span v-if="!codeCopied && !wasJustCopied" 
+                  class="tooltip"
+                  data-trans="click_to_copy">
+            </span>
+            <span v-if="codeCopied" 
+                  class="tooltip visible"
+                  data-trans="copied">
+            </span>
+            <span class="room-code-value">{{ room.room_id }}</span>
+          </div>
+        </button>
 
-      <!-- Action Buttons -->
-      <div class="flex gap-2">
-        <button @click="toggleStats" 
-                class="px-3 py-1.5 rounded medieval text-sm bg-gray-700 text-amber-100 hover:bg-gray-600 transition-colors"
-                data-trans="my_stats">
-        </button>
-        <button @click="togglePlayers" 
-                class="px-3 py-1.5 rounded medieval text-sm bg-gray-700 text-amber-100 hover:bg-gray-600 transition-colors"
-                data-trans="players">
-        </button>
-        <button @click="saveGame" 
-                class="px-3 py-1.5 rounded medieval text-sm bg-gray-700 text-amber-100 hover:bg-gray-600 transition-colors"
-                data-trans="save_game">
-        </button>
-        <button @click="loadGame" 
-                class="px-3 py-1.5 rounded medieval text-sm bg-gray-700 text-amber-100 hover:bg-gray-600 transition-colors"
-                data-trans="load_game">
-        </button>
-        <button @click="leaveRoom" 
-                class="px-3 py-1.5 rounded medieval text-sm bg-gray-700 text-amber-100 hover:bg-gray-600 transition-colors"
-                data-trans="leave_room">
-        </button>
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+          <button @click="toggleStats" 
+                  class="action-button medieval"
+                  data-trans="my_stats">
+          </button>
+          <button @click="togglePlayers" 
+                  class="action-button medieval"
+                  data-trans="players">
+          </button>
+          <button @click="saveGame" 
+                  class="action-button medieval"
+                  data-trans="save_game">
+          </button>
+          <button @click="loadGame" 
+                  class="action-button medieval"
+                  data-trans="load_game">
+          </button>
+          <button @click="leaveRoom" 
+                  class="action-button medieval"
+                  data-trans="leave_room">
+          </button>
+        </div>
       </div>
     </div>
   </header>
 
-  <!-- Main Content Area - Scrollable -->
+  <!-- Main Content Area -->
   <div class="flex-1 flex flex-col overflow-hidden">
-    <!-- Players Overview (Collapsed by Default) -->
-    <div v-show="showPlayers" class="flex-none p-4">
-      <div class="container mx-auto">
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          <div v-for="(player, pid) in room.players" :key="pid" 
-               class="bg-gray-800 rounded-lg p-3 border border-gray-700">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-amber-100 font-medium">{{ player.name }}</span>
-              <span class="text-amber-200">{{ player.health_points }} HP</span>
-            </div>
-            <div class="text-gray-400 text-sm">
-              <span data-trans="condition"></span>: <span class="text-amber-300">{{ player.condition || 'Normal' }}</span>
-            </div>
-          </div>
+    <!-- Players Overview - SIMPLIFIED to only name and HP -->
+    <div v-show="showPlayers" class="players-overview">
+      <div class="players-grid">
+        <div v-for="(player, pid) in room.players" :key="pid" class="player-card">
+          <h3 class="player-name">{{ player.name }}</h3>
+          <span class="player-hp">HP: {{ player.health_points }}</span>
         </div>
       </div>
     </div>
 
-    <!-- Messages Section - Scrollable -->
-    <div class="flex-1 overflow-hidden px-4 py-4">
-      <div class="h-full mx-auto container">
-        <div class="h-full bg-gray-800 rounded-lg border border-gray-700 overflow-y-auto" ref="messagesContainer">
-          <div class="p-4">
-            <div v-for="msg in allMessages" :key="msg.id" class="mb-2">
-              <span v-if="msg.type === 'system'" class="text-amber-300">
-                <span data-trans="system"></span>: <span v-html="formatMessage(msg.message)"></span>
-              </span>
-              <span v-else-if="msg.type === 'dm'" class="text-amber-200">
-                <span data-trans="dm"></span>: <span v-html="formatMessage(msg.message)"></span>
-              </span>
-              <span v-else-if="msg.type === 'thinking'" class="text-amber-200 flex items-center gap-2">
-                <span data-trans="dm_thinking"></span>
-                <span class="inline-flex gap-1">
-                  <span class="w-2 h-2 bg-amber-200 rounded-full animate-bounce" style="animation-delay: 0s"></span>
-                  <span class="w-2 h-2 bg-amber-200 rounded-full animate-bounce" style="animation-delay: 0.2s"></span>
-                  <span class="w-2 h-2 bg-amber-200 rounded-full animate-bounce" style="animation-delay: 0.4s"></span>
-                </span>
-              </span>
-              <span v-else class="text-amber-100">
-                {{ msg.player_name }}: 
-                <span v-if="msg.detailed_result" class="text-amber-200">
-                  <span v-if="msg.detailed_result.ability_modifier !== undefined">
-                    Rolled {{ msg.detailed_result.base_roll }} on {{ diceType }}
-                    <span v-if="msg.detailed_result.ability_modifier || msg.detailed_result.proficient_bonus">
-                      (modifier: {{ msg.detailed_result.ability_modifier }}
-                      <span v-if="msg.detailed_result.proficient_bonus">
-                        + {{ msg.detailed_result.proficient_bonus }} proficiency
-                      </span>
-                      = {{ msg.detailed_result.total }})
+    <!-- Messages Section -->
+    <div class="messages-container">
+      <div class="messages-content" ref="messagesContainer">
+        <div v-for="msg in allMessages" :key="msg.id" class="message">
+          <template v-if="msg.type === 'system'">
+            <span class="message-label" data-trans="system"></span>
+            <span class="message-content" v-html="formatMessage(msg.message)"></span>
+          </template>
+          <template v-else-if="msg.type === 'dm'">
+            <span class="message-label">DM:</span>
+            <span class="message-content" v-html="formatMessage(msg.message)"></span>
+          </template>
+          <template v-else-if="msg.type === 'thinking'">
+            <span class="message-label" data-trans="dm_thinking"></span>
+            <div class="thinking-dots">
+              <span class="thinking-dot"></span>
+              <span class="thinking-dot"></span>
+              <span class="thinking-dot"></span>
+            </div>
+          </template>
+          <template v-else>
+            <span class="message-label">{{ msg.player_name }}:</span>
+            <span class="message-content">
+              <template v-if="msg.detailed_result">
+                <span v-if="msg.detailed_result.ability_modifier !== undefined">
+                  Rolled {{ msg.detailed_result.base_roll }} on {{ diceType }}
+                  <span v-if="msg.detailed_result.ability_modifier || msg.detailed_result.proficient_bonus">
+                    (modifier: {{ msg.detailed_result.ability_modifier }}
+                    <span v-if="msg.detailed_result.proficient_bonus">
+                      + {{ msg.detailed_result.proficient_bonus }} proficiency
                     </span>
-                    <span v-if="msg.detailed_result.difficulty !== undefined">
-                      against DC {{ msg.detailed_result.difficulty }}
-                      <span v-if="msg.detailed_result.success !== undefined" 
-                            :class="{'text-green-400': msg.detailed_result.success, 'text-red-400': !msg.detailed_result.success}">
-                        {{ msg.detailed_result.success ? 'Success!' : 'Failure!' }}
-                      </span>
-                    </span>
+                    = {{ msg.detailed_result.total }})
                   </span>
-                  <span v-else>
-                    {{ msg.message }}
+                  <span v-if="msg.detailed_result.difficulty !== undefined">
+                    against DC {{ msg.detailed_result.difficulty }}
+                    <span v-if="msg.detailed_result.success !== undefined" 
+                          :class="{'text-success': msg.detailed_result.success, 'text-error': !msg.detailed_result.success}">
+                      {{ msg.detailed_result.success ? 'Success!' : 'Failure!' }}
+                    </span>
                   </span>
                 </span>
                 <span v-else v-html="formatMessage(msg.message)"></span>
-              </span>
-            </div>
-          </div>
+              </template>
+              <template v-else>
+                <span v-html="formatMessage(msg.message)"></span>
+              </template>
+            </span>
+          </template>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Action Input - Fixed at bottom -->
-  <div class="flex-none sticky bottom-0 p-4 bg-gray-900 border-t border-gray-800 shadow-lg">
-    <div class="container mx-auto">
+  <!-- Input Area -->
+  <div class="input-container">
+    <div class="container">
       <template v-if="diceNeeded">
-        <!-- Empty space when dice is needed -->
         <div class="h-12"></div>
       </template>
       <template v-else>
-        <div class="w-full flex gap-2">
+        <div class="input-wrapper">
           <input v-model="userInput" 
                  :placeholder="translate('enter_action')" 
                  :disabled="isLoading || isThinking"
-                 class="w-full flex-grow px-4 py-2 rounded-lg bg-gray-800 text-gray-100 border border-gray-700 focus:border-amber-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed" 
+                 class="action-input" 
                  @keyup.enter="sendMessage">
           <button @click="sendMessage" 
                   :disabled="!userInput.trim() || isLoading || isThinking"
-                  class="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-700 text-amber-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  class="send-button">
             <svg xmlns="http://www.w3.org/2000/svg" 
-                 :class="{'text-amber-500': userInput.trim().length > 0 && !isLoading && !isThinking, 'text-gray-400': !userInput.trim() || isLoading || isThinking}" 
-                 class="h-5 w-5" 
+                 :class="['send-icon', {'active': userInput.trim().length > 0 && !isLoading && !isThinking, 'inactive': !userInput.trim() || isLoading || isThinking}]" 
                  viewBox="0 0 20 20" 
                  fill="currentColor">
               <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
@@ -228,88 +220,88 @@
     </div>
   </div>
 
-  <!-- My Stats Modal (Hidden by Default) -->
+  <!-- My Stats Modal - ENHANCED -->
   <div v-if="showStats" 
-       class="fixed inset-0 bg-black/75 flex items-center justify-center z-50"
+       class="stats-modal"
        @click.self="toggleStats">
-    <div class="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 border border-gray-700">
+    <div class="stats-content">
       <div class="flex justify-between items-center mb-4">
-        <h3 class="medieval text-xl text-amber-100" data-trans="character_stats"></h3>
+        <h3 class="medieval text-xl text-white" data-trans="character_stats"></h3>
         <button @click="toggleStats" class="text-gray-400 hover:text-gray-300">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
       
-      <div v-if="currentPlayer" class="space-y-4">
+      <div v-if="currentPlayer" class="space-y-6">
         <!-- Basic Info -->
-        <div class="grid grid-cols-2 gap-4">
-          <div class="text-center p-3 bg-gray-900/50 rounded">
-            <div class="text-gray-400 text-sm mb-1" data-trans="level"></div>
-            <div class="text-xl text-amber-200">{{ currentPlayer.level }}</div>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-label" data-trans="level"></div>
+            <div class="stat-value">{{ currentPlayer.level }}</div>
           </div>
-          <div class="text-center p-3 bg-gray-900/50 rounded">
-            <div class="text-gray-400 text-sm mb-1" data-trans="hp"></div>
-            <div class="text-xl text-amber-200">{{ currentPlayer.health_points }}</div>
+          <div class="stat-item">
+            <div class="stat-label" data-trans="hp"></div>
+            <div class="stat-value">{{ currentPlayer.health_points }}</div>
           </div>
-          <div class="text-center p-3 bg-gray-900/50 rounded">
-            <div class="text-gray-400 text-sm mb-1" data-trans="damage"></div>
-            <div class="text-xl text-amber-200">{{ currentPlayer.damage }}</div>
+          <div class="stat-item">
+            <div class="stat-label" data-trans="damage"></div>
+            <div class="stat-value">{{ currentPlayer.damage }}</div>
           </div>
-          <div class="text-center p-3 bg-gray-900/50 rounded">
-            <div class="text-gray-400 text-sm mb-1" data-trans="gold"></div>
-            <div class="text-xl text-amber-200">{{ currentPlayer.gold }}</div>
+          <div class="stat-item">
+            <div class="stat-label" data-trans="gold"></div>
+            <div class="stat-value">{{ currentPlayer.gold }}</div>
+          </div>
+        </div>
+
+        <!-- Character Info -->
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-label" data-trans="race"></div>
+            <div class="stat-value">{{ currentPlayer.race }}</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label" data-trans="class"></div>
+            <div class="stat-value">{{ currentPlayer.class_name }}</div>
           </div>
         </div>
 
         <!-- Ability Scores -->
-        <div class="bg-gray-900/50 rounded-lg p-3 mt-4">
-          <div class="text-gray-400 text-sm mb-2" data-trans="ability_scores"></div>
-          <div class="grid grid-cols-2 gap-x-8 gap-y-2">
-            <div class="flex justify-between items-center">
-              <span class="text-gray-300" data-trans="strength"></span>
-              <span class="text-amber-200">{{ currentPlayer.ability_scores.strength }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-gray-300" data-trans="dexterity"></span>
-              <span class="text-amber-200">{{ currentPlayer.ability_scores.dexterity }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-gray-300" data-trans="constitution"></span>
-              <span class="text-amber-200">{{ currentPlayer.ability_scores.constitution }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-gray-300" data-trans="intelligence"></span>
-              <span class="text-amber-200">{{ currentPlayer.ability_scores.intelligence }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-gray-300" data-trans="wisdom"></span>
-              <span class="text-amber-200">{{ currentPlayer.ability_scores.wisdom }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-gray-300" data-trans="charisma"></span>
-              <span class="text-amber-200">{{ currentPlayer.ability_scores.charisma }}</span>
+        <div class="ability-scores">
+          <div class="ability-title" data-trans="ability_scores"></div>
+          <div class="ability-grid">
+            <div v-for="(value, ability) in currentPlayer.ability_scores" :key="ability"
+                 class="ability-item">
+              <span class="ability-label">{{ ability }}</span>
+              <span class="ability-value" 
+                    :class="{
+                      'positive': value > 14, 
+                      'negative': value < 10,
+                      'neutral': value >= 10 && value <= 14
+                    }">
+                {{ value }}
+              </span>
             </div>
           </div>
         </div>
 
         <!-- Magic -->
-        <div class="bg-gray-900/50 rounded-lg p-3 mt-4">
-          <div class="text-gray-400 text-sm mb-2" data-trans="magic"></div>
-          <div class="grid grid-cols-2 gap-4">
-            <div class="text-center">
-              <div class="text-gray-400 text-xs mb-1" data-trans="magic_1lvl"></div>
-              <div class="text-lg text-amber-200">{{ currentPlayer.magic_1lvl }}</div>
+        <div class="ability-scores">
+          <div class="ability-title" data-trans="magic"></div>
+          <div class="stats-grid">
+            <div class="stat-item">
+              <div class="stat-label" data-trans="magic_1lvl"></div>
+              <div class="stat-value">{{ currentPlayer.magic_1lvl }}</div>
             </div>
-            <div class="text-center">
-              <div class="text-gray-400 text-xs mb-1" data-trans="magic_2lvl"></div>
-              <div class="text-lg text-amber-200">{{ currentPlayer.magic_2lvl }}</div>
+            <div class="stat-item">
+              <div class="stat-label" data-trans="magic_2lvl"></div>
+              <div class="stat-value">{{ currentPlayer.magic_2lvl }}</div>
             </div>
           </div>
         </div>
       </div>
-      <div v-else class="text-center text-amber-100">
+      <div v-else class="text-center text-white py-8">
         {{ translate('no_character_stats') || 'No character stats available. Please choose your character.' }}
       </div>
     </div>

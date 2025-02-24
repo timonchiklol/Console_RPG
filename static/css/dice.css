@@ -49,19 +49,6 @@
   margin-bottom: 80px;
 }
 
-.dice-info .reason {
-  font-size: 0.9em;
-  margin-bottom: 8px;
-  color: rgba(251, 191, 36, 0.7);
-}
-
-.dice-info .difficulty {
-  font-weight: bold;
-  color: rgba(251, 191, 36, 1);
-  font-size: 1.2em;
-  margin-top: 8px;
-}
-
 .die {
   position: relative;
   width: 150px;
@@ -161,4 +148,17 @@
 .die[data-face="12"] { transform: rotateX(-11deg) rotateY(-108deg); }
 .die[data-face="13"] { transform: rotateX(-11deg) rotateY(-180deg); }
 .die[data-face="14"] { transform: rotateX(-11deg) rotateY(-252deg); }
-.die[data-face="15"] { transform: rotateX(-11deg) rotateY(-324deg); } 
+.die[data-face="15"] { transform: rotateX(-11deg) rotateY(-324deg); }
+
+.dice-info .reason {
+  font-size: 0.9em;
+  margin-bottom: 8px;
+  color: rgba(251, 191, 36, 0.7);
+}
+
+.dice-info .difficulty {
+  font-weight: bold;
+  color: rgba(251, 191, 36, 1);
+  font-size: 1.2em;
+  margin-top: 8px;
+} 

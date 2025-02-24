@@ -1,0 +1,770 @@
+/* Game Layout */
+.game-container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: rgb(17, 24, 39);
+    overflow: hidden;
+}
+
+/* Header */
+.game-header {
+    flex: none;
+    background-color: rgb(31, 41, 55);
+    border-bottom: 1px solid rgb(55, 65, 81);
+    padding: 1rem;
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.room-code {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: rgb(251, 191, 36);
+    transition: color 0.2s;
+}
+
+.room-code:hover {
+    color: rgb(252, 211, 77);
+}
+
+.room-code-label {
+    font-size: 1.125rem;
+}
+
+.room-code-value {
+    font-family: monospace;
+    font-size: 1.125rem;
+    color: rgb(251, 191, 36);
+}
+
+.tooltip {
+    position: absolute;
+    top: -1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 0.75rem;
+    color: rgb(251, 191, 36);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.tooltip.visible {
+    opacity: 1;
+}
+
+/* Action Buttons */
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.action-button {
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    background-color: rgb(55, 65, 81);
+    color: rgb(251, 191, 36);
+    transition: background-color 0.2s;
+}
+
+.action-button:hover {
+    background-color: rgb(75, 85, 99);
+}
+
+/* Ensure consistent width for messages, input and players */
+.messages-container, .input-container, .players-overview {
+    width: 100%;
+    max-width: 100%;
+    padding: 0 1rem;
+    box-sizing: border-box;
+}
+
+.input-wrapper {
+    width: 100%;
+}
+
+.action-input {
+    width: 100%;
+}
+
+/* Players Overview */
+.players-overview {
+    background-color: rgba(0, 0, 0, 0.85);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem; /* Removed horizontal margin for alignment */
+    max-height: 30vh;
+    overflow-y: auto;
+}
+
+.players-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); /* Smaller cards */
+    gap: 0.75rem; /* Reduced gap */
+}
+
+.player-card {
+    background-color: rgba(30, 30, 30, 0.7);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.player-name {
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+.player-hp {
+    font-size: 0.875rem;
+    color: var(--primary-color);
+}
+
+/* Messages Section */
+.messages-container {
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+    display: flex;
+}
+
+.messages-content {
+    height: 100%;
+    background-color: rgb(31, 41, 55);
+    border-radius: 0.5rem;
+    border: 1px solid rgb(55, 65, 81);
+    overflow-y: auto;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.message {
+    margin-bottom: 0.5rem;
+    word-wrap: break-word;
+    max-width: 100%;
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-start;
+}
+
+.message-system,
+.message-dm,
+.message-thinking {
+    color: rgb(251, 191, 36);
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+}
+
+.message-label {
+    flex-shrink: 0;
+    min-width: 60px;
+    color: #e2e8f0 !important;
+    font-weight: bold;
+}
+
+.message-content {
+    flex: 1;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    color: white !important;
+}
+
+.thinking-dots {
+    display: inline-flex;
+    gap: 0.25rem;
+    margin-left: 0.5rem;
+    align-items: center;
+}
+
+.thinking-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    background-color: rgb(251, 191, 36);
+    border-radius: 50%;
+    animation: bounce 0.6s infinite;
+}
+
+.thinking-dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.thinking-dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-0.25rem);
+    }
+}
+
+.message span {
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+/* Input Area */
+.input-container {
+    flex: none;
+    position: sticky;
+    bottom: 0;
+    padding: 1rem;
+    background-color: rgb(17, 24, 39);
+    border-top: 1px solid rgb(31, 41, 55);
+    box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.input-wrapper {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.action-input {
+    flex: 1;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    background-color: rgb(31, 41, 55);
+    color: rgb(243, 244, 246);
+    border: 1px solid rgb(55, 65, 81);
+}
+
+.action-input:focus {
+    border-color: rgb(251, 191, 36);
+    outline: none;
+}
+
+.action-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.send-button {
+    padding: 0.5rem 1rem;
+    background-color: rgb(31, 41, 55);
+    border: 1px solid rgb(55, 65, 81);
+    border-radius: 0.5rem;
+    transition: all 0.2s;
+}
+
+.send-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.send-button:not(:disabled):hover {
+    background-color: rgb(55, 65, 81);
+}
+
+.send-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.send-icon.active {
+    color: rgb(251, 191, 36);
+}
+
+.send-icon.inactive {
+    color: rgb(156, 163, 175);
+}
+
+/* Main content area that contains messages */
+.flex-1.flex.flex-col.overflow-hidden {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+}
+
+/* Stats Modal */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.stat-item {
+    text-align: center;
+    background-color: rgb(31, 41, 55);
+    padding: 1rem;
+    border-radius: 0.25rem;
+    border: 1px solid rgb(55, 65, 81);
+}
+
+.ability-scores {
+    background-color: rgb(31, 41, 55);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid rgb(55, 65, 81);
+}
+
+.ability-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.ability-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background-color: rgba(17, 24, 39, 0.5);
+    border-radius: 0.25rem;
+    border: 1px solid rgb(55, 65, 81);
+}
+
+.stat-label {
+    color: rgb(156, 163, 175);
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+}
+
+.stat-value {
+    color: rgb(251, 191, 36);
+    font-size: 1.25rem;
+    font-weight: bold;
+}
+
+:root {
+    --primary-color: #f59e0b;
+    --primary-hover: #d97706;
+    --secondary-color: #4b5563;
+    --text-color: #ffffff;
+    --text-secondary: #e2e8f0;
+    --bg-color: #111827;
+    --border-color: #374151;
+}
+
+.game-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: var(--bg-color);
+    background-image: url('/static/img/background.jpg');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    color: var(--text-color);
+    overflow: hidden;
+}
+
+/* Header Styles */
+.game-header {
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.5rem 0;
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.room-code {
+    display: flex;
+    align-items: center;
+}
+
+.room-code-label {
+    color: var(--text-color);
+    margin-right: 0.5rem;
+}
+
+.room-code-value {
+    color: var(--primary-color);
+    font-family: monospace;
+}
+
+.tooltip {
+    position: absolute;
+    top: -1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.tooltip.visible {
+    opacity: 1;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.action-button {
+    background-color: rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.action-button:hover {
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+.action-button.active {
+    background-color: var(--primary-color);
+    border-color: var(--primary-hover);
+}
+
+/* Messages Container */
+.messages-container {
+    flex: 1;
+    overflow: hidden;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.messages-content {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+    width: 100%;
+    max-width: 100%;
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    margin: 0 1rem;
+}
+
+.message {
+    display: flex;
+    margin-bottom: 0.5rem;
+}
+
+.message-label {
+    flex-shrink: 0;
+    font-weight: bold;
+    color: var(--text-secondary);
+    margin-right: 0.5rem;
+    min-width: 50px;
+}
+
+.message-content {
+    flex: 1;
+    color: var(--text-color);
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+/* Input Area */
+.input-container {
+    padding: 1rem;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border-color);
+    width: 100%;
+}
+
+.input-wrapper {
+    display: flex;
+    width: 100%;
+    position: relative;
+}
+
+.action-input {
+    flex: 1;
+    background-color: rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    width: 100%;
+}
+
+.action-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.send-button {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0.5rem;
+}
+
+.send-icon {
+    height: 1.25rem;
+    width: 1.25rem;
+    transition: color 0.2s ease;
+}
+
+.send-icon.active {
+    color: var(--primary-color);
+}
+
+.send-icon.inactive {
+    color: var(--secondary-color);
+}
+
+/* Thinking Animation */
+.thinking-dots {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.thinking-dot {
+    height: 0.5rem;
+    width: 0.5rem;
+    background-color: var(--text-secondary);
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+}
+
+.thinking-dot:nth-child(2) {
+    animation-delay: 0.5s;
+}
+
+.thinking-dot:nth-child(3) {
+    animation-delay: 1s;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(0.5);
+        opacity: 0.5;
+    }
+}
+
+/* Dice Styles - See dice.css for more styles */
+.dice-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.dice-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.dice-overlay.disabled {
+    cursor: not-allowed;
+}
+
+.dice-reason {
+    font-size: 1.25rem;
+    font-weight: bold;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    max-width: 80%;
+}
+
+.roll-button {
+    background-color: var(--primary-color);
+    color: black;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    font-size: 1.25rem;
+    font-weight: bold;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 1.5rem;
+}
+
+.roll-button:hover:not(:disabled) {
+    background-color: var(--primary-hover);
+    transform: translateY(-2px);
+}
+
+.roll-button:disabled {
+    background-color: var(--secondary-color);
+    cursor: not-allowed;
+}
+
+/* Stats Modal */
+.stats-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.stats-content {
+    background-color: rgba(17, 24, 39, 0.95);
+    border: 2px solid var(--border-color);
+    border-radius: 0.75rem;
+    padding: 2rem;
+    max-width: 500px; /* Reduced from 600px for better fit */
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.stats-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.stats-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.close-button {
+    background-color: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 1.5rem;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.stat-item {
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.stat-value {
+    font-weight: bold;
+}
+
+.ability-scores {
+    margin-top: 2rem;
+}
+
+.ability-title {
+    font-size: 1.5rem;
+    color: white;
+    margin-bottom: 1rem;
+    text-align: center;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+}
+
+.ability-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); /* Changed from 3 to 2 columns */
+    gap: 0.75rem; /* Reduced gap */
+}
+
+.ability-item {
+    background-color: rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 0.75rem; /* Reduced padding */
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.ability-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem; /* Smaller font size */
+    margin-bottom: 0.25rem; /* Reduced margin */
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.ability-value {
+    font-size: 1.25rem; /* Smaller font size */
+    font-weight: bold;
+}
+
+.positive {
+    color: #10b981 !important;
+}
+
+.negative {
+    color: #ef4444 !important;
+}
+
+.neutral {
+    color: #f59e0b !important;
+}
+
+/* Success/Failure Text */
+.text-success {
+    color: #10b981 !important;
+    font-weight: bold;
+}
+
+.text-error {
+    color: #ef4444 !important;
+    font-weight: bold;
+} 

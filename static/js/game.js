@@ -154,6 +154,11 @@ const gameApp = Vue.createApp({
             return result;
         },
         currentPlayer() {
+            // Make sure gameState has ability_scores before returning it
+            if (this.gameState && !this.gameState.ability_scores) {
+                // If ability scores aren't present, try to get them from the server
+                this.loadInitialState();
+            }
             return this.gameState;
         }
     },
@@ -228,7 +233,17 @@ const gameApp = Vue.createApp({
                 if (data.error) {
                     alert(data.error);
                 } else {
+                    // Store current ability scores if they exist
+                    const currentAbilityScores = this.gameState.ability_scores;
+                    
+                    // Update game state
                     this.gameState = data.player;
+                    
+                    // Ensure ability scores are preserved
+                    if (!this.gameState.ability_scores && currentAbilityScores) {
+                        this.gameState.ability_scores = currentAbilityScores;
+                    }
+                    
                     if (data.room) {
                         this.room = data.room;
                     }
@@ -377,7 +392,17 @@ const gameApp = Vue.createApp({
                         if (processData.error) {
                             alert(processData.error);
                         } else {
+                            // Store current ability scores if they exist
+                            const currentAbilityScores = this.gameState.ability_scores;
+                            
+                            // Update game state
                             this.gameState = processData.player;
+                            
+                            // Ensure ability scores are preserved
+                            if (!this.gameState.ability_scores && currentAbilityScores) {
+                                this.gameState.ability_scores = currentAbilityScores;
+                            }
+                            
                             if (processData.messages) {
                                 this.messages = processData.messages;
                             }
@@ -420,7 +445,15 @@ const gameApp = Vue.createApp({
                 });
                 const data = await response.json();
                 if (data.status === 'success') {
+                    // Make sure we preserve ability scores when loading
+                    const currentAbilityScores = this.gameState.ability_scores;
                     this.gameState = data.player;
+                    
+                    // Ensure ability scores are preserved
+                    if (!this.gameState.ability_scores && currentAbilityScores) {
+                        this.gameState.ability_scores = currentAbilityScores;
+                    }
+                    
                     alert(data.message);
                 } else {
                     alert(data.error || data.message || this.translate('load_game_error'));

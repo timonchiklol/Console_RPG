@@ -6,12 +6,90 @@
     font-family: 'MedievalSharp', cursive; 
 }
 
-.game-bg { 
-    background-image: url('https://images.unsplash.com/photo-1519074069444-1ba4fff66d16?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'); 
-    background-size: cover; 
-    background-position: center; 
-}
-
 [v-cloak] { 
     display: none; 
+}
+
+/* Base styles */
+.medieval {
+    font-family: 'MedievalSharp', cursive;
+}
+
+/* Common layout */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Settings modal */
+.settings-modal {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.settings-content {
+    background-color: rgb(31, 41, 55);
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    max-width: 28rem;
+    width: 100%;
+}
+
+/* Common form elements */
+.input-field {
+    width: 100%;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    background-color: rgb(31, 41, 55);
+    color: rgb(243, 244, 246);
+    border: 1px solid rgb(75, 85, 99);
+}
+
+.input-field:focus {
+    border-color: rgb(239, 68, 68);
+    outline: none;
+}
+
+/* Button styles */
+.btn {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    transition-property: all;
+    transition-duration: 200ms;
+}
+
+.btn-primary {
+    background-color: rgb(185, 28, 28);
+}
+
+.btn-primary:hover {
+    background-color: rgb(220, 38, 38);
+}
+
+/* Common text colors */
+.text-amber {
+    color: rgb(251, 191, 36);
+}
+
+.text-error {
+    color: rgb(239, 68, 68);
+}
+
+.text-success {
+    color: rgb(34, 197, 94);
+}
+
+/* Transitions */
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
 } 

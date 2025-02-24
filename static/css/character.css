@@ -1,0 +1,195 @@
+/* Character Creation Page */
+.character-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+    background-color: var(--bg-color);
+    background-image: url('/static/img/background.jpg');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    color: var(--text-color);
+    min-height: 100vh;
+}
+
+.character-title {
+    font-size: 2.25rem;
+    color: var(--primary-color);
+    text-align: center;
+    margin-bottom: 2rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Settings Button */
+.settings-button {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--primary-color);
+    font-size: 0.875rem;
+    transition: color 0.2s;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    border: 1px solid var(--border-color);
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+}
+
+.settings-button:hover {
+    color: var(--primary-hover);
+}
+
+.settings-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+/* Race and Class Cards */
+.selection-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.character-card {
+    background-color: rgba(31, 41, 55, 0.8);
+    backdrop-filter: blur(4px);
+    border-radius: 0.5rem;
+    border: 2px solid var(--border-color);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.character-card:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+}
+
+.character-card.selected {
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 6px -1px rgba(251, 191, 36, 0.3);
+}
+
+.card-content {
+    padding: 1.25rem;
+}
+
+.card-title {
+    font-size: 1.5rem;
+    color: var(--primary-color);
+    margin-bottom: 0.75rem;
+    text-align: center;
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.stat-item {
+    text-align: center;
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+}
+
+.stat-label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+}
+
+.stat-value {
+    font-size: 1.25rem;
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+/* Ability Scores */
+.ability-scores {
+    background-color: rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+}
+
+.ability-title {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+    text-align: center;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.25rem;
+}
+
+.ability-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+}
+
+.ability-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+}
+
+.ability-label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.ability-value {
+    font-family: monospace;
+    font-size: 0.875rem;
+}
+
+.ability-value.positive {
+    color: #10b981;
+}
+
+.ability-value.negative {
+    color: #ef4444;
+}
+
+/* Begin Adventure Button */
+.begin-button {
+    width: 100%;
+    height: 3.5rem;
+    font-size: 1.25rem;
+    border-radius: 0.5rem;
+    transition: all 0.2s ease;
+    background-color: rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border-color);
+    color: var(--primary-color);
+}
+
+.begin-button:disabled {
+    background-color: rgba(75, 85, 99, 0.5);
+    color: rgb(156, 163, 175);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.begin-button:not(:disabled) {
+    background-color: rgba(0, 0, 0, 0.7);
+    color: var(--primary-color);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+}
+
+.begin-button:not(:disabled):hover {
+    background-color: rgba(0, 0, 0, 0.8);
+    border-color: var(--primary-color);
+} 
