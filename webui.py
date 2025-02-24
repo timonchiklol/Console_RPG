@@ -162,15 +162,30 @@ def battle():
     if 'current_terrain' not in session:
         session['current_terrain'] = BATTLEFIELD['default_terrain']
     
+    # Prepare config data
+    config_data = {
+        'battlefield': BATTLEFIELD,
+        'player': session['character'],
+        'enemy': session['enemy'],
+        'rules': GAME_RULES,
+        'currentTerrain': session['current_terrain'],
+        'spells': {
+            'level1': spells_1lvl,
+            'level2': spells_2lvl
+        },
+        'basicAttacks': basic_attacks
+    }
+    
     return render_template('battle.html', 
         character=session['character'],
         enemy=session['enemy'],
-        spells_1lvl=spells_1lvl,
-        spells_2lvl=spells_2lvl,
-        basic_attacks=basic_attacks,
         battlefield_config=BATTLEFIELD,
         current_terrain=session['current_terrain'],
         game_rules=GAME_RULES,
+        spells_1lvl=spells_1lvl,
+        spells_2lvl=spells_2lvl,
+        basic_attacks=basic_attacks,
+        config_data=config_data,
         lang='en'
     )
 

@@ -6,247 +6,129 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h1>Battle</h1>
-    <div class="status-panel">
-        <div class="character-status">
-            <h2>Character: {{ character.name }}</h2>
-            <p>HP: <span id="char_hp">{{ character.hp }}/{{ character.max_hp }}</span></p>
-            <p>Speed: <span id="char_speed">{{ character.movement_left }}/{{ character.speed }}</span></p>
-            <div class="spell-slots">
-                <p>Spell Slots:</p>
-                <p>Level 1: <span id="spell_slots_1">{{ character.spell_slots['1'] }}</span></p>
-                <p>Level 2: <span id="spell_slots_2">{{ character.spell_slots['2'] }}</span></p>
-            </div>
-            <!-- Ability Scores Section -->
-            <div class="ability-scores mt-2 text-sm text-gray-400">
-                <h3>Ability Scores</h3>
-                <div class="flex space-x-4">
-                    <div>Strength: <span id="ability_strength">{{ character.ability_scores.strength }}</span></div>
-                    <div>Dexterity: <span id="ability_dexterity">{{ character.ability_scores.dexterity }}</span></div>
-                    <div>Constitution: <span id="ability_constitution">{{ character.ability_scores.constitution }}</span></div>
-                    <div>Intelligence: <span id="ability_intelligence">{{ character.ability_scores.intelligence }}</span></div>
-                    <div>Wisdom: <span id="ability_wisdom">{{ character.ability_scores.wisdom }}</span></div>
-                    <div>Charisma: <span id="ability_charisma">{{ character.ability_scores.charisma }}</span></div>
+    <div class="game-container">
+        <div class="status-panel">
+            <div class="character-status">
+                <h2>Character: <span id="char_name">{{ character.name }}</span></h2>
+                <p>HP: <span id="char_hp">{{ character.hp }}/{{ character.max_hp }}</span></p>
+                <p>Speed: <span id="char_speed">{{ character.movement_left }}/{{ character.speed }}</span></p>
+                <div class="spell-slots">
+                    <p>Spell Slots:</p>
+                    <p>Level 1: <span id="spell_slots_1">{{ character.spell_slots['1'] }}</span></p>
+                    <p>Level 2: <span id="spell_slots_2">{{ character.spell_slots['2'] }}</span></p>
+                </div>
+                <div class="ability-scores">
+                    <h3>Ability Scores</h3>
+                    <div class="scores-grid">
+                        <div>STR: <span id="ability_strength">{{ character.ability_scores.strength }}</span></div>
+                        <div>DEX: <span id="ability_dexterity">{{ character.ability_scores.dexterity }}</span></div>
+                        <div>CON: <span id="ability_constitution">{{ character.ability_scores.constitution }}</span></div>
+                        <div>INT: <span id="ability_intelligence">{{ character.ability_scores.intelligence }}</span></div>
+                        <div>WIS: <span id="ability_wisdom">{{ character.ability_scores.wisdom }}</span></div>
+                        <div>CHA: <span id="ability_charisma">{{ character.ability_scores.charisma }}</span></div>
+                    </div>
                 </div>
             </div>
+            <div class="enemy-status">
+                <h2>Enemy: <span id="enemy_name">{{ enemy.name }}</span></h2>
+                <p>HP: <span id="enemy_hp">{{ enemy.hp }}/{{ enemy.max_hp }}</span></p>
+                <p>Speed: <span id="enemy_speed">{{ enemy.speed }}</span></p>
+            </div>
         </div>
-        <div class="enemy-status">
-            <h2>Enemy: {{ enemy.name }}</h2>
-            <p>HP: <span id="enemy_hp">{{ enemy.hp }}/{{ enemy.max_hp }}</span></p>
-            <p>Speed: {{ enemy.speed }}</p>
-        </div>
-    </div>
-    
-    <!-- Movement instructions -->
-    <br>
-    <p id="instructions">Click and drag to plan movement. Movement cost: {{ game_rules.movement.base_cost }} speed per hex.</p>
-    
-    <!-- Terrain controls -->
-    <div class="terrain-controls">
-        {% for terrain_type in battlefield_config.terrain_types %}
-        <button onclick="changeTerrain('{{ terrain_type }}')" class="terrain-btn" 
-                {% if terrain_type == current_terrain %}data-active="true"{% endif %}>
-            {{ terrain_type.title() }}
-        </button>
-        {% endfor %}
-    </div>
-    
-    <!-- Battle grid canvas -->
-    <canvas id="hexCanvas" width="800" height="600"></canvas>
-    <br>
-    
-    <!-- Controls section -->
-    <div class="controls">
-        <div class="movement-controls">
-            <button id="applyMoveButton">Apply Move (Cost: <span id="moveCost">0</span>)</button>
-            <button id="endTurnButton">End Turn</button>
-        </div>
-        <div class="combat-controls">
-            <div class="attack-options">
-                <h3>Basic Attacks:</h3>
-                {% for attack_name, attack in character.abilities.items() %}
-                <button 
-                    data-attack-type="{{ attack_name }}"
-                    data-range="{{ attack.range }}"
-                    data-damage="{{ attack.damage }}"
-                    class="attack-button basic-attack">
-                    {{ attack.name }} (Range: {{ attack.range }}, Damage: {{ attack.damage }})
+        
+        <div class="game-area">
+            <p id="instructions">Click and drag to plan movement. Movement cost: {{ game_rules.movement.base_cost }} speed per hex.</p>
+            
+            <div class="terrain-controls">
+                {% for terrain_type in battlefield_config.terrain_types %}
+                <button class="terrain-btn" data-terrain="{{ terrain_type }}" 
+                        {% if terrain_type == current_terrain %}data-active="true"{% endif %}>
+                    {{ terrain_type.title() }}
                 </button>
                 {% endfor %}
+            </div>
+            
+            <canvas id="hexCanvas" width="800" height="600"></canvas>
+            
+            <div class="controls">
+                <div class="movement-controls">
+                    <button id="applyMoveButton">Apply Move (<span id="moveCost">0</span>)</button>
+                    <button id="endTurnButton">End Turn</button>
+                </div>
                 
-                <h3>Available Spells:</h3>
-                <div class="spell-buttons">
-                    <h4>Level 1 Spells (Cost: {{ game_rules.combat.spell_cost }} speed)</h4>
-                    {% for spell_name, spell_data in spells_1lvl.items() %}
-                    <button 
-                        data-spell-type="spell"
-                        data-spell-level="1"
-                        data-range="{{ spell_data.range }}"
-                        data-spell-name="{{ spell_name }}"
-                        class="attack-button spell-btn level-1"
-                        {% if character.spell_slots['1'] < 1 %}disabled{% endif %}>
-                        {{ spell_name }} (Range: {{ spell_data.range }} tiles)
-                    </button>
-                    {% endfor %}
+                <div class="combat-controls">
+                    <div class="attack-options">
+                        <h3>Basic Attacks</h3>
+                        <div class="basic-attacks">
+                            {% for attack_name, attack in character.abilities.items() %}
+                            <button class="attack-button basic-attack" 
+                                    data-attack-type="{{ attack_name }}"
+                                    data-range="{{ attack.range }}"
+                                    data-aoe="{{ attack.aoe|default(0) }}"
+                                    data-damage="{{ attack.damage }}">
+                                {{ attack.name }} (Range: {{ attack.range }}, Damage: {{ attack.damage }})
+                            </button>
+                            {% endfor %}
+                        </div>
+                        
+                        <h3>Spells</h3>
+                        <div class="spell-list">
+                            <div class="level-1-spells">
+                                <h4>Level 1 Spells</h4>
+                                {% for spell_name, spell_data in spells_1lvl.items() %}
+                                <button class="attack-button spell-btn level-1"
+                                        data-spell-name="{{ spell_name }}"
+                                        data-spell-level="1"
+                                        data-range="{{ spell_data.range }}"
+                                        data-aoe="{{ spell_data.aoe|default(0) }}"
+                                        {% if character.spell_slots['1'] < 1 %}disabled{% endif %}>
+                                    {{ spell_name }} (Range: {{ spell_data.range }})
+                                </button>
+                                {% endfor %}
+                            </div>
+                            
+                            <div class="level-2-spells">
+                                <h4>Level 2 Spells</h4>
+                                {% for spell_name, spell_data in spells_2lvl.items() %}
+                                <button class="attack-button spell-btn level-2"
+                                        data-spell-name="{{ spell_name }}"
+                                        data-spell-level="2"
+                                        data-range="{{ spell_data.range }}"
+                                        data-aoe="{{ spell_data.aoe|default(0) }}"
+                                        {% if character.spell_slots['2'] < 1 %}disabled{% endif %}>
+                                    {{ spell_name }} (Range: {{ spell_data.range }})
+                                </button>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
                     
-                    <h4>Level 2 Spells (Cost: {{ game_rules.combat.spell_cost }} speed)</h4>
-                    {% for spell_name, spell_data in spells_2lvl.items() %}
-                    <button 
-                        data-spell-type="spell"
-                        data-spell-level="2"
-                        data-range="{{ spell_data.range }}"
-                        data-spell-name="{{ spell_name }}"
-                        class="attack-button spell-btn level-2"
-                        {% if character.spell_slots['2'] < 1 %}disabled{% endif %}>
-                        {{ spell_name }} (Range: {{ spell_data.range }} tiles)
-                    </button>
-                    {% endfor %}
+                    <div class="action-buttons">
+                        <button id="attackButton" disabled>Attack</button>
+                        <button id="castSpellButton" disabled>Cast Spell</button>
+                    </div>
+                    
+                    <div id="attackPreview" class="hidden"></div>
+                    <div id="diceControls" class="hidden">
+                        <button id="rollHitButton">Roll Hit (d20)</button>
+                        <button id="rollDamageButton">Roll Damage</button>
+                    </div>
                 </div>
             </div>
-            <div class="action-buttons">
-                <button id="attackButton" disabled>Attack (Cost: {{ game_rules.combat.attack_cost }} speed)</button>
-                <button id="castSpellButton" disabled>Cast Spell</button>
-            </div>
-            <div id="attackPreview" style="display:none;"></div>
-            <div id="diceControls" style="display:none;">
-                <button id="rollHitButton">Roll Hit (d20)</button>
-                <button id="rollDamageButton" style="display:none;">Roll Damage</button>
-            </div>
+        </div>
+        
+        <div class="battle-log">
+            <h3>Battle Log</h3>
+            <div id="battleLog"></div>
         </div>
     </div>
-    
-    <div class="battle-log">
-        <h3>Battle Log:</h3>
-        <div id="battleLog" style="border:1px solid #000; padding: 10px; width: 800px; height: 300px; overflow-y: scroll;"></div>
-    </div>
-    
-    <style>
-    .spell-level {
-        margin-bottom: 20px;
-    }
 
-    .spell-card {
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        padding: 10px;
-        margin: 5px;
-        background-color: white;
-        width: 200px;
-        display: inline-block;
-        vertical-align: top;
-    }
-
-    .spell-details {
-        font-size: 0.9em;
-        color: #666;
-        margin-top: 5px;
-    }
-
-    .spell-button {
-        width: 100%;
-        padding: 8px;
-        margin-bottom: 5px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-weight: bold;
-    }
-
-    .level-1 {
-        background-color: #e3f2fd;
-        color: #1565c0;
-    }
-
-    .level-2 {
-        background-color: #fff3e0;
-        color: #ef6c00;
-    }
-
-    .spell-button:hover {
-        filter: brightness(0.9);
-    }
-
-    .spell-button:disabled {
-        background-color: #ccc;
-        cursor: not-allowed;
-    }
-
-    .attack-button {
-        display: block;
-        width: 100%;
-        padding: 10px;
-        margin: 5px 0;
-        background-color: #4CAF50;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        text-align: left;
-    }
-
-    .attack-button:hover {
-        background-color: #45a049;
-    }
-
-    .attack-button:disabled {
-        background-color: #cccccc;
-        cursor: not-allowed;
-    }
-
-    .terrain-controls {
-        margin: 10px 0;
-    }
-    
-    .terrain-btn {
-        padding: 5px 15px;
-        margin: 0 5px;
-        cursor: pointer;
-        border: none;
-        border-radius: 4px;
-    }
-    
-    .terrain-btn[data-active="true"] {
-        border: 2px solid #000;
-    }
-    
-    .terrain-btn:hover {
-        opacity: 0.8;
-    }
-
-    .spell-slots {
-        background-color: #f5f5f5;
-        padding: 10px;
-        border-radius: 5px;
-        margin: 10px 0;
-    }
-    </style>
-    
+    <!-- Pass configuration to JavaScript -->
     <script>
-    // Pass configuration to JavaScript
-    const BATTLEFIELD_CONFIG = {{ battlefield_config|tojson|safe }};
-    const GAME_RULES = {{ game_rules|tojson|safe }};
-    const CURRENT_TERRAIN = "{{ current_terrain }}";
+        window.GAME_CONFIG = JSON.parse('{{ config_data|tojson|safe }}');
     </script>
     <script src="{{ url_for('static', filename='js/hexgrid.js') }}"></script>
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Initialize with current terrain
-        changeTerrain(CURRENT_TERRAIN);
-        
-        // Attack button handlers
-        document.querySelectorAll('.attack-button').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const attackType = this.dataset.attackType;
-                const range = parseInt(this.dataset.range);
-                const spellName = this.dataset.spellName;
-                
-                selectAttack(attackType, range, spellName);
-            });
-        });
-        
-        updateEndTurnButton();
-        drawHexGrid();
-    });
-    </script>
+    <script src="{{ url_for('static', filename='js/combat.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
 </body>
 </html> 

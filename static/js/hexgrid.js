@@ -1,9 +1,18 @@
 // Initialize game state
-let playerPos = BATTLEFIELD_CONFIG.dimensions.starting_position || { col: 0, row: 0 };
+let playerPos = { col: 0, row: 0 };  // Will be updated from GAME_CONFIG
 let enemyPos = { col: 5, row: 4 };  // This will be set by the server
 
-// player's current speed, default 30
-let playerSpeed = 30;
+// Get player stats from config
+const PLAYER = {
+    stats: {
+        speed: 30,  // Default speed
+        ...window.GAME_CONFIG?.player?.stats  // Merge with any server-provided stats
+    }
+};
+
+// player's current speed, default to config value
+let playerSpeed = PLAYER.stats.speed;
+let hasMoved = false;  // Track if player has moved this turn
 
 let currentPath = [];
 let drawingPath = false;
@@ -11,22 +20,125 @@ let drawingPath = false;
 // Add these variables at the top with other globals
 let highlightedCells = [];
 let currentRange = 0;
-
-// Add TranslationManager initialization at the top
-let translationManager;
+let selectedCell = null;  // Store selected cell for AOE
+let currentAOE = 0;      // Store current AOE size
 
 // Grid dimensions from config
-const gridCols = BATTLEFIELD_CONFIG.dimensions.cols;
-const gridRows = BATTLEFIELD_CONFIG.dimensions.rows;
-const hexSize = BATTLEFIELD_CONFIG.dimensions.hex_size;
+const gridCols = window.GAME_CONFIG.battlefield.dimensions.cols;
+const gridRows = window.GAME_CONFIG.battlefield.dimensions.rows;
+const hexSize = window.GAME_CONFIG.battlefield.dimensions.hex_size;
 
 // Current terrain settings
-let currentTerrain = BATTLEFIELD_CONFIG.terrain_types[CURRENT_TERRAIN];
+let currentTerrain = window.GAME_CONFIG.battlefield.terrain_types[window.GAME_CONFIG.currentTerrain];
 let hexColors = [];
 
-document.addEventListener('DOMContentLoaded', async () => {
-    translationManager = new TranslationManager();
-    await translationManager.loadTranslations();
+// Single DOMContentLoaded event listener
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize hex colors and draw grid
+    initializeHexColors();
+    drawHexGrid();
+
+    // Attack button handlers
+    document.querySelectorAll('.attack-button').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const attackType = this.dataset.attackType || this.dataset.spellName;
+            const range = parseInt(this.dataset.range);
+            const aoe = parseInt(this.dataset.aoe) || 0;
+            const spellName = this.dataset.spellName;
+
+            console.log('Attack button clicked:', attackType);
+
+            // Clear any previous highlights
+            clearHighlight();
+
+            // Show range for spells/attacks if a range is specified
+            if (range) {
+                highlightRange(range, aoe);
+            }
+
+            // Call the selectAttack function if it exists
+            if (typeof selectAttack === 'function') {
+                selectAttack(attackType, range, spellName);
+            } else {
+                console.error('selectAttack function is not defined');
+            }
+        });
+    });
+
+    // Apply move button handler
+    const applyMoveButton = document.getElementById('applyMoveButton');
+    if (applyMoveButton) {
+        applyMoveButton.addEventListener('click', function() {
+            console.log('Apply Move button clicked');
+            applyMove();
+        });
+    }
+
+    // End turn button handler
+    const endTurnButton = document.getElementById('endTurnButton');
+    if (endTurnButton) {
+        endTurnButton.addEventListener('click', async function() {
+            console.log('End turn clicked');
+            
+            // Reset movement state
+            hasMoved = false;
+            playerSpeed = PLAYER.stats.speed;
+            currentPath = [];
+            clearHighlight();
+            
+            // Update UI
+            const charSpeedElem = document.getElementById('char_speed');
+            if (charSpeedElem) {
+                charSpeedElem.textContent = `${playerSpeed}/${PLAYER.stats.speed}`;
+            }
+            drawHexGrid();
+            
+            // Enemy turn
+            try {
+                const response = await fetch('/api/enemy_attack', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                console.log('Enemy turn response:', data);
+                
+                if (data.combat_log) {
+                    if (typeof addToBattleLog === 'function') {
+                        addToBattleLog(data.combat_log);
+                    } else {
+                        console.error('addToBattleLog function is not defined');
+                    }
+                }
+                
+                const charHPElem = document.getElementById('char_hp');
+                const enemyHPElem = document.getElementById('enemy_hp');
+                if (charHPElem) {
+                    charHPElem.textContent = data.character_hp;
+                }
+                if (enemyHPElem) {
+                    enemyHPElem.textContent = data.enemy_hp;
+                }
+                
+                if (data.enemy_pos) {
+                    enemyPos = data.enemy_pos;
+                    drawHexGrid();
+                }
+            } catch (error) {
+                console.error('Error during enemy turn:', error);
+                if (typeof addToBattleLog === 'function') {
+                    addToBattleLog('Error during enemy turn: ' + error.message);
+                }
+            }
+        });
+    }
+
+    // Update end turn button style
+    updateEndTurnButton();
 });
 
 function initializeHexColors() {
@@ -43,7 +155,7 @@ function initializeHexColors() {
 }
 
 function changeTerrain(terrainType) {
-    currentTerrain = BATTLEFIELD_CONFIG.terrain_types[terrainType];
+    currentTerrain = window.GAME_CONFIG.battlefield.terrain_types[terrainType];
     initializeHexColors();
     drawHexGrid();
 }
@@ -70,12 +182,20 @@ function drawHexGrid() {
             let x = col * hexWidth * 0.75 + hexSize;
             let y = row * hexHeight + ((col % 2) * hexHeight / 2) + hexSize;
             
-            // Check if this cell should be highlighted
+            // Check if this cell should be highlighted for range
             let isHighlighted = highlightedCells.some(cell => 
                 cell.col === col && cell.row === row
             );
             
-            drawHexagon(ctx, x, y, hexSize, isHighlighted);
+            // Check if this cell should be highlighted for AOE
+            let isInAOE = false;
+            if (selectedCell && currentAOE > 0) {
+                isInAOE = getCellsInAOE(selectedCell, currentAOE).some(cell =>
+                    cell.col === col && cell.row === row
+                );
+            }
+            
+            drawHexagon(ctx, x, y, hexSize, isHighlighted, isInAOE);
         }
     }
     
@@ -89,6 +209,8 @@ function drawHexGrid() {
 }
 
 function drawPath(ctx) {
+    if (currentPath.length < 2) return;
+    
     ctx.beginPath();
     ctx.strokeStyle = "green";
     ctx.lineWidth = 3;
@@ -112,10 +234,14 @@ function drawPath(ctx) {
     
     // Draw movement cost
     let steps = currentPath.length - 1;
-    let moveCost = steps * GAME_RULES.movement.base_cost;
+    let moveCost = steps * window.GAME_CONFIG.rules.movement.base_cost;
     let terrainMultiplier = currentTerrain.movement_cost || 1;
     let totalCost = Math.floor(moveCost * terrainMultiplier);
     
+    // Update move cost display
+    document.getElementById('moveCost').textContent = totalCost;
+    
+    // Color based on whether we can afford the move
     ctx.fillStyle = totalCost > playerSpeed ? "red" : "green";
     ctx.font = "14px Arial";
     ctx.fillText(`Movement Cost: ${totalCost} speed`, 10, 20);
@@ -174,7 +300,7 @@ function drawTokens(ctx) {
     ctx.fillText('E', x, y);
 }
 
-function drawHexagon(ctx, x, y, size, isHighlighted) {
+function drawHexagon(ctx, x, y, size, isHighlighted, isInAOE) {
     ctx.beginPath();
     for (let i = 0; i < 6; i++) {
         let angle = Math.PI / 180 * (60 * i);
@@ -189,8 +315,12 @@ function drawHexagon(ctx, x, y, size, isHighlighted) {
     ctx.closePath();
     
     // Fill with terrain color
-    ctx.fillStyle = hexColors[Math.floor(x / (size * 1.5))][Math.floor(y / (size * Math.sqrt(3)))];
-    ctx.fill();
+    let col = Math.floor(x / (size * 1.5));
+    let row = Math.floor(y / (size * Math.sqrt(3)));
+    if (col >= 0 && col < hexColors.length && row >= 0 && row < hexColors[col].length) {
+        ctx.fillStyle = hexColors[col][row];
+        ctx.fill();
+    }
     
     // Add highlight if needed
     if (isHighlighted) {
@@ -198,30 +328,41 @@ function drawHexagon(ctx, x, y, size, isHighlighted) {
         ctx.fill();
     }
     
+    // Add AOE highlight if needed
+    if (isInAOE) {
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+        ctx.fill();
+    }
+    
     ctx.strokeStyle = currentTerrain.grid_color;
     ctx.stroke();
 }
 
-function getCellFromPixel(x, y) {
-    let canvas = document.getElementById("hexCanvas");
-    let rect = canvas.getBoundingClientRect();
-    let mx = x - rect.left;
-    let my = y - rect.top;
-    
-    let hexWidth = hexSize * 2;
-    let hexHeight = Math.sqrt(3) * hexSize;
-    
-    for (let col = 0; col < gridCols; col++) {
-        for (let row = 0; row < gridRows; row++) {
-            let cx = col * hexWidth * 0.75 + hexSize;
-            let cy = row * hexHeight + ((col % 2) * hexHeight / 2) + hexSize;
-            let dist = Math.sqrt((mx - cx) ** 2 + (my - cy) ** 2);
-            if (dist < hexSize) {
-                return { col: col, row: row };
-            }
-        }
+/* Missing helper functions added */
+if (typeof getCellFromPixel !== 'function') {
+    function getCellFromPixel(clientX, clientY) {
+        let hexWidth = hexSize * 2;
+        let hexHeight = Math.sqrt(3) * hexSize;
+        let col = Math.floor((clientX - hexSize) / (hexWidth * 0.75));
+        if (col < 0) col = 0;
+        let row = Math.floor((clientY - hexSize - ((col % 2) * hexHeight / 2)) / hexHeight);
+        if (row < 0) row = 0;
+        if (col >= gridCols) col = gridCols - 1;
+        if (row >= gridRows) row = gridRows - 1;
+        return { col, row };
     }
-    return null;
+}
+
+if (typeof addToBattleLog !== 'function') {
+    function addToBattleLog(message) {
+        console.log('Battle Log:', message);
+    }
+}
+
+if (typeof selectAttack !== 'function') {
+    function selectAttack(attackType, range, spellName) {
+        console.log('Selected attack:', attackType, 'with range', range, 'and spell', spellName);
+    }
 }
 
 function computePath(start, end) {
@@ -235,7 +376,7 @@ function computePath(start, end) {
     
     // Calculate max steps based on remaining speed and terrain
     let terrainMultiplier = currentTerrain.movement_cost || 1;
-    let maxSteps = Math.floor(playerSpeed / (GAME_RULES.movement.base_cost * terrainMultiplier));
+    let maxSteps = Math.floor(playerSpeed / (window.GAME_CONFIG.rules.movement.base_cost * terrainMultiplier));
     
     while (current.col !== end.col || current.row !== end.row) {
         if (path.length > maxSteps) {
@@ -298,20 +439,20 @@ function checkAdjacent() {
     return neighbors.some(n => n.col === enemyPos.col && n.row === enemyPos.row);
 }
 
-function applyMove() {
+// Add this function to handle movement application
+async function applyMove() {
+    if (hasMoved) {
+        addToBattleLog("You can only move once per turn!");
+        return;
+    }
+
     if (currentPath.length < 2) {
         addToBattleLog("No path selected!");
         return;
     }
     
-    let dest = currentPath[currentPath.length - 1];
-    if (dest.col === enemyPos.col && dest.row === enemyPos.row) {
-        addToBattleLog("Cannot move onto enemy's square!");
-        return;
-    }
-    
     let steps = currentPath.length - 1;
-    let moveCost = steps * GAME_RULES.movement.base_cost;
+    let moveCost = steps * window.GAME_CONFIG.rules.movement.base_cost;
     let terrainMultiplier = currentTerrain.movement_cost || 1;
     let totalCost = Math.floor(moveCost * terrainMultiplier);
     
@@ -320,20 +461,27 @@ function applyMove() {
         return;
     }
     
+    // Update position and speed
+    playerPos = currentPath[currentPath.length - 1];
     playerSpeed -= totalCost;
-    playerPos = dest;
-    currentPath = [];
-    drawHexGrid();
+    hasMoved = true;  // Mark that player has moved this turn
     
     // Update UI
     document.getElementById('char_speed').textContent = playerSpeed;
     addToBattleLog(`Moved ${steps} tiles. Cost: ${totalCost} speed. Remaining: ${playerSpeed}`);
+    
+    // Clear path and redraw
+    currentPath = [];
+    drawHexGrid();
 }
 
 // Mouse event handlers
 let canvas = document.getElementById("hexCanvas");
 
 canvas.addEventListener("mousedown", function(e) {
+    if (hasMoved) {
+        return;  // Don't allow path drawing if already moved
+    }
     let cell = getCellFromPixel(e.clientX, e.clientY);
     if (cell && cell.col === playerPos.col && cell.row === playerPos.row) {
         drawingPath = true;
@@ -343,17 +491,33 @@ canvas.addEventListener("mousedown", function(e) {
 });
 
 canvas.addEventListener("mousemove", function(e) {
-    if (!drawingPath) return;
-    
-    let cell = getCellFromPixel(e.clientX, e.clientY);
-    if (cell) {
-        currentPath = computePath(playerPos, cell);
-        drawHexGrid();
+    if (drawingPath) {
+        let cell = getCellFromPixel(e.clientX, e.clientY);
+        if (cell) {
+            currentPath = computePath(playerPos, cell);
+            drawHexGrid();
+        }
+    } else if (currentRange > 0) {
+        let cell = getCellFromPixel(e.clientX, e.clientY);
+        if (cell && isInRange(cell.col, cell.row, currentRange)) {
+            selectedCell = cell;
+            drawHexGrid();
+        }
     }
 });
 
 canvas.addEventListener("mouseup", function() {
     drawingPath = false;
+});
+
+canvas.addEventListener("click", function(e) {
+    if (currentRange > 0 && !drawingPath) {
+        let cell = getCellFromPixel(e.clientX, e.clientY);
+        if (cell && isInRange(cell.col, cell.row, currentRange)) {
+            selectedCell = cell;
+            drawHexGrid();
+        }
+    }
 });
 
 // Initialize
@@ -394,8 +558,9 @@ function getCellsInRange(startCell, range) {
 }
 
 // Add function to highlight range
-function highlightRange(range) {
+function highlightRange(range, aoe = 0) {
     currentRange = range;
+    currentAOE = aoe;
     highlightedCells = getCellsInRange(playerPos, range);
     drawHexGrid();
 }
@@ -404,12 +569,46 @@ function highlightRange(range) {
 function clearHighlight() {
     highlightedCells = [];
     currentRange = 0;
+    currentAOE = 0;
+    selectedCell = null;
     drawHexGrid();
 }
 
 // Add function to check if target is in range
 function isInRange(targetCol, targetRow, range) {
-    return getCellsInRange(playerPos, range).some(cell => 
+    return highlightedCells.some(cell => 
         cell.col === targetCol && cell.row === targetRow
     );
-} 
+}
+
+// Add function to get cells in AOE
+function getCellsInAOE(center, size) {
+    if (size <= 0) return [];
+    return getCellsInRange(center, size - 1);
+}
+
+// Update the end turn button styling function
+function updateEndTurnButton() {
+    const endTurnButton = document.getElementById('endTurnButton');
+    if (endTurnButton) {
+        // Add hover effect directly to preserve existing click event listener
+        endTurnButton.addEventListener('mouseover', function() {
+            this.style.backgroundColor = '#45a049';
+        });
+        endTurnButton.addEventListener('mouseout', function() {
+            this.style.backgroundColor = '#4CAF50';
+        });
+    }
+}
+
+/* Expose functions and variables to the global window object */
+window.playerPos = playerPos;
+window.enemyPos = enemyPos;
+window.hasMoved = hasMoved;
+window.playerSpeed = playerSpeed;
+window.currentPath = currentPath;
+window.drawHexGrid = drawHexGrid;
+window.initializeHexColors = initializeHexColors;
+window.getCellsInRange = getCellsInRange;
+window.checkAdjacent = checkAdjacent;
+window.applyMove = applyMove; 

@@ -150,12 +150,12 @@ ENEMIES = {
 GAME_RULES = {
     "movement": {
         "base_cost": 5,  # Cost per hex of movement
-        "diagonal_cost": 7,  # Cost for diagonal movement
+        "diagonal_cost": 5,  # Cost for diagonal movement
         "min_movement": 5,  # Minimum movement allowed
     },
     "combat": {
-        "attack_cost": 10,  # Speed cost for making an attack
-        "spell_cost": 15,   # Speed cost for casting a spell
+        "attack_cost": 0,
+        "spell_cost": 0,
         "opportunity_attack_range": 1  # Range for opportunity attacks
     },
     "effects": {
@@ -165,7 +165,7 @@ GAME_RULES = {
             "breaks_control": True
         },
         "frozen": {
-            "movement_penalty": 0.5,
+            "movement_penalty": 3,
             "duration": 2,
             "breaks_on_damage": True
         },

@@ -8,19 +8,186 @@ h1, h2 {
     color: #333;
 }
 
+/* Game container */
+.game-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Status panel */
 .status-panel {
     display: flex;
     justify-content: space-between;
     margin-bottom: 20px;
-    max-width: 800px;
+    padding: 15px;
+    background-color: #f5f5f5;
+    border-radius: 8px;
 }
 
 .character-status, .enemy-status {
-    background-color: #fff;
-    padding: 15px;
-    border: 1px solid #ddd;
+    flex: 1;
+    padding: 10px;
+}
+
+.spell-slots {
+    background-color: #e3f2fd;
+    padding: 10px;
     border-radius: 5px;
-    width: 45%;
+    margin: 10px 0;
+}
+
+.ability-scores {
+    margin-top: 15px;
+}
+
+.scores-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 10px;
+}
+
+/* Game area */
+.game-area {
+    margin: 20px 0;
+}
+
+/* Terrain controls */
+.terrain-controls {
+    margin: 10px 0;
+}
+
+.terrain-btn {
+    padding: 8px 16px;
+    margin: 0 5px;
+    cursor: pointer;
+    border: none;
+    border-radius: 4px;
+    background-color: #f0f0f0;
+    transition: all 0.3s ease;
+}
+
+.terrain-btn:hover {
+    background-color: #e0e0e0;
+}
+
+.terrain-btn[data-active="true"] {
+    border: 2px solid #000;
+    background-color: #e0e0e0;
+}
+
+/* Combat controls */
+.combat-controls {
+    margin: 20px 0;
+}
+
+.attack-options {
+    margin-bottom: 20px;
+}
+
+.basic-attacks, .spell-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.attack-button {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    margin: 5px 0;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.3s ease;
+}
+
+.attack-button:hover {
+    background-color: #45a049;
+}
+
+.attack-button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.level-1 {
+    background-color: #1976d2;
+}
+
+.level-1:hover {
+    background-color: #1565c0;
+}
+
+.level-2 {
+    background-color: #7b1fa2;
+}
+
+.level-2:hover {
+    background-color: #6a1b9a;
+}
+
+/* Action buttons */
+.action-buttons {
+    margin: 15px 0;
+}
+
+#applyMoveButton, #attackButton, #castSpellButton, #endTurnButton {
+    padding: 10px 20px;
+    margin: 5px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+}
+
+#applyMoveButton:hover, #attackButton:hover, #castSpellButton:hover, #endTurnButton:hover {
+    background-color: #45a049;
+}
+
+#applyMoveButton:disabled, #attackButton:disabled, #castSpellButton:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+/* Battle log */
+.battle-log {
+    margin-top: 20px;
+}
+
+#battleLog {
+    border: 1px solid #ddd;
+    padding: 10px;
+    height: 300px;
+    overflow-y: auto;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+}
+
+#battleLog div {
+    margin: 5px 0;
+    padding: 5px;
+    border-bottom: 1px solid #eee;
+}
+
+/* Utility classes */
+.hidden {
+    display: none;
+}
+
+/* Canvas */
+#hexCanvas {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin: 10px 0;
 }
 
 .controls {
@@ -38,16 +205,6 @@ h1, h2 {
     padding: 15px;
     border: 1px solid #ddd;
     border-radius: 5px;
-}
-
-.combat-controls {
-    flex-grow: 1;
-}
-
-.attack-options {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
 }
 
 .attack-options h3 {
@@ -69,12 +226,6 @@ h1, h2 {
     background-color: #45a049;
 }
 
-.action-buttons {
-    display: flex;
-    gap: 10px;
-    margin: 10px 0;
-}
-
 #attackPreview {
     background-color: #f5f5f5;
     padding: 10px;
@@ -87,94 +238,6 @@ h1, h2 {
     display: flex;
     gap: 10px;
     margin-top: 10px;
-}
-
-.battle-log {
-    margin-top: 20px;
-}
-
-.battle-log h3 {
-    margin-bottom: 10px;
-    color: #333;
-}
-
-#applyMoveButton {
-    background-color: #2196F3;
-}
-
-#applyMoveButton:hover {
-    background-color: #0b7dda;
-}
-
-#attackButton {
-    background-color: #f44336;
-}
-
-#attackButton:hover {
-    background-color: #da190b;
-}
-
-#castSpellButton {
-    background-color: #9c27b0;
-}
-
-#castSpellButton:hover {
-    background-color: #7b1fa2;
-}
-
-#endTurnButton {
-    background-color: #ff9800;
-}
-
-#endTurnButton:hover {
-    background-color: #f57c00;
-}
-
-.controls button {
-    padding: 10px 20px;
-    font-size: 14px;
-    cursor: pointer;
-    color: white;
-    border: none;
-    border-radius: 4px;
-}
-
-.controls button:disabled {
-    background-color: #cccccc !important;
-    cursor: not-allowed;
-}
-
-#rollHitButton {
-    background-color: #673ab7;
-}
-
-#rollHitButton:hover {
-    background-color: #512da8;
-}
-
-#rollDamageButton {
-    background-color: #e91e63;
-}
-
-#rollDamageButton:hover {
-    background-color: #c2185b;
-}
-
-form {
-    background-color: #fff;
-    padding: 20px;
-    border: 1px solid #ddd;
-}
-
-canvas {
-    background-color: #fff;
-    border: 1px solid #ccc;
-    margin: 10px 0;
-}
-
-#battleLog {
-    font-family: monospace;
-    background-color: #fff;
 }
 
 #attackOptions {
