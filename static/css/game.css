@@ -1,10 +1,12 @@
 /* Game Layout */
 .game-container {
-    height: 100vh;
+    height: 100%;
+    min-height: 100vh;
     display: flex;
     flex-direction: column;
     background-color: rgb(17, 24, 39);
     overflow: hidden;
+    position: relative;
 }
 
 /* Header */
@@ -13,6 +15,9 @@
     background-color: rgb(31, 41, 55);
     border-bottom: 1px solid rgb(55, 65, 81);
     padding: 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 .header-content {
@@ -137,6 +142,7 @@
     overflow: hidden;
     min-height: 0;
     display: flex;
+    padding-bottom: 70px; /* Ensure space for input container */
 }
 
 .messages-content {
@@ -224,12 +230,15 @@
 /* Input Area */
 .input-container {
     flex: none;
-    position: sticky;
+    position: fixed;
     bottom: 0;
+    left: 0;
+    right: 0;
     padding: 1rem;
     background-color: rgb(17, 24, 39);
     border-top: 1px solid rgb(31, 41, 55);
     box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
+    z-index: 10;
 }
 
 .input-wrapper {
@@ -767,4 +776,36 @@
 .text-error {
     color: #ef4444 !important;
     font-weight: bold;
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+    .game-container {
+        height: 100%;
+        min-height: -webkit-fill-available;
+    }
+    
+    .messages-content {
+        padding-bottom: 80px;
+    }
+    
+    .input-container {
+        padding: 0.75rem;
+    }
+    
+    .action-input {
+        padding: 0.5rem 0.75rem;
+    }
+    
+    .header-content {
+        flex-wrap: wrap;
+    }
+    
+    .action-buttons {
+        margin-top: 0.5rem;
+    }
+    
+    .players-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    }
 } 
