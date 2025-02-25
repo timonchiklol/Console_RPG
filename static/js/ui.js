@@ -3,6 +3,7 @@ class GameUI {
     constructor(config) {
         this.config = config;
         this.setupEventListeners();
+        this.adjustCanvasSize();
     }
 
     setupEventListeners() {
@@ -14,15 +15,70 @@ class GameUI {
         // End turn button handler
         const endTurnButton = document.getElementById('endTurnButton');
         if (endTurnButton) {
-            endTurnButton.onclick = () => this.handleEndTurn();
+            endTurnButton.onclick = (event) => this.handleEndTurn(event.target);
         }
 
-        // Initialize end turn button style
-        this.updateEndTurnButton();
+        // Adjust canvas size on window resize
+        window.addEventListener('resize', () => {
+            this.adjustCanvasSize();
+            this.fixScrolling();
+        });
+        
+        // Call fixScrolling when window is fully loaded to ensure correct formatting
+        window.addEventListener('load', () => this.fixScrolling());
+        
+        // Ensure page is scrollable
+        this.fixScrolling();
+    }
+    
+    // Make sure page is scrollable
+    fixScrolling() {
+        // Fix the game container for proper scrolling
+        const gameContainer = document.querySelector('.game-container');
+        if (gameContainer) {
+            gameContainer.style.display = 'flex';
+            gameContainer.style.flexDirection = 'column';
+            gameContainer.style.height = '100vh';
+            gameContainer.style.overflow = 'hidden';
+        }
+        
+        // Make the main content area scrollable
+        const mainContent = document.querySelector('.main-content');
+        if (mainContent) {
+            mainContent.style.height = 'auto';
+            mainContent.style.flex = '1';
+            mainContent.style.overflowY = 'auto';
+            mainContent.style.overflowX = 'hidden';
+            mainContent.style.padding = '0 1rem';
+        }
+    }
+    
+    // Adjust canvas size based on container width
+    adjustCanvasSize() {
+        const canvas = document.getElementById('hexCanvas');
+        if (!canvas) return;
+        
+        const container = canvas.parentElement;
+        const containerWidth = container.clientWidth;
+        
+        // Maintain aspect ratio for the hexCanvas
+        const aspectRatio = 1.6; // width/height
+        const height = containerWidth / aspectRatio;
+        
+        canvas.width = containerWidth;
+        canvas.height = height;
+        
+        // Redraw the grid with new dimensions
+        if (window.drawHexGrid) {
+            window.drawHexGrid();
+        }
     }
 
-    async handleEndTurn() {
-        console.log("End turn clicked"); // Debug log
+    async handleEndTurn(buttonElement) {
+        console.log("End turn clicked");
+        
+        // Show notification
+        window.showNotification("Ending your turn...", "info", buttonElement);
         
         // Reset movement state
         window.hasMoved = false;
@@ -48,10 +104,10 @@ class GameUI {
             }
             
             const data = await response.json();
-            console.log("Enemy turn response:", data); // Debug log
+            console.log("Enemy turn response:", data);
             
             if (data.combat_log) {
-                this.addToBattleLog(data.combat_log);
+                window.showNotification(data.combat_log, "info");
             }
             
             // Update UI
@@ -62,41 +118,11 @@ class GameUI {
             if (data.enemy_pos) {
                 window.enemyPos = data.enemy_pos;
                 window.drawHexGrid();
+                window.showNotification("Enemy has moved!", "info");
             }
         } catch (error) {
             console.error('Error during enemy turn:', error);
-            this.addToBattleLog('Error during enemy turn: ' + error.message);
-        }
-    }
-
-    updateEndTurnButton() {
-        const endTurnButton = document.getElementById('endTurnButton');
-        if (endTurnButton) {
-            // Apply styles
-            const styles = {
-                'display': 'block',
-                'marginTop': '10px',
-                'padding': '10px 20px',
-                'backgroundColor': '#4CAF50',
-                'color': 'white',
-                'border': 'none',
-                'borderRadius': '4px',
-                'cursor': 'pointer',
-                'transition': 'background-color 0.3s ease',
-                'fontSize': '16px',
-                'fontWeight': 'bold'
-            };
-            
-            Object.assign(endTurnButton.style, styles);
-            
-            // Add hover effect
-            endTurnButton.addEventListener('mouseover', function() {
-                this.style.backgroundColor = '#45a049';
-            });
-            
-            endTurnButton.addEventListener('mouseout', function() {
-                this.style.backgroundColor = '#4CAF50';
-            });
+            window.showNotification('Error during enemy turn: ' + error.message, "error", buttonElement);
         }
     }
 
@@ -104,14 +130,12 @@ class GameUI {
         window.currentTerrain = this.config.battlefield.terrain_types[terrainType];
         window.initializeHexColors();
         window.drawHexGrid();
+        window.showNotification(`Changed terrain to ${terrainType}`, "info");
     }
 
-    addToBattleLog(message) {
-        const battleLog = document.getElementById('battleLog');
-        const entry = document.createElement('div');
-        entry.textContent = message;
-        battleLog.appendChild(entry);
-        battleLog.scrollTop = battleLog.scrollHeight;
+    addToBattleLog(message, targetElement = null) {
+        // Use the notification system instead
+        window.showNotification(message, "info", targetElement);
     }
 
     clearHighlight() {

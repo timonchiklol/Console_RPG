@@ -1,129 +1,216 @@
-<!DOCTYPE html>
-<html lang="{{ lang }}">
-<head>
-    <meta charset="UTF-8">
-    <title>Battle</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
-    <div class="game-container bg-gray-900">
-        <header class="bg-gray-800 border-b border-gray-700 p-4">
-            <div class="container mx-auto">
-                <div class="status-panel">
-                    <div class="character-status">
-                        <h2>{{ character.name }}</h2>
-                        <p>HP: <span id="char_hp">{{ character.hp }}/{{ character.max_hp }}</span></p>
-                        <p>Speed: <span id="char_speed">{{ character.movement_left }}/{{ character.speed }}</span></p>
-                        <div class="spell-slots">
-                            <p>Spell Slots:</p>
-                            <p>Level 1: <span id="spell_slots_1">{{ character.spell_slots['1'] }}</span></p>
-                            <p>Level 2: <span id="spell_slots_2">{{ character.spell_slots['2'] }}</span></p>
-                        </div>
-                        <div class="ability-scores">
-                            <h3>Ability Scores</h3>
-                            <div class="scores-grid">
-                                <div>STR: <span id="ability_strength">{{ character.ability_scores.strength }}</span></div>
-                                <div>DEX: <span id="ability_dexterity">{{ character.ability_scores.dexterity }}</span></div>
-                                <div>CON: <span id="ability_constitution">{{ character.ability_scores.constitution }}</span></div>
-                                <div>INT: <span id="ability_intelligence">{{ character.ability_scores.intelligence }}</span></div>
-                                <div>WIS: <span id="ability_wisdom">{{ character.ability_scores.wisdom }}</span></div>
-                                <div>CHA: <span id="ability_charisma">{{ character.ability_scores.charisma }}</span></div>
-                            </div>
-                        </div>
+{% extends "base.html" %}
+
+{% block title %}Battle{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/battle.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="game-container bg-gray-900">
+    <!-- Header Bar -->
+    <header class="game-header">
+        <div class="container mx-auto">
+            <div class="header-content">
+                <div class="character-status">
+                    <h2 class="text-amber-200 medieval text-xl">{{ character.name }}</h2>
+                    <div class="flex gap-4 mt-2">
+                        <div class="text-gray-200">HP: <span id="char_hp" class="text-amber-200">{{ character.hp }}/{{ character.max_hp }}</span></div>
+                        <div class="text-gray-200">Speed: <span id="char_speed" class="text-amber-200">{{ character.movement_left }}/{{ character.speed }}</span></div>
                     </div>
-                    <div class="enemy-status">
-                        <h2>Enemy: {{ enemy.name }}</h2>
-                        <p>HP: <span id="enemy_hp">{{ enemy.hp }}/{{ enemy.max_hp }}</span></p>
-                        <p>Speed: <span id="enemy_speed">{{ enemy.speed }}</span></p>
+                </div>
+                <div class="enemy-status">
+                    <h2 class="text-red-300 medieval text-xl">Enemy: {{ enemy.name }}</h2>
+                    <div class="flex gap-4 mt-2">
+                        <div class="text-gray-200">HP: <span id="enemy_hp" class="text-red-300">{{ enemy.hp }}/{{ enemy.max_hp }}</span></div>
+                        <div class="text-gray-200">Speed: <span id="enemy_speed" class="text-red-300">{{ enemy.speed }}</span></div>
                     </div>
                 </div>
             </div>
-        </header>
-        
-        <div class="game-area">
-            <p id="instructions" class="text-amber-100">Click and drag from your character to plan movement. Movement cost: {{ game_rules.movement.base_cost }} speed per hex.</p>
-            
-            <canvas id="hexCanvas" width="800" height="600"></canvas>
-            
-            <div class="controls">
-                <div class="movement-controls">
-                    <button id="applyMoveButton" class="action-button">Apply Move (<span id="moveCost">0</span>)</button>
-                    <button id="endTurnButton" class="action-button">End Turn</button>
+        </div>
+    </header>
+    
+    <!-- Main Content Area - Made scrollable -->
+    <div class="main-content">
+        <!-- Character Details Panel -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <!-- Character Card -->
+            <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                <h3 class="text-amber-100 text-lg medieval mb-2">Character Details</h3>
+                <div class="spell-slots bg-gray-700 rounded p-3 mt-2">
+                    <p class="text-amber-100 font-semibold">Spell Slots:</p>
+                    <div class="grid grid-cols-2 gap-2 mt-1">
+                        <p>Level 1: <span id="spell_slots_1" class="text-blue-300">{{ character.spell_slots['1'] }}</span></p>
+                        <p>Level 2: <span id="spell_slots_2" class="text-purple-300">{{ character.spell_slots['2'] }}</span></p>
+                    </div>
                 </div>
+                <div class="ability-scores mt-3">
+                    <h3 class="text-amber-100 text-md">Ability Scores</h3>
+                    <div class="scores-grid grid grid-cols-3 gap-2 mt-2 text-sm">
+                        <div class="bg-gray-700 p-2 rounded">STR: <span id="ability_strength" class="text-amber-200">{{ character.ability_scores.strength }}</span></div>
+                        <div class="bg-gray-700 p-2 rounded">DEX: <span id="ability_dexterity" class="text-amber-200">{{ character.ability_scores.dexterity }}</span></div>
+                        <div class="bg-gray-700 p-2 rounded">CON: <span id="ability_constitution" class="text-amber-200">{{ character.ability_scores.constitution }}</span></div>
+                        <div class="bg-gray-700 p-2 rounded">INT: <span id="ability_intelligence" class="text-amber-200">{{ character.ability_scores.intelligence }}</span></div>
+                        <div class="bg-gray-700 p-2 rounded">WIS: <span id="ability_wisdom" class="text-amber-200">{{ character.ability_scores.wisdom }}</span></div>
+                        <div class="bg-gray-700 p-2 rounded">CHA: <span id="ability_charisma" class="text-amber-200">{{ character.ability_scores.charisma }}</span></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Game Area / Canvas -->
+            <div class="md:col-span-2">
+                <p id="instructions" class="text-amber-100 mb-2">Click and drag from your character to plan movement. Movement cost: {{ game_rules.movement.base_cost }} speed per hex.</p>
+                <div class="canvas-container">
+                    <canvas id="hexCanvas" class="w-full border border-gray-700 rounded-lg bg-gray-800" width="800" height="500"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Controls Area -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <!-- Movement Controls -->
+            <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 relative">
+                <h3 class="text-amber-100 text-lg medieval mb-3">Movement</h3>
+                <div class="flex flex-col gap-2">
+                    <button id="applyMoveButton" class="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded transition-colors">
+                        Apply Move (<span id="moveCost">0</span>)
+                    </button>
+                    <button id="endTurnButton" class="bg-amber-600 hover:bg-amber-700 text-white p-3 rounded transition-colors">
+                        End Turn
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Combat Controls -->
+            <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 md:col-span-2 relative">
+                <h3 class="text-amber-100 text-lg medieval mb-3">Combat</h3>
                 
-                <div class="combat-controls">
-                    <div class="attack-options">
-                        <h3 class="text-amber-100">Basic Attacks</h3>
-                        <div class="basic-attacks">
+                <!-- Attack Options Tabs -->
+                <div class="mb-4">
+                    <div class="border-b border-gray-700">
+                        <nav class="flex -mb-px">
+                            <button class="group inline-flex items-center py-2 px-4 border-b-2 border-amber-500 text-amber-200 font-medium text-sm" role="tab" aria-selected="true">
+                                Basic Attacks
+                            </button>
+                            <button class="group inline-flex items-center py-2 px-4 border-b-2 border-transparent text-gray-400 hover:text-gray-300 font-medium text-sm" role="tab" aria-selected="false">
+                                Spells
+                            </button>
+                        </nav>
+                    </div>
+                    
+                    <!-- Basic Attacks -->
+                    <div class="pt-3">
+                        <div class="basic-attacks grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {% for attack_name, attack in character.abilities.items() %}
-                            <button class="attack-button basic-attack" 
+                            <button class="attack-button basic-attack text-left text-sm bg-gray-700 hover:bg-gray-600 text-white p-3 rounded transition-colors"
                                     data-attack-type="{{ attack_name }}"
                                     data-range="{{ attack.range }}"
                                     data-aoe="{{ attack.aoe|default(0) }}"
                                     data-damage="{{ attack.damage }}">
-                                {{ attack.name }} (Range: {{ attack.range }}, Damage: {{ attack.damage }})
+                                <div class="font-bold">{{ attack.name }}</div>
+                                <div class="text-xs text-gray-300">Range: {{ attack.range }}, Damage: {{ attack.damage }}</div>
                             </button>
                             {% endfor %}
                         </div>
                         
-                        <h3 class="text-amber-100">Spells</h3>
-                        <div class="spell-list">
-                            <div class="level-1-spells">
-                                <h4 class="text-amber-200">Level 1 Spells</h4>
-                                {% for spell_name, spell_data in spells_1lvl.items() %}
-                                <button class="attack-button spell-btn level-1"
-                                        data-spell-name="{{ spell_name }}"
-                                        data-spell-level="1"
-                                        data-range="{{ spell_data.range }}"
-                                        data-aoe="{{ spell_data.aoe|default(0) }}"
-                                        {% if character.spell_slots['1'] < 1 %}disabled{% endif %}>
-                                    {{ spell_name }} (Range: {{ spell_data.range }})
-                                </button>
-                                {% endfor %}
+                        <!-- Spells (Initially Hidden) -->
+                        <div class="spell-list hidden">
+                            <div class="mb-2">
+                                <h4 class="text-blue-300 text-sm font-bold mb-1">Level 1 Spells</h4>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {% for spell_name, spell_data in spells_1lvl.items() %}
+                                    <button class="attack-button spell-btn text-left text-sm bg-blue-900 hover:bg-blue-800 text-white p-3 rounded transition-colors"
+                                            data-spell-name="{{ spell_name }}"
+                                            data-spell-level="1"
+                                            data-range="{{ spell_data.range }}"
+                                            data-aoe="{{ spell_data.aoe|default(0) }}"
+                                            {% if character.spell_slots['1'] < 1 %}disabled{% endif %}>
+                                        <div class="font-bold">{{ spell_name }}</div>
+                                        <div class="text-xs text-gray-300">Range: {{ spell_data.range }}</div>
+                                    </button>
+                                    {% endfor %}
+                                </div>
                             </div>
                             
-                            <div class="level-2-spells">
-                                <h4 class="text-amber-200">Level 2 Spells</h4>
-                                {% for spell_name, spell_data in spells_2lvl.items() %}
-                                <button class="attack-button spell-btn level-2"
-                                        data-spell-name="{{ spell_name }}"
-                                        data-spell-level="2"
-                                        data-range="{{ spell_data.range }}"
-                                        data-aoe="{{ spell_data.aoe|default(0) }}"
-                                        {% if character.spell_slots['2'] < 1 %}disabled{% endif %}>
-                                    {{ spell_name }} (Range: {{ spell_data.range }})
-                                </button>
-                                {% endfor %}
+                            <div>
+                                <h4 class="text-purple-300 text-sm font-bold mb-1">Level 2 Spells</h4>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {% for spell_name, spell_data in spells_2lvl.items() %}
+                                    <button class="attack-button spell-btn text-left text-sm bg-purple-900 hover:bg-purple-800 text-white p-3 rounded transition-colors"
+                                            data-spell-name="{{ spell_name }}"
+                                            data-spell-level="2"
+                                            data-range="{{ spell_data.range }}"
+                                            data-aoe="{{ spell_data.aoe|default(0) }}"
+                                            {% if character.spell_slots['2'] < 1 %}disabled{% endif %}>
+                                        <div class="font-bold">{{ spell_name }}</div>
+                                        <div class="text-xs text-gray-300">Range: {{ spell_data.range }}</div>
+                                    </button>
+                                    {% endfor %}
+                                </div>
                             </div>
-                        </div>
-                        
-                        <div class="action-buttons">
-                            <button id="attackButton" class="action-button" disabled>Attack</button>
-                            <button id="castSpellButton" class="action-button" disabled>Cast Spell</button>
-                        </div>
-                        
-                        <div id="attackPreview" class="hidden"></div>
-                        <div id="diceControls" class="hidden">
-                            <button id="rollHitButton" class="action-button">Roll Hit (d20)</button>
-                            <button id="rollDamageButton" class="action-button">Roll Damage</button>
                         </div>
                     </div>
                 </div>
+                
+                <!-- Action Buttons -->
+                <div class="flex gap-2">
+                    <button id="attackButton" class="bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed" disabled>
+                        Attack
+                    </button>
+                    <button id="castSpellButton" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed" disabled>
+                        Cast Spell
+                    </button>
+                </div>
+                
+                <div id="attackPreview" class="mt-3 p-2 bg-gray-700 rounded text-gray-300 text-sm hidden"></div>
+                <div id="diceControls" class="mt-2 hidden">
+                    <button id="rollHitButton" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded text-sm">
+                        Roll Hit (d20)
+                    </button>
+                    <button id="rollDamageButton" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded text-sm ml-2">
+                        Roll Damage
+                    </button>
+                </div>
             </div>
         </div>
-        
-        <div class="battle-log">
-            <h3 class="text-amber-100">Battle Log</h3>
-            <div id="battleLog"></div>
-        </div>
     </div>
+</div>
 
-    <!-- Pass configuration to JavaScript -->
-    <script>
-        window.GAME_CONFIG = JSON.parse('{{ config_data|tojson|safe }}');
-    </script>
-    <script src="{{ url_for('static', filename='js/hexgrid.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/combat.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
-</body>
-</html> 
+<!-- Pass configuration to JavaScript -->
+<script>
+    window.GAME_CONFIG = JSON.parse('{{ config_data|tojson|safe }}');
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/hexgrid.js') }}"></script>
+<script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+<script src="{{ url_for('static', filename='js/combat.js') }}"></script>
+<script src="{{ url_for('static', filename='js/ui.js') }}"></script>
+<script>
+    // JavaScript to handle tab switching between Basic Attacks and Spells
+    document.addEventListener('DOMContentLoaded', function() {
+        const tabButtons = document.querySelectorAll('[role="tab"]');
+        const basicAttacks = document.querySelector('.basic-attacks');
+        const spellList = document.querySelector('.spell-list');
+        
+        tabButtons[0].addEventListener('click', function() {
+            tabButtons[0].classList.add('border-amber-500', 'text-amber-200');
+            tabButtons[0].classList.remove('border-transparent', 'text-gray-400');
+            tabButtons[1].classList.add('border-transparent', 'text-gray-400');
+            tabButtons[1].classList.remove('border-amber-500', 'text-amber-200');
+            basicAttacks.classList.remove('hidden');
+            spellList.classList.add('hidden');
+        });
+        
+        tabButtons[1].addEventListener('click', function() {
+            tabButtons[1].classList.add('border-amber-500', 'text-amber-200');
+            tabButtons[1].classList.remove('border-transparent', 'text-gray-400');
+            tabButtons[0].classList.add('border-transparent', 'text-gray-400');
+            tabButtons[0].classList.remove('border-amber-500', 'text-amber-200');
+            spellList.classList.remove('hidden');
+            basicAttacks.classList.add('hidden');
+        });
+    });
+</script>
+{% endblock %} 
