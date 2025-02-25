@@ -19,13 +19,14 @@ BATTLEFIELD_CONFIGS = {
         "description": "A dense forest where enemies can hide behind trees. Movement is slower but provides good cover.",
         "default_terrain": "FOREST",
         "dimensions": {
-            "cols": 8,
-            "rows": 6,
+            "cols": 10,
+            "rows": 10,
             "hex_size": 40
         },
-        "player_start": {"col": 0, "row": 2},
-        "enemy_start": {"col": 6, "row": 3},
-        "difficulty": "easy"
+        "player_start": {"col": 2, "row": 5},
+        "enemy_start": {"col": 8, "row": 5},
+        "difficulty": "easy",
+        "terrain_map": []
     },
     "desert_duel": {
         **BASE_CONFIG,
@@ -37,7 +38,7 @@ BATTLEFIELD_CONFIGS = {
             "rows": 8,
             "hex_size": 35
         },
-        "player_start": {"col": 1, "row": 4},
+        "player_start": {"col": 2, "row": 4},
         "enemy_start": {"col": 10, "row": 4},
         "difficulty": "medium"
     },
@@ -47,12 +48,12 @@ BATTLEFIELD_CONFIGS = {
         "description": "A dark cave system with tight corridors. Close quarters combat is inevitable.",
         "default_terrain": "CAVE",
         "dimensions": {
-            "cols": 6,
-            "rows": 10,
+            "cols": 8,
+            "rows": 12,
             "hex_size": 45
         },
-        "player_start": {"col": 2, "row": 0},
-        "enemy_start": {"col": 3, "row": 8},
+        "player_start": {"col": 2, "row": 6},
+        "enemy_start": {"col": 6, "row": 6},
         "difficulty": "hard"
     },
     "winter_siege": {
@@ -65,8 +66,8 @@ BATTLEFIELD_CONFIGS = {
             "rows": 10,
             "hex_size": 35
         },
-        "player_start": {"col": 4, "row": 0},
-        "enemy_start": {"col": 5, "row": 9},
+        "player_start": {"col": 2, "row": 5},
+        "enemy_start": {"col": 8, "row": 5},
         "difficulty": "medium"
     }
 } 

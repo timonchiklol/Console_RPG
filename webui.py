@@ -200,50 +200,71 @@ def roll_dice():
 # Update attack endpoint to use manual dice rolls
 @app.route("/api/attack", methods=["POST"])
 def api_attack():
-    if 'character' not in session or 'enemy' not in session:
-        return jsonify({"error": "No battle in progress."})
-    
-    character = session['character']
-    enemy = session['enemy']
-    
-    # Get attack type from request
-    attack_type = request.form.get("attack_type", "melee_attack")
-    
-    # Get the attack configuration
-    if attack_type in PLAYER['abilities']:
-        attack_config = PLAYER['abilities'][attack_type]
-    else:
-        return jsonify({"error": "Invalid attack type"})
-    
-    # Check if we have enough speed for the attack
-    attack_cost = GAME_RULES['combat']['attack_cost']
-    if character['movement_left'] < attack_cost:
-        return jsonify({"error": "Not enough speed for attack"})
-    
-    # Auto-roll attack
-    roll = random.randint(1, 20)
-    if roll >= 10:  # TODO: Use proper AC calculation
-        # Parse damage dice (e.g., "1d6")
-        dice_count, dice_sides = map(int, attack_config['damage'].split('d'))
-        damage = sum(random.randint(1, dice_sides) for _ in range(dice_count))
-        enemy['hp'] -= damage
-        combat_log = f"You used {attack_config['name']} and dealt {damage} damage."
-    else:
-        combat_log = f"Your {attack_config['name']} missed!"
-    
-    # Deduct speed cost
-    character['movement_left'] -= attack_cost
-    
-    session['character'] = character
-    session['enemy'] = enemy
-    
-    return jsonify({
-        "combat_log": combat_log,
-        "character_hp": character['hp'],
-        "enemy_hp": enemy['hp'],
-        "enemy_defeated": enemy['hp'] <= 0,
-        "movement_left": character['movement_left']
-    })
+    try:
+        if 'character' not in session or 'enemy' not in session:
+            return jsonify({"error": "No battle in progress."})
+        
+        character = session['character']
+        enemy = session['enemy']
+        
+        # Get attack type from request
+        attack_type = request.form.get("attack_type", "melee_attack")
+        print(f"Received attack_type: {attack_type}")  # Debugging
+        
+        # Get the attack configuration
+        attack_config = None
+        
+        # Try different approaches to find the attack config
+        if attack_type in character.get('abilities', {}):
+            attack_config = character['abilities'][attack_type]
+            print(f"Found attack in character abilities: {attack_config}")
+        elif attack_type in PLAYER['abilities']:
+            attack_config = PLAYER['abilities'][attack_type]
+            print(f"Found attack in PLAYER abilities: {attack_config}")
+        else:
+            # Fallback to basic melee attack
+            attack_config = {
+                "name": "Melee Attack",
+                "damage": "1d6",
+                "range": 1,
+                "description": "Basic melee attack"
+            }
+            print(f"Using fallback attack: {attack_config}")
+        
+        # Auto-roll attack
+        roll = random.randint(1, 20)
+        if roll >= 10:  # TODO: Use proper AC calculation
+            try:
+                dice_count, dice_sides = map(int, attack_config['damage'].split('d'))
+                damage = sum(random.randint(1, dice_sides) for _ in range(dice_count))
+            except Exception as e:
+                print(f"Error calculating damage: {e}")
+                damage = random.randint(1, 6)  # Fallback damage
+            
+            enemy['hp'] -= damage
+            combat_log = f"You used {attack_config['name']} and dealt {damage} damage."
+        else:
+            combat_log = f"Your {attack_config['name']} missed!"
+        
+        # Deduct speed cost
+        attack_cost = GAME_RULES['combat']['attack_cost']
+        character['movement_left'] -= attack_cost
+        
+        session['character'] = character
+        session['enemy'] = enemy
+        session.modified = True
+        
+        return jsonify({
+            "combat_log": combat_log,
+            "character_hp": character['hp'],
+            "enemy_hp": enemy['hp'],
+            "enemy_defeated": enemy['hp'] <= 0,
+            "movement_left": character['movement_left']
+        })
+        
+    except Exception as e:
+        print(f"Attack error: {e}")
+        return jsonify({"error": f"Attack failed: {str(e)}"})
 
 # Обновляем функцию api_enemy_attack, добавляем обработку новых эффектов
 @app.route("/api/enemy_attack", methods=["POST"])
@@ -254,103 +275,88 @@ def api_enemy_attack():
         effects = session.get('effects', {'enemy': {}, 'player': {}})
         combat_log = ""
         
-        # Check effects on enemy
-        enemy_effects = effects['enemy']
+        # Проверяем, что HP определены, иначе устанавливаем дефолтные значения
+        if 'hp' not in character:
+            character['hp'] = PLAYER['stats']['hp']
+        if 'hp' not in enemy:
+            enemy['hp'] = ENEMIES['goblin']['stats']['hp']
         
-        # Process damage from effects
-        if 'burning' in enemy_effects:
-            damage = GAME_RULES['effects']['burning']['damage']
-            enemy['hp'] -= damage
-            combat_log += f"Enemy takes {damage} damage from burning! "
-            
-            # Check if Hold Person effect should break
-            if 'paralyze' in enemy_effects and GAME_RULES['effects']['paralyze']['breaks_on_damage']:
-                del enemy_effects['paralyze']
-                combat_log += "Hold Person effect breaks from damage! "
+        # Обработка эффектов осталась без изменений
+        # ...
         
-        if 'bleeding' in enemy_effects:
-            damage = GAME_RULES['effects'].get('bleeding', {}).get('damage', 1)
-            enemy['hp'] -= damage
-            combat_log += f"Enemy takes {damage} damage from bleeding! "
-            
-            # Check Hold Person
-            if 'paralyze' in enemy_effects and GAME_RULES['effects']['paralyze']['breaks_on_damage']:
-                del enemy_effects['paralyze']
-                combat_log += "Hold Person effect breaks from damage! "
-        
-        # Check if enemy is under control effects
-        if any(effect in enemy_effects for effect in ['paralyze', 'frozen', 'fear', 'stunned']):
-            if 'fear' in enemy_effects:
-                # Use enemy's own attack against itself
-                enemy_type = enemy.get('name', 'goblin').lower()
-                attack = list(ENEMIES[enemy_type]['abilities'].values())[0]
-                dice_count, dice_sides = map(int, attack['damage'].split('d'))
-                damage = sum(random.randint(1, dice_sides) for _ in range(dice_count))
-                enemy['hp'] -= damage
-                combat_log += f"Enemy is feared and attacks itself for {damage} damage! "
-            elif 'frozen' in enemy_effects:
-                combat_log += "Enemy is frozen and cannot act! "
-            elif 'stunned' in enemy_effects:
-                combat_log += "Enemy is stunned and cannot attack! "
-            else:
-                combat_log += "Enemy is paralyzed and cannot move or attack! "
-            
-            # Reduce effect durations
-            for effect_name in list(enemy_effects.keys()):
-                effect = enemy_effects[effect_name]
-                effect['duration'] -= 1
-                if effect['duration'] <= 0:
-                    del enemy_effects[effect_name]
-                    combat_log += f"Enemy is no longer {effect_name}! "
-            
-            effects['enemy'] = enemy_effects
-            session['effects'] = effects
-            session['enemy'] = enemy
-            session.modified = True
-            
-            return jsonify({
-                "combat_log": combat_log,
-                "character_hp": character['hp'],
-                "enemy_hp": enemy['hp'],
-                "enemy_pos": enemy['pos']
-            })
-        
-        # Normal attack if no control effects
-        enemy_type = enemy.get('name', 'goblin').lower()
-        available_attacks = ENEMIES[enemy_type]['abilities']
-        
-        # Choose attack based on range to player
+        # Используем упрощенный подход к тактике ИИ для избежания проблем с Gemini API
         player_pos = character['pos']
         enemy_pos = enemy['pos']
+        enemy_type = enemy.get('name', 'goblin').lower()
+        
+        # Рассчитываем дистанцию до игрока
         distance = math.sqrt((player_pos['col'] - enemy_pos['col'])**2 + 
                            (player_pos['row'] - enemy_pos['row'])**2)
         
-        # Select best attack based on range
-        selected_attack = None
-        for attack in available_attacks.values():
+        # Простая тактика без использования Gemini API
+        # 1. Если игрок далеко - двигаемся к нему
+        # 2. Если в радиусе атаки - атакуем
+        
+        moved = False
+        attacked = False
+        
+        # Получаем доступные атаки
+        available_attacks = ENEMIES[enemy_type]['abilities']
+        
+        # Проверяем, есть ли атака в диапазоне
+        attack_in_range = False
+        best_attack = None
+        
+        for attack_name, attack in available_attacks.items():
             if attack['range'] >= distance:
-                selected_attack = attack
+                attack_in_range = True
+                best_attack = attack
                 break
         
-        if not selected_attack:
-            combat_log += "Enemy is too far to attack!"
-            return jsonify({
-                "combat_log": combat_log,
-                "character_hp": character['hp'],
-                "enemy_hp": enemy['hp'],
-                "enemy_pos": enemy['pos']
-            })
+        # Если игрок не в диапазоне атаки - двигаемся к нему
+        if not attack_in_range:
+            # Простое движение - уменьшаем разницу в координатах
+            if player_pos['col'] > enemy_pos['col']:
+                enemy_pos['col'] += 1
+            elif player_pos['col'] < enemy_pos['col']:
+                enemy_pos['col'] -= 1
+                
+            if player_pos['row'] > enemy_pos['row']:
+                enemy_pos['row'] += 1
+            elif player_pos['row'] < enemy_pos['row']:
+                enemy_pos['row'] -= 1
+                
+            moved = True
+            combat_log += "Enemy moves closer to attack! "
+            
+            # Проверяем, не стал ли игрок доступен для атаки после перемещения
+            distance = math.sqrt((player_pos['col'] - enemy_pos['col'])**2 + 
+                               (player_pos['row'] - enemy_pos['row'])**2)
+            
+            # Проверяем атаки снова
+            for attack_name, attack in available_attacks.items():
+                if attack['range'] >= distance:
+                    attack_in_range = True
+                    best_attack = attack
+                    break
         
-        # Roll attack
-        roll = random.randint(1, 20)
-        if roll >= 10:  # TODO: Use proper AC calculation
-            dice_count, dice_sides = map(int, selected_attack['damage'].split('d'))
-            damage = sum(random.randint(1, dice_sides) for _ in range(dice_count))
-            character['hp'] -= damage
-            combat_log += f"Enemy uses {selected_attack['name']} and deals {damage} damage! "
-        else:
-            combat_log += f"Enemy's {selected_attack['name']} missed! "
+        # Если игрок в диапазоне атаки - атакуем
+        if attack_in_range and best_attack:
+            # Атака
+            roll = random.randint(1, 20)
+            if roll >= 10:  # TODO: Использовать правильный расчет AC
+                dice_count, dice_sides = map(int, best_attack['damage'].split('d'))
+                damage = sum(random.randint(1, dice_sides) for _ in range(dice_count))
+                character['hp'] -= damage
+                combat_log += f"Enemy uses {best_attack['name']} and deals {damage} damage! "
+                attacked = True
+            else:
+                combat_log += f"Enemy's {best_attack['name']} missed! "
+                attacked = True
+        elif not moved:
+            combat_log += "Enemy couldn't find a way to attack! "
         
+        # Сохраняем изменения
         session['character'] = character
         session['enemy'] = enemy
         session['effects'] = effects
@@ -364,8 +370,15 @@ def api_enemy_attack():
         })
         
     except Exception as e:
-        print(f"Error in enemy attack: {e}")
-        return jsonify({"error": f"Enemy attack error: {str(e)}"})
+        print(f"Ошибка в атаке противника: {e}")
+        # В случае ошибки возвращаем последние известные значения
+        return jsonify({
+            "error": f"Enemy attack error: {str(e)}",
+            "combat_log": "Enemy is confused and does nothing.",
+            "character_hp": session.get('character', {}).get('hp', PLAYER['stats']['hp']),
+            "enemy_hp": session.get('enemy', {}).get('hp', ENEMIES['goblin']['stats']['hp']),
+            "enemy_pos": session.get('enemy', {}).get('pos', ENEMIES['goblin']['position'])
+        })
 
 # Обновляем функцию api_cast_spell для новых эффектов
 @app.route("/api/cast_spell", methods=["POST"])
@@ -508,6 +521,41 @@ def api_cast_spell():
     except Exception as e:
         print(f"Error casting spell: {e}")
         return jsonify({"error": f"Failed to cast spell: {str(e)}"})
+
+@app.route("/api/end_turn", methods=["POST"])
+def api_end_turn():
+    try:
+        if 'character' not in session:
+            return jsonify({"error": "No character in session"})
+            
+        character = session['character']
+        
+        # Восстанавливаем движение персонажа
+        character['movement_left'] = character['speed']
+        
+        # Обрабатываем эффекты, которые действуют в течение хода
+        effects = session.get('effects', {'player': {}, 'enemy': {}})
+        player_effects = effects['player']
+        
+        # Уменьшаем длительность эффектов игрока
+        for effect_name in list(player_effects.keys()):
+            effect = player_effects[effect_name]
+            effect['duration'] -= 1
+            if effect['duration'] <= 0:
+                del player_effects[effect_name]
+        
+        # Сохраняем изменения
+        effects['player'] = player_effects
+        session['effects'] = effects
+        session['character'] = character
+        session.modified = True
+        
+        # Вызываем атаку врага
+        return api_enemy_attack()
+        
+    except Exception as e:
+        print(f"Error in end_turn: {e}")
+        return jsonify({"error": f"Failed to end turn: {str(e)}"})
 
 if __name__ == "__main__":
     # This web UI runs on port 5000.

@@ -6,8 +6,8 @@ Contains settings for battlefield, characters, and game rules.
 # Battlefield Configuration
 BATTLEFIELD = {
     "dimensions": {
-        "cols": 10,
-        "rows": 8,
+        "cols": 15,
+        "rows": 12,
         "hex_size": 30
     },
     "terrain_types": {
