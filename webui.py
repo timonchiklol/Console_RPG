@@ -220,28 +220,16 @@ def api_attack():
     if character['movement_left'] < attack_cost:
         return jsonify({"error": "Not enough speed for attack"})
     
-    hit_roll = request.form.get("hit_roll")
-    damage_roll = request.form.get("damage_roll")
-    
-    if hit_roll is not None and damage_roll is not None:
-        hit_roll = int(hit_roll)
-        damage_roll = int(damage_roll)
-        if hit_roll >= 10:  # TODO: Use proper AC calculation
-            enemy['hp'] -= damage_roll
-            combat_log = f"You used {attack_config['name']} and dealt {damage_roll} damage."
-        else:
-            combat_log = f"Your {attack_config['name']} missed!"
+    # Auto-roll attack
+    roll = random.randint(1, 20)
+    if roll >= 10:  # TODO: Use proper AC calculation
+        # Parse damage dice (e.g., "1d6")
+        dice_count, dice_sides = map(int, attack_config['damage'].split('d'))
+        damage = sum(random.randint(1, dice_sides) for _ in range(dice_count))
+        enemy['hp'] -= damage
+        combat_log = f"You used {attack_config['name']} and dealt {damage} damage."
     else:
-        # Fallback auto-roll if manual roll not provided
-        roll = random.randint(1, 20)
-        if roll >= 10:  # TODO: Use proper AC calculation
-            # Parse damage dice (e.g., "1d6")
-            dice_count, dice_sides = map(int, attack_config['damage'].split('d'))
-            damage = sum(random.randint(1, dice_sides) for _ in range(dice_count))
-            enemy['hp'] -= damage
-            combat_log = f"You used {attack_config['name']} and dealt {damage} damage."
-        else:
-            combat_log = f"Your {attack_config['name']} missed!"
+        combat_log = f"Your {attack_config['name']} missed!"
     
     # Deduct speed cost
     character['movement_left'] -= attack_cost

@@ -17,7 +17,7 @@ BATTLEFIELD = {
                 "colors": ["#4a4a4a", "#545454", "#404040", "#4d4d4d"],
                 "frequency": 0.7
             },
-            "movement_cost": 1.2  # Movement costs more in caves
+            "movement_cost": 1.0  # Movement costs more in caves
         },
         "FOREST": {
             "grid_color": "#2d5a27",
@@ -25,7 +25,7 @@ BATTLEFIELD = {
                 "colors": ["#2d5a27", "#1e4d2b", "#386641", "#1b4332"],
                 "frequency": 0.8
             },
-            "movement_cost": 1.5  # Movement costs more in forests
+            "movement_cost": 1.0  # Movement costs more in forests
         },
         "DESERT": {
             "grid_color": "#b38b6d",
@@ -33,7 +33,7 @@ BATTLEFIELD = {
                 "colors": ["#deb887", "#d2aa7d", "#c4976f", "#b38b6d"],
                 "frequency": 0.9
             },
-            "movement_cost": 1.3  # Movement costs more in desert
+            "movement_cost": 1.2  # Movement costs more in desert
         },
         "WINTER": {
             "grid_color": "#b3d4d6",
@@ -41,7 +41,7 @@ BATTLEFIELD = {
                 "colors": ["#ffffff", "#f0f8ff", "#e6f3ff", "#d6eaff"],
                 "frequency": 0.6
             },
-            "movement_cost": 1.4  # Movement costs more in winter
+            "movement_cost": 1.0  # Movement costs more in winter
         }
     },
     "default_terrain": "FOREST"
@@ -149,9 +149,16 @@ ENEMIES = {
 # Game Rules Configuration
 GAME_RULES = {
     "movement": {
-        "base_cost": 4,  # Cost per hex of movement
-        "diagonal_cost": 4,  # Cost for diagonal movement
-        "min_movement": 4,  # Minimum movement allowed
+        "base_cost": 5,  # Base cost of 5 for all hexes
+        "terrain_costs": {
+            "plains": 5,
+            "forest": 7,
+            "mountains": 10,
+            "desert": 6,
+            "water": 8
+        },
+        "diagonal_cost": 5,  # Changed to match base_cost to avoid extra cost
+        "min_movement": 4,
     },
     "combat": {
         "attack_cost": 0,
