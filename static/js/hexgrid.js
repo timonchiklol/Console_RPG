@@ -12,7 +12,6 @@ const PLAYER = {
 
 // player's current speed, default to config value
 let playerSpeed = PLAYER.stats.speed;
-let hasMoved = false;  // Track if player has moved this turn
 
 let currentPath = [];
 let drawingPath = false;
@@ -81,7 +80,6 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('End turn clicked');
             
             // Reset movement state
-            hasMoved = false;
             playerSpeed = PLAYER.stats.speed;
             currentPath = [];
             clearHighlight();
@@ -91,6 +89,13 @@ document.addEventListener('DOMContentLoaded', function() {
             if (charSpeedElem) {
                 charSpeedElem.textContent = `${playerSpeed}/${PLAYER.stats.speed}`;
             }
+            
+            // Убеждаемся, что кнопка движения активна для следующего хода
+            const applyMoveButton = document.getElementById('applyMoveButton');
+            if (applyMoveButton) {
+                applyMoveButton.disabled = false;
+            }
+            
             drawHexGrid();
             
             // Enemy turn
@@ -441,11 +446,6 @@ function checkAdjacent() {
 
 // Add this function to handle movement application
 async function applyMove() {
-    if (hasMoved) {
-        addToBattleLog("You can only move once per turn!");
-        return;
-    }
-
     if (currentPath.length < 2) {
         addToBattleLog("No path selected!");
         return;
@@ -464,23 +464,29 @@ async function applyMove() {
     // Update position and speed
     playerPos = currentPath[currentPath.length - 1];
     playerSpeed -= totalCost;
-    hasMoved = true;  // Mark that player has moved this turn
     
     // Update UI
-    document.getElementById('char_speed').textContent = playerSpeed;
+    document.getElementById('char_speed').textContent = `${playerSpeed}/${PLAYER.stats.speed}`;
     addToBattleLog(`Moved ${steps} tiles. Cost: ${totalCost} speed. Remaining: ${playerSpeed}`);
     
     // Clear path and redraw
     currentPath = [];
     drawHexGrid();
+    
+    // Проверяем, осталось ли движение, и включаем/отключаем кнопку движения
+    const applyMoveButton = document.getElementById('applyMoveButton');
+    if (applyMoveButton) {
+        applyMoveButton.disabled = (playerSpeed <= 0);
+    }
 }
 
 // Mouse event handlers
 let canvas = document.getElementById("hexCanvas");
 
 canvas.addEventListener("mousedown", function(e) {
-    if (hasMoved) {
-        return;  // Don't allow path drawing if already moved
+    // Новая проверка - можно ли двигаться
+    if (playerSpeed <= 0) {
+        return;  // No more movement left
     }
     
     let rect = canvas.getBoundingClientRect();
@@ -608,7 +614,6 @@ function updateEndTurnButton() {
 /* Expose functions and variables to the global window object */
 window.playerPos = playerPos;
 window.enemyPos = enemyPos;
-window.hasMoved = hasMoved;
 window.playerSpeed = playerSpeed;
 window.currentPath = currentPath;
 window.drawHexGrid = drawHexGrid;
