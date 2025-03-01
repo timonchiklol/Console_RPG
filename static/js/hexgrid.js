@@ -31,6 +31,10 @@ const hexSize = window.GAME_CONFIG.battlefield.dimensions.hex_size;
 let currentTerrain = window.GAME_CONFIG.battlefield.terrain_types[window.GAME_CONFIG.currentTerrain];
 let hexColors = [];
 
+// Добавляем переменные для Misty Step
+let awaitingMistyStepTarget = false;
+let selectedTeleportCell = null;
+
 // Single DOMContentLoaded event listener
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize hex colors and draw grid
@@ -339,23 +343,95 @@ function drawHexagon(ctx, x, y, size, isHighlighted, isInAOE) {
         ctx.fill();
     }
     
+    // Добавляем подсветку клетки телепортации
+    if (selectedTeleportCell && col === selectedTeleportCell.col && row === selectedTeleportCell.row) {
+        ctx.fillStyle = 'rgba(0, 191, 255, 0.5)';  // Голубой цвет для телепортации
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0, 191, 255, 0.8)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.lineWidth = 1;
+    }
+    
     ctx.strokeStyle = currentTerrain.grid_color;
     ctx.stroke();
 }
 
-/* Missing helper functions added */
-if (typeof getCellFromPixel !== 'function') {
-    function getCellFromPixel(clientX, clientY) {
-        let hexWidth = hexSize * 2;
-        let hexHeight = Math.sqrt(3) * hexSize;
-        let col = Math.floor((clientX - hexSize) / (hexWidth * 0.75));
-        if (col < 0) col = 0;
-        let row = Math.floor((clientY - hexSize - ((col % 2) * hexHeight / 2)) / hexHeight);
-        if (row < 0) row = 0;
-        if (col >= gridCols) col = gridCols - 1;
-        if (row >= gridRows) row = gridRows - 1;
-        return { col, row };
+// Исправленная функция получения клетки из координат клика
+function getCellFromPixel(x, y) {
+    // Размеры шестиугольника
+    const hexWidth = hexSize * 2;
+    const hexHeight = Math.sqrt(3) * hexSize;
+    
+    // Сначала находим приблизительную колонку и строку
+    let col = Math.floor(x / (hexWidth * 0.75));
+    let row = Math.floor(y / hexHeight);
+    
+    // Учитываем смещение для нечетных колонок
+    if (col % 2 === 1) {
+        row = Math.floor((y - hexHeight / 2) / hexHeight);
     }
+    
+    // Дополнительная проверка для граничных ячеек
+    // Поскольку шестиугольники имеют наклонные границы
+    const centerX = col * (hexWidth * 0.75) + hexSize;
+    const centerY = row * hexHeight + ((col % 2) * (hexHeight / 2)) + hexSize;
+    
+    // Расчет расстояния от центра ячейки до точки клика
+    const dx = x - centerX;
+    const dy = y - centerY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Если точка находится далеко от центра, проверяем соседние ячейки
+    if (distance > hexSize / 2) {
+        // Проверяем соседние ячейки, чтобы найти ближайшую
+        const possibleCells = [
+            {col: col, row: row},
+            {col: col+1, row: row},
+            {col: col-1, row: row},
+            {col: col, row: row+1},
+            {col: col, row: row-1},
+            {col: col+1, row: row + (col % 2 === 0 ? 0 : 1)},
+            {col: col-1, row: row + (col % 2 === 0 ? 0 : 1)},
+            {col: col+1, row: row + (col % 2 === 0 ? -1 : 0)},
+            {col: col-1, row: row + (col % 2 === 0 ? -1 : 0)}
+        ];
+        
+        let bestDistance = distance;
+        let bestCell = {col, row};
+        
+        for (const cell of possibleCells) {
+            // Пропускаем ячейки за пределами сетки
+            if (cell.col < 0 || cell.col >= gridCols || cell.row < 0 || cell.row >= gridRows) {
+                continue;
+            }
+            
+            const cellCenterX = cell.col * (hexWidth * 0.75) + hexSize;
+            const cellCenterY = cell.row * hexHeight + ((cell.col % 2) * (hexHeight / 2)) + hexSize;
+            
+            const cellDx = x - cellCenterX;
+            const cellDy = y - cellCenterY;
+            const cellDistance = Math.sqrt(cellDx * cellDx + cellDy * cellDy);
+            
+            if (cellDistance < bestDistance) {
+                bestDistance = cellDistance;
+                bestCell = cell;
+            }
+        }
+        
+        col = bestCell.col;
+        row = bestCell.row;
+    }
+    
+    // Проверка границ сетки
+    if (col < 0) col = 0;
+    if (row < 0) row = 0;
+    if (col >= gridCols) col = gridCols - 1;
+    if (row >= gridRows) row = gridRows - 1;
+    
+    console.log(`Точные координаты клика: (${x}, ${y}), выбрана клетка: (${col}, ${row})`);
+    
+    return { col, row };
 }
 
 if (typeof addToBattleLog !== 'function') {
@@ -484,6 +560,50 @@ async function applyMove() {
 let canvas = document.getElementById("hexCanvas");
 
 canvas.addEventListener("mousedown", function(e) {
+    console.log("Mouse down event", awaitingMistyStepTarget);
+    
+    // Сначала проверяем режим Misty Step (важно проверить это первым)
+    if (awaitingMistyStepTarget) {
+        console.log("In Misty Step target selection mode");
+        let rect = canvas.getBoundingClientRect();
+        let x = e.clientX - rect.left;
+        let y = e.clientY - rect.top;
+        let cell = getCellFromPixel(x, y);
+        
+        console.log("Selected cell:", cell);
+        
+        // Проверяем, что клетка не занята врагом
+        if (cell.col === enemyPos.col && cell.row === enemyPos.row) {
+            if (window.showNotification) {
+                window.showNotification("Нельзя телепортироваться на клетку с врагом", "warning");
+            } else {
+                alert("Нельзя телепортироваться на клетку с врагом");
+            }
+            return;
+        }
+        
+        // Сохраняем выбранную клетку
+        selectedTeleportCell = cell;
+        
+        // Перерисовываем с новой выбранной клеткой
+        drawHexGrid();
+        
+        if (window.showNotification) {
+            window.showNotification(`Клетка (${cell.col}, ${cell.row}) выбрана. Нажмите 'Teleport' для телепортации.`, "info");
+        } else {
+            alert(`Клетка (${cell.col}, ${cell.row}) выбрана. Нажмите 'Teleport' для телепортации.`);
+        }
+        
+        // Включаем кнопку телепортации
+        const teleportButton = document.getElementById('teleportButton');
+        if (teleportButton) {
+            teleportButton.classList.remove('hidden');
+        }
+        
+        return; // Прерываем обработку
+    }
+    
+    // Оставшийся код для движения
     // Новая проверка - можно ли двигаться
     if (playerSpeed <= 0) {
         return;  // No more movement left
@@ -611,6 +731,81 @@ function updateEndTurnButton() {
     }
 }
 
+// Обновляем функцию телепортации для использования глобальной переменной
+function teleportToSelectedCell() {
+    if (!selectedTeleportCell) {
+        if (window.showNotification) {
+            window.showNotification("Сначала выберите клетку для телепортации", "warning");
+        } else {
+            alert("Сначала выберите клетку для телепортации");
+        }
+        return;
+    }
+    
+    console.log("Телепортация игрока из", playerPos, "в точку", selectedTeleportCell);
+    
+    // Телепортируем игрока точно в выбранную клетку
+    playerPos = {
+        col: selectedTeleportCell.col,
+        row: selectedTeleportCell.row
+    };
+    
+    // Сбрасываем выделение
+    highlightedCells = [];
+    
+    // Обновляем отображение
+    drawHexGrid();
+    
+    // Сбрасываем состояние телепортации
+    awaitingMistyStepTarget = false;
+    selectedTeleportCell = null;
+    
+    // Уменьшаем количество ячеек заклинаний
+    const spellSlots2Element = document.getElementById('spell_slots_2');
+    if (spellSlots2Element) {
+        const current = parseInt(spellSlots2Element.textContent);
+        spellSlots2Element.textContent = Math.max(0, current - 1);
+    }
+    
+    // Отображаем уведомление об успешной телепортации
+    if (window.showNotification) {
+        window.showNotification("Телепортация успешна!", "success");
+    } else {
+        alert("Телепортация успешна!");
+    }
+    
+    // Добавляем запись в боевой журнал
+    if (window.addToBattleLog) {
+        window.addToBattleLog(`Вы используете Misty Step и телепортируетесь на (${playerPos.col}, ${playerPos.row})!`);
+    }
+}
+
+// Добавляем функцию активации режима Misty Step
+function activateMistyStep() {
+    awaitingMistyStepTarget = true;
+    selectedTeleportCell = null;
+    
+    // Подсвечиваем все возможные клетки для телепортации
+    // Используем большой радиус, как указано в заклинании (100)
+    highlightedCells = [];
+    for (let col = 0; col < gridCols; col++) {
+        for (let row = 0; row < gridRows; row++) {
+            // Не добавляем клетку с врагом
+            if (col === enemyPos.col && row === enemyPos.row) continue;
+            highlightedCells.push({col, row});
+        }
+    }
+    
+    drawHexGrid();
+    
+    // Показать уведомление
+    if (window.showNotification) {
+        window.showNotification("Выберите клетку для телепортации", "info");
+    } else {
+        alert("Выберите клетку для телепортации");
+    }
+}
+
 /* Expose functions and variables to the global window object */
 window.playerPos = playerPos;
 window.enemyPos = enemyPos;
@@ -620,4 +815,6 @@ window.drawHexGrid = drawHexGrid;
 window.initializeHexColors = initializeHexColors;
 window.getCellsInRange = getCellsInRange;
 window.checkAdjacent = checkAdjacent;
-window.applyMove = applyMove; 
+window.applyMove = applyMove;
+window.activateMistyStep = activateMistyStep;
+window.teleportToSelectedCell = teleportToSelectedCell; 

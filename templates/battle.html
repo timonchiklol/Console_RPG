@@ -204,5 +204,22 @@
             basicAttacks.classList.add('hidden');
         });
     });
+
+    // Исправляем обработчик кнопки телепортации
+    document.addEventListener('DOMContentLoaded', function() {
+        // Кнопка телепортации
+        const teleportButton = document.getElementById('teleportButton');
+        if (teleportButton) {
+            teleportButton.addEventListener('click', function() {
+                if (window.teleportToSelectedCell) {
+                    window.teleportToSelectedCell();
+                } else {
+                    alert("Функция телепортации не найдена!");
+                }
+            });
+        }
+        
+        // Остальной код...
+    });
 </script>
 {% endblock %} 

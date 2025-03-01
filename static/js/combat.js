@@ -111,6 +111,14 @@ class CombatManager {
         }
 
         this.selectAttack(attackType, range, spellName);
+
+        // В handleAttackButtonClick добавляем обработку Misty Step
+        if (spellName === "Misty Step") {
+            // Активируем режим выбора клетки для телепортации
+            if (window.activateMistyStep) {
+                window.activateMistyStep();
+            }
+        }
     }
 
     selectAttack(attackType, range, spellName) {
@@ -213,6 +221,20 @@ class CombatManager {
     }
 
     async castSpell(event) {
+        // Если текущая атака - Misty Step и выбрана клетка
+        if (this.currentAttack.spellName === "Misty Step" && window.selectedTeleportCell) {
+            // Вызываем телепортацию напрямую
+            window.teleportToSelectedCell();
+            
+            // Отмечаем атаку как использованную, если нужно
+            this.attackUsedThisTurn = true;
+            
+            // Обновляем UI
+            this.updateUIAfterAction();
+            
+            return; // Прерываем выполнение, не отправляя запрос на сервер
+        }
+        
         // Проверяем, не использована ли атака в этом ходу
         if (this.attackUsedThisTurn) {
             if (window.showNotification) {
@@ -296,6 +318,23 @@ class CombatManager {
             }
             if (window.drawHexGrid) {
                 window.drawHexGrid();
+            }
+
+            // В castSpell добавляем обработку телепортации
+            if (this.currentAttack && this.currentAttack.spellName === "Misty Step") {
+                // Телепортируем игрока на выбранную клетку
+                if (window.teleportToSelectedCell) {
+                    window.teleportToSelectedCell();
+                    
+                    // Расходуем слот заклинания
+                    if (spellSlots2Element) {
+                        const current = parseInt(spellSlots2Element.textContent);
+                        spellSlots2Element.textContent = Math.max(0, current - 1);
+                    }
+                    
+                    // Не помечаем атаку как использованную, чтобы можно было ходить
+                    return;
+                }
             }
 
         } catch (error) {
