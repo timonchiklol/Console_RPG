@@ -35,6 +35,9 @@ let hexColors = [];
 let awaitingMistyStepTarget = false;
 let selectedTeleportCell = null;
 
+// Добавляем поддержку Hold Person
+let holdPersonActive = false;
+
 // Single DOMContentLoaded event listener
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize hex colors and draw grid
@@ -188,23 +191,16 @@ function drawHexGrid() {
     // Draw hexagons
     for (let col = 0; col < gridCols; col++) {
         for (let row = 0; row < gridRows; row++) {
-            let x = col * hexWidth * 0.75 + hexSize;
-            let y = row * hexHeight + ((col % 2) * hexHeight / 2) + hexSize;
+            // Вычисляем координаты центра гексагона
+            let x = col * hexSize * 1.5 + hexSize;
+            let y = row * hexSize * Math.sqrt(3) + (col % 2) * hexSize * Math.sqrt(3) / 2 + hexSize;
             
-            // Check if this cell should be highlighted for range
-            let isHighlighted = highlightedCells.some(cell => 
-                cell.col === col && cell.row === row
-            );
+            // Проверка, находится ли клетка в подсвеченной зоне
+            let isHighlighted = highlightedCells.some(cell => cell.col === col && cell.row === row);
+            let isInAOE = selectedCell && currentAOE > 0 && 
+                          getDistance(col, row, selectedCell.col, selectedCell.row) <= currentAOE;
             
-            // Check if this cell should be highlighted for AOE
-            let isInAOE = false;
-            if (selectedCell && currentAOE > 0) {
-                isInAOE = getCellsInAOE(selectedCell, currentAOE).some(cell =>
-                    cell.col === col && cell.row === row
-                );
-            }
-            
-            drawHexagon(ctx, x, y, hexSize, isHighlighted, isInAOE);
+            drawHexagon(ctx, x, y, hexSize, isHighlighted, isInAOE, col, row);
         }
     }
     
@@ -309,7 +305,7 @@ function drawTokens(ctx) {
     ctx.fillText('E', x, y);
 }
 
-function drawHexagon(ctx, x, y, size, isHighlighted, isInAOE) {
+function drawHexagon(ctx, x, y, size, isHighlighted, isInAOE, col, row) {
     ctx.beginPath();
     for (let i = 0; i < 6; i++) {
         let angle = Math.PI / 180 * (60 * i);
@@ -324,8 +320,6 @@ function drawHexagon(ctx, x, y, size, isHighlighted, isInAOE) {
     ctx.closePath();
     
     // Fill with terrain color
-    let col = Math.floor(x / (size * 1.5));
-    let row = Math.floor(y / (size * Math.sqrt(3)));
     if (col >= 0 && col < hexColors.length && row >= 0 && row < hexColors[col].length) {
         ctx.fillStyle = hexColors[col][row];
         ctx.fill();
@@ -351,6 +345,25 @@ function drawHexagon(ctx, x, y, size, isHighlighted, isInAOE) {
         ctx.lineWidth = 3;
         ctx.stroke();
         ctx.lineWidth = 1;
+    }
+    
+    // Это особое выделение для выбранной клетки Hold Person
+    if (holdPersonActive && window.holdPersonTarget) {
+        // Проверяем координаты врага напрямую, а не вычисленные col и row
+        if (enemyPos.col === window.holdPersonTarget.col && 
+            enemyPos.row === window.holdPersonTarget.row && 
+            col === enemyPos.col && row === enemyPos.row) {
+            
+            // Заливка более насыщенным фиолетовым без белой обводки
+            ctx.fillStyle = 'rgba(138, 43, 226, 0.6)';
+            ctx.fill();
+            
+            // Добавляем маленький внутренний круг для лучшей видимости
+            ctx.beginPath();
+            ctx.arc(x, y, size * 0.3, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(138, 43, 226, 0.9)';
+            ctx.fill();
+        }
     }
     
     ctx.strokeStyle = currentTerrain.grid_color;
@@ -701,6 +714,13 @@ function clearHighlight() {
     currentRange = 0;
     currentAOE = 0;
     selectedCell = null;
+    
+    // Сбрасываем состояние Misty Step и Hold Person
+    awaitingMistyStepTarget = false;
+    selectedTeleportCell = null;
+    holdPersonActive = false;
+    window.holdPersonTarget = null;
+    
     drawHexGrid();
 }
 
@@ -806,6 +826,153 @@ function activateMistyStep() {
     }
 }
 
+// Переделываем функцию activateHoldPerson для поддержки смены выбора
+function activateHoldPerson() {
+    // Сбрасываем состояние
+    holdPersonActive = true;
+    window.holdPersonTarget = null;
+    
+    // Подсвечиваем клетки в радиусе от игрока (60 футов = 12 клеток)
+    const spellRange = 12;
+    highlightedCells = getCellsInRange(playerPos, spellRange);
+    
+    // Перерисовываем поле
+    drawHexGrid();
+    
+    // Показываем подсказку
+    if (window.showNotification) {
+        window.showNotification("Выберите врага в радиусе для применения Hold Person", "info");
+    }
+    
+    // Добавляем обработчик для кнопки Cast Spell
+    const castSpellButton = document.getElementById('castSpellButton');
+    if (castSpellButton) {
+        // Сохраняем оригинальный обработчик
+        const originalOnClick = castSpellButton.onclick;
+        
+        // Устанавливаем новый обработчик
+        castSpellButton.onclick = function(e) {
+            if (holdPersonActive) {
+                // Проверяем, что цель выбрана
+                if (!window.holdPersonTarget) {
+                    if (window.showNotification) {
+                        window.showNotification("Сначала выберите врага для Hold Person", "warning");
+                    }
+                    return;
+                }
+                
+                // Отправляем запрос на сервер
+                fetch('/api/cast_spell', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        spell_name: "Hold Person",
+                        target: window.holdPersonTarget
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Обработка успешного ответа
+                    if (data.combat_log) {
+                        if (window.showNotification) {
+                            window.showNotification(data.combat_log, "success");
+                        }
+                        if (window.addToBattleLog) {
+                            window.addToBattleLog(data.combat_log);
+                        }
+                    }
+                    
+                    // Обновляем слоты заклинаний
+                    if (data.spell_slots) {
+                        const level2Element = document.getElementById('spell_slots_2');
+                        if (level2Element) {
+                            level2Element.textContent = data.spell_slots['2'];
+                        }
+                    }
+                    
+                    // Сбрасываем режим Hold Person
+                    holdPersonActive = false;
+                    window.holdPersonTarget = null;
+                    highlightedCells = [];
+                    drawHexGrid();
+                    
+                    // Восстанавливаем оригинальный обработчик
+                    castSpellButton.onclick = originalOnClick;
+                })
+                .catch(error => {
+                    console.error("Error casting Hold Person:", error);
+                    if (window.showNotification) {
+                        window.showNotification("Ошибка при применении Hold Person", "error");
+                    }
+                    
+                    // Сбрасываем режим даже при ошибке
+                    holdPersonActive = false;
+                    window.holdPersonTarget = null;
+                    highlightedCells = [];
+                    drawHexGrid();
+                    
+                    // Восстанавливаем оригинальный обработчик
+                    castSpellButton.onclick = originalOnClick;
+                });
+                
+                // Предотвращаем дальнейшую обработку клика
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            } else if (originalOnClick) {
+                // Для других заклинаний вызываем оригинальный обработчик
+                return originalOnClick.call(this, e);
+            }
+        };
+    }
+}
+
+// Исправляем обработчик клика для правильного выбора клетки
+canvas.onclick = function(e) {
+    // Если активен режим Hold Person
+    if (holdPersonActive) {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const cell = getCellFromPixel(x, y);
+        
+        if (!cell) return; // Защита от клика вне поля
+        
+        // Проверяем, что клетка находится в диапазоне заклинания
+        const isInRange = highlightedCells.some(c => c.col === cell.col && c.row === cell.row);
+        if (!isInRange) {
+            if (window.showNotification) {
+                window.showNotification("Эта клетка вне диапазона Hold Person", "warning");
+            }
+            return;
+        }
+        
+        // Проверяем, есть ли враг на этой клетке
+        if (cell.col === enemyPos.col && cell.row === enemyPos.row) {
+            // Выбираем или обновляем выбор цели
+            window.holdPersonTarget = {col: cell.col, row: cell.row};
+            
+            // Перерисовываем поле с новой выделенной клеткой
+            drawHexGrid();
+            
+            if (window.showNotification) {
+                window.showNotification("Враг выбран для Hold Person. Нажмите 'Cast Spell'", "success");
+            }
+        } else {
+            if (window.showNotification) {
+                window.showNotification("В этой клетке нет врага для Hold Person", "warning");
+            }
+        }
+        
+        return; // Предотвращаем дальнейшую обработку
+    }
+    
+    // Обработка для Misty Step и других случаев
+    // ...остальной код обработчика клика...
+};
+
 /* Expose functions and variables to the global window object */
 window.playerPos = playerPos;
 window.enemyPos = enemyPos;
@@ -817,4 +984,5 @@ window.getCellsInRange = getCellsInRange;
 window.checkAdjacent = checkAdjacent;
 window.applyMove = applyMove;
 window.activateMistyStep = activateMistyStep;
-window.teleportToSelectedCell = teleportToSelectedCell; 
+window.teleportToSelectedCell = teleportToSelectedCell;
+window.activateHoldPerson = activateHoldPerson; 

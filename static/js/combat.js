@@ -114,9 +114,14 @@ class CombatManager {
 
         // В handleAttackButtonClick добавляем обработку Misty Step
         if (spellName === "Misty Step") {
-            // Активируем режим выбора клетки для телепортации
             if (window.activateMistyStep) {
                 window.activateMistyStep();
+            }
+        } else if (spellName === "Hold Person") {
+            if (window.activateHoldPerson) {
+                window.activateHoldPerson();
+            } else {
+                console.error("Function activateHoldPerson not found");
             }
         }
     }
@@ -349,4 +354,30 @@ class CombatManager {
 // Initialize combat manager when the DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.combatManager = new CombatManager(window.GAME_CONFIG);
-}); 
+});
+
+// Находим и исправляем функцию, которая обрабатывает ответ после хода врага
+function handleEnemyTurnResponse(response) {
+    // ... существующий код ...
+    
+    // Проверяем, действительно ли враг переместился, сравнивая старую и новую позиции
+    const oldEnemyPos = JSON.stringify(window.enemyPos || {});
+    const newEnemyPos = JSON.stringify(response.enemy_pos || {});
+    
+    // Обновляем позицию врага
+    window.enemyPos = response.enemy_pos;
+    
+    // Перерисовываем поле
+    if (window.drawHexGrid) {
+        window.drawHexGrid();
+    }
+    
+    // Показываем сообщение о перемещении только если позиция действительно изменилась
+    if (oldEnemyPos !== newEnemyPos) {
+        if (window.showNotification) {
+            window.showNotification("Enemy has moved!", "info");
+        }
+    }
+    
+    // ... остальной код ...
+} 

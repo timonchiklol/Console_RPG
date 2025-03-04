@@ -8,6 +8,7 @@ import os
 from config import BATTLEFIELD, PLAYER, ENEMIES, GAME_RULES  # Import our new config
 from battlefield_configs import BATTLEFIELD_CONFIGS
 from character_config import CLASS_CONFIGS
+import copy
 
 app = Flask(__name__)
 app.secret_key = 'secret-key-for-session'
@@ -281,34 +282,55 @@ def api_enemy_attack():
         if 'hp' not in enemy:
             enemy['hp'] = ENEMIES['goblin']['stats']['hp']
         
-        # Обработка эффектов осталась без изменений
-        # ...
+        # Обработка эффектов врага
+        enemy_effects = effects.get('enemy', {})
         
-        # Используем упрощенный подход к тактике ИИ для избежания проблем с Gemini API
+        # Проверяем наличие эффекта паралича
+        if 'paralyze' in enemy_effects:
+            paralyze_effect = enemy_effects['paralyze']
+            paralyze_effect['duration'] -= 1
+            
+            # Проверяем, не закончился ли эффект
+            if paralyze_effect['duration'] <= 0:
+                del enemy_effects['paralyze']
+                combat_log += "Враг освободился от эффекта паралича! "
+            else:
+                combat_log += f"Враг парализован и не может действовать! (Осталось ходов: {paralyze_effect['duration']}) "
+                
+                # Сохраняем изменения и завершаем - враг пропускает ход
+                session['character'] = character
+                session['enemy'] = enemy
+                session['effects'] = effects
+                session.modified = True
+                
+                print("DEBUG: Враг парализован, пропускаем ход")
+                return jsonify({
+                    "combat_log": combat_log,
+                    "character_hp": character['hp'],
+                    "enemy_hp": enemy['hp'],
+                    "enemy_pos": enemy['pos']
+                })
+        
+        # Если код дошел до этого места, значит враг не парализован
+        print("DEBUG: Враг не парализован, выполняем его ход")
+        
+        # Используем упрощенный подход к тактике ИИ
         player_pos = character['pos']
         enemy_pos = enemy['pos']
-        enemy_type = enemy.get('name', 'goblin').lower()
         
-        # Рассчитываем дистанцию до игрока
-        distance = math.sqrt((player_pos['col'] - enemy_pos['col'])**2 + 
-                           (player_pos['row'] - enemy_pos['row'])**2)
-        
-        # Простая тактика без использования Gemini API
-        # 1. Если игрок далеко - двигаемся к нему
-        # 2. Если в радиусе атаки - атакуем
-        
-        moved = False
-        attacked = False
-        
-        # Получаем доступные атаки
-        available_attacks = ENEMIES[enemy_type]['abilities']
+        # Сохраняем начальную позицию для проверки
+        initial_pos = copy.deepcopy(enemy_pos)
         
         # Проверяем, есть ли атака в диапазоне
         attack_in_range = False
         best_attack = None
         
+        # Получаем доступные атаки
+        available_attacks = ENEMIES[enemy.get('name', 'goblin').lower()]['abilities']
+        
         for attack_name, attack in available_attacks.items():
-            if attack['range'] >= distance:
+            if attack['range'] >= math.sqrt((player_pos['col'] - enemy_pos['col'])**2 + 
+                                           (player_pos['row'] - enemy_pos['row'])**2):
                 attack_in_range = True
                 best_attack = attack
                 break
@@ -326,7 +348,6 @@ def api_enemy_attack():
             elif player_pos['row'] < enemy_pos['row']:
                 enemy_pos['row'] -= 1
                 
-            moved = True
             combat_log += "Enemy moves closer to attack! "
             
             # Проверяем, не стал ли игрок доступен для атаки после перемещения
@@ -349,12 +370,14 @@ def api_enemy_attack():
                 damage = sum(random.randint(1, dice_sides) for _ in range(dice_count))
                 character['hp'] -= damage
                 combat_log += f"Enemy uses {best_attack['name']} and deals {damage} damage! "
-                attacked = True
             else:
                 combat_log += f"Enemy's {best_attack['name']} missed! "
-                attacked = True
-        elif not moved:
-            combat_log += "Enemy couldn't find a way to attack! "
+        
+        # Проверяем, изменилась ли позиция врага
+        if enemy_pos != initial_pos:
+            print(f"DEBUG: Враг переместился с {initial_pos} на {enemy_pos}")
+        else:
+            print("DEBUG: Враг не двигался")
         
         # Сохраняем изменения
         session['character'] = character
@@ -556,6 +579,18 @@ def api_end_turn():
     except Exception as e:
         print(f"Error in end_turn: {e}")
         return jsonify({"error": f"Failed to end turn: {str(e)}"})
+
+# Если у вас есть отдельная функция для движения врага, добавьте в неё:
+def move_enemy():
+    # Получаем эффекты врага
+    enemy_effects = session.get('effects', {}).get('enemy', {})
+    
+    # Если враг парализован, пропускаем движение
+    if 'paralyze' in enemy_effects:
+        return "Враг парализован и не может двигаться"
+    
+    # Код движения врага
+    # ...
 
 if __name__ == "__main__":
     # This web UI runs on port 5000.

@@ -106,19 +106,32 @@ class GameUI {
             const data = await response.json();
             console.log("Enemy turn response:", data);
             
-            if (data.combat_log) {
-                window.showNotification(data.combat_log, "info");
-            }
-            
-            // Update UI
-            document.getElementById('char_hp').textContent = data.character_hp;
-            document.getElementById('enemy_hp').textContent = data.enemy_hp;
-            
-            // Update enemy position if it moved
-            if (data.enemy_pos) {
-                window.enemyPos = data.enemy_pos;
-                window.drawHexGrid();
-                window.showNotification("Enemy has moved!", "info");
+            // Используем нашу новую функцию для обработки хода врага
+            if (typeof handleEnemyTurnResponse === 'function') {
+                handleEnemyTurnResponse(data);
+            } else {
+                // Резервный вариант, если функция не определена
+                if (data.combat_log) {
+                    window.showNotification(data.combat_log, "info");
+                }
+                
+                // Update UI
+                document.getElementById('char_hp').textContent = data.character_hp;
+                document.getElementById('enemy_hp').textContent = data.enemy_hp;
+                
+                // Update enemy position
+                if (data.enemy_pos) {
+                    const oldPos = JSON.stringify(window.enemyPos);
+                    const newPos = JSON.stringify(data.enemy_pos);
+                    
+                    window.enemyPos = data.enemy_pos;
+                    window.drawHexGrid();
+                    
+                    // Показываем сообщение только если позиция действительно изменилась
+                    if (oldPos !== newPos) {
+                        window.showNotification("Enemy has moved!", "info");
+                    }
+                }
             }
         } catch (error) {
             console.error('Error during enemy turn:', error);
@@ -165,4 +178,51 @@ class GameUI {
 // Initialize UI manager when the DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.gameUI = new GameUI(window.GAME_CONFIG);
-}); 
+});
+
+// Ищем функцию, которая обрабатывает ответ от сервера после хода врага
+function handleEnemyTurnResponse(response) {
+    // Обновляем здоровье персонажа
+    const charHpElement = document.getElementById('character_hp');
+    if (charHpElement) {
+        charHpElement.textContent = response.character_hp;
+    }
+    
+    // Обновляем здоровье врага
+    const enemyHpElement = document.getElementById('enemy_hp');
+    if (enemyHpElement) {
+        enemyHpElement.textContent = response.enemy_hp;
+    }
+    
+    // ИСПРАВИТЬ: Добавляем проверку изменения позиции врага
+    if (response.enemy_pos) {
+        const oldPos = JSON.stringify(window.enemyPos);
+        const newPos = JSON.stringify(response.enemy_pos);
+        
+        // Обновляем позицию врага
+        window.enemyPos = response.enemy_pos;
+        
+        // Показываем сообщение только если позиция реально изменилась
+        if (oldPos !== newPos) {
+            if (window.showNotification) {
+                window.showNotification("Enemy has moved!", "info");
+            }
+        }
+    }
+    
+    // Перерисовываем поле
+    if (window.drawHexGrid) {
+        window.drawHexGrid();
+    }
+    
+    // Добавляем боевой лог
+    if (response.combat_log) {
+        if (window.showNotification) {
+            window.showNotification(response.combat_log, "info");
+        }
+        
+        if (window.addToBattleLog) {
+            window.addToBattleLog(response.combat_log);
+        }
+    }
+} 
