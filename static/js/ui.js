@@ -180,30 +180,36 @@ document.addEventListener('DOMContentLoaded', () => {
     window.gameUI = new GameUI(window.GAME_CONFIG);
 });
 
-// Ищем функцию, которая обрабатывает ответ от сервера после хода врага
+// Изменим функцию handleEnemyTurnResponse для учета статуса врага
 function handleEnemyTurnResponse(response) {
-    // Обновляем здоровье персонажа
-    const charHpElement = document.getElementById('character_hp');
-    if (charHpElement) {
-        charHpElement.textContent = response.character_hp;
+    // Обновляем здоровье персонажа и врага
+    if (document.getElementById('character_hp')) {
+        document.getElementById('character_hp').textContent = response.character_hp;
+    }
+    if (document.getElementById('enemy_hp')) {
+        document.getElementById('enemy_hp').textContent = response.enemy_hp;
     }
     
-    // Обновляем здоровье врага
-    const enemyHpElement = document.getElementById('enemy_hp');
-    if (enemyHpElement) {
-        enemyHpElement.textContent = response.enemy_hp;
-    }
+    // Проверяем статус врага - мы добавили специальный флаг в ответ сервера
+    const enemyStatus = response.enemy_status;
+    const isFrozenOrParalyzed = enemyStatus === "frozen" || enemyStatus === "paralyzed" ||
+                              (response.combat_log && 
+                               (response.combat_log.includes("заморожен") || 
+                                response.combat_log.includes("парализован")));
     
-    // ИСПРАВИТЬ: Добавляем проверку изменения позиции врага
+    // Обновляем позицию врага и проверяем движение
     if (response.enemy_pos) {
-        const oldPos = JSON.stringify(window.enemyPos);
+        const oldPos = JSON.stringify(window.enemyPos || {});
         const newPos = JSON.stringify(response.enemy_pos);
         
-        // Обновляем позицию врага
+        // Обновляем позицию врага в любом случае
         window.enemyPos = response.enemy_pos;
         
-        // Показываем сообщение только если позиция реально изменилась
-        if (oldPos !== newPos) {
+        // Показываем сообщение только если:
+        // 1. Позиция реально изменилась
+        // 2. Враг НЕ заморожен и НЕ парализован
+        if (oldPos !== newPos && !isFrozenOrParalyzed) {
+            console.log("Enemy moved from", oldPos, "to", newPos);
             if (window.showNotification) {
                 window.showNotification("Enemy has moved!", "info");
             }
@@ -225,4 +231,9 @@ function handleEnemyTurnResponse(response) {
             window.addToBattleLog(response.combat_log);
         }
     }
+
+    // Добавим в handleEnemyTurnResponse дополнительные отладочные сообщения
+    console.log("Enemy position from server:", response.enemy_pos);
+    console.log("Current enemy position:", window.enemyPos);
+    console.log("Is frozen or paralyzed:", isFrozenOrParalyzed);
 } 

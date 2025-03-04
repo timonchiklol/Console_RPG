@@ -271,10 +271,19 @@ def api_attack():
 @app.route("/api/enemy_attack", methods=["POST"])
 def api_enemy_attack():
     try:
+        print("DEBUG: Starting enemy turn, effects:", session.get('effects', {'enemy': {}, 'player': {}}).get('enemy', {}))
+        
         character = session.get('character', {})
         enemy = session.get('enemy', {})
         effects = session.get('effects', {'enemy': {}, 'player': {}})
+        enemy_effects = effects.get('enemy', {})
         combat_log = ""
+        
+        # ПРИНУДИТЕЛЬНО ПРОВЕРЯЕМ ЗАМОРОЖЕННОСТЬ В НАЧАЛЕ ФУНКЦИИ
+        if 'frozen' in enemy_effects:
+            print("ВАЖНО: Враг заморожен в начале функции api_enemy_attack")
+            # Запоминаем начальную позицию, чтобы потом проверить, не изменилась ли она
+            initial_pos = copy.deepcopy(enemy.get('pos', {}))
         
         # Проверяем, что HP определены, иначе устанавливаем дефолтные значения
         if 'hp' not in character:
@@ -311,8 +320,75 @@ def api_enemy_attack():
                     "enemy_pos": enemy['pos']
                 })
         
-        # Если код дошел до этого места, значит враг не парализован
-        print("DEBUG: Враг не парализован, выполняем его ход")
+        # Проверяем наличие эффекта испуга
+        elif 'fear' in enemy_effects:
+            fear_effect = enemy_effects['fear']
+            fear_effect['duration'] -= 1
+            
+            if fear_effect['duration'] <= 0:
+                combat_log += "Враг преодолел свой страх! "
+                del enemy_effects['fear']
+            else:
+                combat_log += "Враг в панике атакует сам себя! "
+                
+                # Враг атакует сам себя своей базовой атакой
+                enemy_type = enemy.get('name', 'goblin').lower()
+                basic_attack = list(ENEMIES[enemy_type]['abilities'].values())[0]
+                
+                # Бросок атаки
+                roll = random.randint(1, 20)
+                if roll >= 10:  # Упрощенный порог попадания
+                    # Наносим урон
+                    dice_parts = basic_attack['damage'].split('d')
+                    dice_count = int(dice_parts[0])
+                    dice_size = int(dice_parts[1])
+                    damage = sum(random.randint(1, dice_size) for _ in range(dice_count))
+                    
+                    enemy['hp'] -= damage
+                    combat_log += f"Враг наносит себе {damage} урона! "
+                else:
+                    combat_log += "Но промахивается! "
+                
+                # Сохраняем изменения
+                session['character'] = character
+                session['enemy'] = enemy
+                session['effects'] = effects
+                session.modified = True
+                
+                return jsonify({
+                    "combat_log": combat_log,
+                    "character_hp": character['hp'],
+                    "enemy_hp": enemy['hp'],
+                    "enemy_pos": enemy['pos']
+                })
+        
+        # Восстанавливаем правильную проверку заморозки
+        elif 'frozen' in enemy_effects:
+            frozen_effect = enemy_effects['frozen']
+            frozen_effect['duration'] -= 1
+            
+            if frozen_effect['duration'] <= 0:
+                combat_log += "Враг оттаивает! "
+                del enemy_effects['frozen']
+            else:
+                combat_log += "Враг заморожен и не может двигаться или атаковать! "
+                
+                # Сохраняем изменения и завершаем ход - враг пропускает ход полностью
+                session['character'] = character
+                session['enemy'] = enemy
+                session['effects'] = effects
+                session.modified = True
+                
+                return jsonify({
+                    "combat_log": combat_log,
+                    "character_hp": character['hp'],
+                    "enemy_hp": enemy['hp'],
+                    "enemy_pos": enemy['pos'],
+                    "enemy_status": "frozen"  # Добавляем специальный флаг статуса
+                })
+        
+        # Если код дошел до этого места, значит враг не парализован и не испуган
+        print("DEBUG: Враг не парализован и не испуган, выполняем его ход")
         
         # Используем упрощенный подход к тактике ИИ
         player_pos = character['pos']
@@ -389,7 +465,8 @@ def api_enemy_attack():
             "combat_log": combat_log,
             "character_hp": character['hp'],
             "enemy_hp": enemy['hp'],
-            "enemy_pos": enemy['pos']
+            "enemy_pos": enemy['pos'],
+            "enemy_status": "frozen" if 'frozen' in enemy_effects else None
         })
         
     except Exception as e:
@@ -403,19 +480,19 @@ def api_enemy_attack():
             "enemy_pos": session.get('enemy', {}).get('pos', ENEMIES['goblin']['position'])
         })
 
-# Обновляем функцию api_cast_spell для новых эффектов
+# Обновляем функцию api_cast_spell, добавляем эффекты для новых заклинаний
 @app.route("/api/cast_spell", methods=["POST"])
 def api_cast_spell():
     try:
         data = request.get_json()
         spell_name = data.get('spell_name')
-        target = data.get('target', {})
+        target = data.get('target')
         
-        character = session['character']
-        enemy = session['enemy']
+        character = session.get('character', {})
+        enemy = session.get('enemy', {})
         effects = session.get('effects', {'enemy': {}, 'player': {}})
         
-        combat_log = f"{character['name']} "
+        combat_log = f"{character.get('name', 'Character')} "
         
         # Специальная обработка для Melee Attack
         if spell_name == "Melee Attack":
@@ -464,7 +541,7 @@ def api_cast_spell():
         elif spell_name == "Ice Knife":
             damage = random.randint(1, 6)
             enemy['hp'] -= damage
-            effects['enemy']['frozen'] = {'duration': 1, 'source': spell_name}
+            effects['enemy']['frozen'] = {'duration': 2, 'source': spell_name}
             combat_log += f"hits with Ice Knife for {damage} damage and freezes the enemy! "
 
         elif spell_name == "Healing Word":
@@ -475,10 +552,17 @@ def api_cast_spell():
             combat_log += f"uses Healing Word and heals for {actual_healing} HP! "
 
         elif spell_name == "Chromatic Orb":
-            damage = random.randint(1, 8)
-            enemy['hp'] -= damage
-            effects['enemy']['fear'] = {'duration': 1, 'source': spell_name}
-            combat_log += f"hits with Chromatic Orb for {damage} damage and frightens the enemy! "
+            # Наносим 3d8 урона
+            damage = sum(random.randint(1, 8) for _ in range(3))
+            enemy['hp'] = max(0, enemy['hp'] - damage)
+            
+            # Добавляем эффект испуга с увеличенной продолжительностью
+            effects['enemy']['fear'] = {
+                'duration': 2,  # Изменяем с 1 на 2, чтобы эффект действовал полный ход
+                'source': 'Chromatic Orb'
+            }
+            
+            combat_log += f"hits with Chromatic Orb for {damage} damage! The enemy is frightened!"
 
         elif spell_name == "Magic Missile":
             damage = random.randint(1, 4) + random.randint(1, 4) + random.randint(1, 4)
@@ -488,13 +572,13 @@ def api_cast_spell():
         elif spell_name == "Burning Hands":
             damage = random.randint(1, 6)
             enemy['hp'] -= damage
-            effects['enemy']['burning'] = {'duration': 2, 'source': spell_name}
+            effects['enemy']['burning'] = {'duration': 3, 'source': spell_name}
             combat_log += f"burns enemy for {damage} damage and sets them on fire! "
 
         elif spell_name == "Thunder Wave":
             damage = random.randint(1, 8)
             enemy['hp'] -= damage
-            effects['enemy']['stunned'] = {'duration': 1, 'source': spell_name}
+            effects['enemy']['stunned'] = {'duration': 2, 'source': spell_name}
             combat_log += f"hits with Thunder Wave for {damage} damage and stuns the enemy! "
 
         elif spell_name == "Scorching Ray":
@@ -512,10 +596,17 @@ def api_cast_spell():
                 combat_log += "misses with all Scorching Rays! "
 
         elif spell_name == "Dragon's Breath":
-            damage = random.randint(1, 10)
-            enemy['hp'] -= damage
-            effects['enemy']['fear'] = {'duration': 1, 'source': spell_name}
-            combat_log += f"breathes fire for {damage} damage and frightens the enemy! "
+            # Наносим 3d6 урона
+            damage = sum(random.randint(1, 6) for _ in range(3))
+            enemy['hp'] = max(0, enemy['hp'] - damage)
+            
+            # Добавляем эффект испуга с увеличенной продолжительностью
+            effects['enemy']['fear'] = {
+                'duration': 2,  # Изменяем с 1 на 2, чтобы эффект действовал полный ход
+                'source': 'Dragon\'s Breath'
+            }
+            
+            combat_log = f"{character.get('name', 'Character')} uses Dragon's Breath for {damage} damage! The enemy is frightened!"
 
         elif spell_name == "Cloud of Daggers":
             damage = random.randint(1, 6)
@@ -542,7 +633,7 @@ def api_cast_spell():
         })
         
     except Exception as e:
-        print(f"Error casting spell: {e}")
+        print(f"Error in cast_spell: {e}")
         return jsonify({"error": f"Failed to cast spell: {str(e)}"})
 
 @app.route("/api/end_turn", methods=["POST"])
@@ -579,18 +670,6 @@ def api_end_turn():
     except Exception as e:
         print(f"Error in end_turn: {e}")
         return jsonify({"error": f"Failed to end turn: {str(e)}"})
-
-# Если у вас есть отдельная функция для движения врага, добавьте в неё:
-def move_enemy():
-    # Получаем эффекты врага
-    enemy_effects = session.get('effects', {}).get('enemy', {})
-    
-    # Если враг парализован, пропускаем движение
-    if 'paralyze' in enemy_effects:
-        return "Враг парализован и не может двигаться"
-    
-    # Код движения врага
-    # ...
 
 if __name__ == "__main__":
     # This web UI runs on port 5000.

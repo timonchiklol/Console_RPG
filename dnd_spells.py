@@ -1,19 +1,19 @@
 spells_1lvl = {
     "Chromatic Orb": {
         "damage": "2d4",
-        "range": 4,
+        "range": 3,
         "area_radius": 2
     },
     
     "Magic Missile": {
         "damage": "d3",
-        "range": 6,
+        "range": 4,
         "area_radius": 0
     },
     
     "Ice Knife": {
         "damage": "1d8",
-        "range": 4,
+        "range": 2,
         "area_radius": 1
     },
     
@@ -25,7 +25,7 @@ spells_1lvl = {
     
     "Burning Hands": {
         "damage": "3d4",
-        "range": 0,
+        "range": 1,
         "area_radius": 1
     },
     
@@ -46,7 +46,7 @@ spells_2lvl = {
 
     "Dragon's Breath": {
         "damage": "2d6",
-        "range": 6,
+        "range": 3,
         "area_radius": 2,
     },
 
@@ -71,7 +71,7 @@ spells_2lvl = {
 basic_attacks = {
     "Melee Attack": {
         "damage": "1d6",
-        "range": 1,
+        "range": 2,
         "area_radius": 0,
         "game_mechanics": "базовая атака ближнего боя",
         "is_spell": False  # Маркер что это не заклинание
