@@ -277,72 +277,16 @@ def api_enemy_attack():
         enemy = session.get('enemy', {})
         effects = session.get('effects', {'enemy': {}, 'player': {}})
         enemy_effects = effects.get('enemy', {})
+        
+        # Добавляем отладку для проверки состояния эффектов
+        print(f"DEBUG: Enemy effects at start: {enemy_effects}")
+        
         combat_log = ""
         
-        # ДОБАВЛЯЕМ ОБРАБОТКУ ЭФФЕКТОВ ГОРЕНИЯ И КРОВОТЕЧЕНИЯ
-        # Эти эффекты наносят урон, но не мешают врагу двигаться или атаковать
-        
-        # Проверяем эффект горения
-        if 'burning' in enemy_effects:
-            burning_effect = enemy_effects['burning']
-            burning_effect['duration'] -= 1
-            
-            # Наносим урон от горения
-            burn_damage = random.randint(1, 4)  # 1d4 урона от горения
-            enemy['hp'] -= burn_damage
-            combat_log += f"Враг получает {burn_damage} урона от горения! "
-            
-            if burning_effect['duration'] <= 0:
-                combat_log += "Пламя погасло. "
-                del enemy_effects['burning']
-        
-        # Проверяем эффект кровотечения
-        if 'bleeding' in enemy_effects:
-            bleeding_effect = enemy_effects['bleeding']
-            bleeding_effect['duration'] -= 1
-            
-            # Наносим урон от кровотечения
-            bleed_damage = random.randint(1, 3)  # 1d3 урона от кровотечения
-            enemy['hp'] -= bleed_damage
-            combat_log += f"Враг теряет {bleed_damage} здоровья от кровотечения! "
-            
-            if bleeding_effect['duration'] <= 0:
-                combat_log += "Кровотечение остановилось. "
-                del enemy_effects['bleeding']
-        
-        # Проверяем, не умер ли враг от эффектов
-        if enemy['hp'] <= 0:
-            combat_log += "Враг повержен! "
-            session['character'] = character
-            session['enemy'] = enemy
-            session['effects'] = effects
-            session.modified = True
-            
-            return jsonify({
-                "combat_log": combat_log,
-                "character_hp": character['hp'],
-                "enemy_hp": 0,
-                "enemy_pos": enemy['pos'],
-                "enemy_defeated": True
-            })
-        
-        # ПРИНУДИТЕЛЬНО ПРОВЕРЯЕМ ЗАМОРОЖЕННОСТЬ В НАЧАЛЕ ФУНКЦИИ
-        if 'frozen' in enemy_effects:
-            print("ВАЖНО: Враг заморожен в начале функции api_enemy_attack")
-            # Запоминаем начальную позицию, чтобы потом проверить, не изменилась ли она
-            initial_pos = copy.deepcopy(enemy.get('pos', {}))
-        
-        # Проверяем, что HP определены, иначе устанавливаем дефолтные значения
-        if 'hp' not in character:
-            character['hp'] = PLAYER['stats']['hp']
-        if 'hp' not in enemy:
-            enemy['hp'] = ENEMIES['goblin']['stats']['hp']
-        
-        # Обработка эффектов врага
-        enemy_effects = effects.get('enemy', {})
-        
+        # Проверка эффектов в правильном порядке
         # Проверяем наличие эффекта паралича
         if 'paralyze' in enemy_effects:
+            print("DEBUG: Обрабатываем эффект паралича")
             paralyze_effect = enemy_effects['paralyze']
             paralyze_effect['duration'] -= 1
             
@@ -364,11 +308,13 @@ def api_enemy_attack():
                     "combat_log": combat_log,
                     "character_hp": character['hp'],
                     "enemy_hp": enemy['hp'],
-                    "enemy_pos": enemy['pos']
+                    "enemy_pos": enemy['pos'],
+                    "enemy_status": "paralyzed"  # Добавляем статус для клиента
                 })
-        
+
         # Проверяем наличие эффекта испуга
         elif 'fear' in enemy_effects:
+            print("DEBUG: Обрабатываем эффект испуга")
             fear_effect = enemy_effects['fear']
             fear_effect['duration'] -= 1
             
@@ -409,8 +355,9 @@ def api_enemy_attack():
                     "enemy_pos": enemy['pos']
                 })
         
-        # Восстанавливаем правильную проверку заморозки
+        # Проверяем наличие эффекта заморозки
         elif 'frozen' in enemy_effects:
+            print("DEBUG: Обрабатываем эффект заморозки")
             frozen_effect = enemy_effects['frozen']
             frozen_effect['duration'] -= 1
             
@@ -420,18 +367,19 @@ def api_enemy_attack():
             else:
                 combat_log += "Враг заморожен и не может двигаться или атаковать! "
                 
-                # Сохраняем изменения и завершаем ход - враг пропускает ход полностью
+                # Сохраняем изменения и завершаем ход
                 session['character'] = character
                 session['enemy'] = enemy
                 session['effects'] = effects
                 session.modified = True
                 
+                print("DEBUG: Враг заморожен, пропускаем ход полностью")
                 return jsonify({
                     "combat_log": combat_log,
                     "character_hp": character['hp'],
                     "enemy_hp": enemy['hp'],
                     "enemy_pos": enemy['pos'],
-                    "enemy_status": "frozen"  # Добавляем специальный флаг статуса
+                    "enemy_status": "frozen"  # Добавляем статус для клиента
                 })
         
         # Если код дошел до этого места, значит враг не парализован и не испуган
@@ -621,12 +569,6 @@ def api_cast_spell():
             enemy['hp'] -= damage
             effects['enemy']['burning'] = {'duration': 3, 'source': spell_name}
             combat_log += f"burns enemy for {damage} damage and sets them on fire! "
-
-        elif spell_name == "Thunder Wave":
-            damage = random.randint(1, 8)
-            enemy['hp'] -= damage
-            effects['enemy']['stunned'] = {'duration': 2, 'source': spell_name}
-            combat_log += f"hits with Thunder Wave for {damage} damage and stuns the enemy! "
 
         elif spell_name == "Scorching Ray":
             total_damage = 0

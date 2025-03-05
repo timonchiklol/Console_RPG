@@ -27,12 +27,6 @@ spells_1lvl = {
         "damage": "3d4",
         "range": 1,
         "area_radius": 1
-    },
-    
-    "Thunderwave": {
-        "damage": "2d4",
-        "range": 100,
-        "area_radius": 100
     }
 }
 
