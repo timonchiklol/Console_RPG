@@ -279,6 +279,53 @@ def api_enemy_attack():
         enemy_effects = effects.get('enemy', {})
         combat_log = ""
         
+        # ДОБАВЛЯЕМ ОБРАБОТКУ ЭФФЕКТОВ ГОРЕНИЯ И КРОВОТЕЧЕНИЯ
+        # Эти эффекты наносят урон, но не мешают врагу двигаться или атаковать
+        
+        # Проверяем эффект горения
+        if 'burning' in enemy_effects:
+            burning_effect = enemy_effects['burning']
+            burning_effect['duration'] -= 1
+            
+            # Наносим урон от горения
+            burn_damage = random.randint(1, 4)  # 1d4 урона от горения
+            enemy['hp'] -= burn_damage
+            combat_log += f"Враг получает {burn_damage} урона от горения! "
+            
+            if burning_effect['duration'] <= 0:
+                combat_log += "Пламя погасло. "
+                del enemy_effects['burning']
+        
+        # Проверяем эффект кровотечения
+        if 'bleeding' in enemy_effects:
+            bleeding_effect = enemy_effects['bleeding']
+            bleeding_effect['duration'] -= 1
+            
+            # Наносим урон от кровотечения
+            bleed_damage = random.randint(1, 3)  # 1d3 урона от кровотечения
+            enemy['hp'] -= bleed_damage
+            combat_log += f"Враг теряет {bleed_damage} здоровья от кровотечения! "
+            
+            if bleeding_effect['duration'] <= 0:
+                combat_log += "Кровотечение остановилось. "
+                del enemy_effects['bleeding']
+        
+        # Проверяем, не умер ли враг от эффектов
+        if enemy['hp'] <= 0:
+            combat_log += "Враг повержен! "
+            session['character'] = character
+            session['enemy'] = enemy
+            session['effects'] = effects
+            session.modified = True
+            
+            return jsonify({
+                "combat_log": combat_log,
+                "character_hp": character['hp'],
+                "enemy_hp": 0,
+                "enemy_pos": enemy['pos'],
+                "enemy_defeated": True
+            })
+        
         # ПРИНУДИТЕЛЬНО ПРОВЕРЯЕМ ЗАМОРОЖЕННОСТЬ В НАЧАЛЕ ФУНКЦИИ
         if 'frozen' in enemy_effects:
             print("ВАЖНО: Враг заморожен в начале функции api_enemy_attack")
