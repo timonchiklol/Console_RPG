@@ -7,37 +7,62 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-    {% block head %}{% endblock %}
+    {% block styles %}{% endblock %}
     <style>
         :root {
-            --text-color: #ffffff;
-            --bg-color: #111827;
-            --border-color: #374151;
-            --primary-color: #f59e0b;
+            --text-color: #ecf0f1;
+            --bg-color: #2c3e50;
+            --border-color: #34495e;
+            --primary-color: #3498db;
+            --accent-color: #e74c3c;
+            --secondary-color: #2ecc71;
         }
         
         html, body {
             height: 100%;
             margin: 0;
             padding: 0;
-            overflow: hidden;
+            font-family: 'Montserrat', sans-serif;
+            /* Remove overflow: hidden; to allow scrolling when needed */
         }
         
         #app-container {
             height: 100%;
             display: flex;
             flex-direction: column;
+            background: linear-gradient(135deg, #1a2a3a, #2c3e50);
         }
         
         .medieval {
             font-family: 'MedievalSharp', 'Luminari', fantasy;
         }
+        
+        /* Add scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #3498db;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #2980b9;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white">
     <div id="app-container">
-        <main class="flex-1 overflow-hidden">
+        <main class="flex-1">
             {% block content %}{% endblock %}
         </main>
     </div>

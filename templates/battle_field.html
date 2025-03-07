@@ -1,0 +1,254 @@
+{% extends 'base.html' %}
+
+{% block title %}D&D Battlefield - {{ battlefield_config.name }}{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/battle_field.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="game-container">
+    <!-- Battlefield Information Header -->
+    <header class="battlefield-header">
+        <h1>{{ battlefield_config.name }}</h1>
+        <p class="battlefield-description">{{ battlefield_config.description }}</p>
+        <div class="difficulty-badge difficulty-{{ battlefield_config.difficulty }}">
+            {{ battlefield_config.difficulty|capitalize }}
+        </div>
+    </header>
+
+    <!-- Main Game Area -->
+    <main class="game-area">
+        <!-- Left Panel: Character Stats -->
+        <div class="character-panel">
+            <div class="panel-section">
+                <h2>Your Character</h2>
+                <div class="character-stats">
+                    <div class="stat-item">
+                        <div class="stat-icon health-icon"></div>
+                        <div class="stat-content">
+                            <h3>HP</h3>
+                            <div class="stat-bar">
+                                <div class="stat-bar-fill health-fill" style="width: 100%"></div>
+                                <span class="stat-value" id="playerHealth">{{ player_stats.hp }}/{{ player_stats.max_hp }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-icon mana-icon"></div>
+                        <div class="stat-content">
+                            <h3>Mana</h3>
+                            <div class="stat-bar">
+                                <div class="stat-bar-fill mana-fill" style="width: 100%"></div>
+                                <span class="stat-value" id="playerMana">{{ player_stats.mana }}/{{ player_stats.max_mana }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-icon speed-icon"></div>
+                        <div class="stat-content">
+                            <h3>Speed</h3>
+                            <div class="stat-value" id="playerSpeed">{{ player_stats.speed }}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="ability-scores">
+                        <h3>Ability Scores</h3>
+                        <div class="ability-grid">
+                            <div class="ability-item">
+                                <span class="ability-label">STR</span>
+                                <span class="ability-value">{{ player_stats.strength }}</span>
+                            </div>
+                            <div class="ability-item">
+                                <span class="ability-label">DEX</span>
+                                <span class="ability-value">{{ player_stats.dexterity }}</span>
+                            </div>
+                            <div class="ability-item">
+                                <span class="ability-label">CON</span>
+                                <span class="ability-value">{{ player_stats.constitution }}</span>
+                            </div>
+                            <div class="ability-item">
+                                <span class="ability-label">INT</span>
+                                <span class="ability-value">{{ player_stats.intelligence }}</span>
+                            </div>
+                            <div class="ability-item">
+                                <span class="ability-label">WIS</span>
+                                <span class="ability-value">{{ player_stats.wisdom }}</span>
+                            </div>
+                            <div class="ability-item">
+                                <span class="ability-label">CHA</span>
+                                <span class="ability-value">{{ player_stats.charisma }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center: Battlefield Canvas -->
+        <div class="battlefield-container">
+            <div class="canvas-wrapper">
+                <canvas id="battlefieldCanvas"></canvas>
+                <div class="zoom-controls">
+                    <button id="zoomIn" class="zoom-btn">+</button>
+                    <button id="zoomOut" class="zoom-btn">-</button>
+                    <button id="resetView" class="zoom-btn">↺</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Enemy Stats & Actions -->
+        <div class="action-panel">
+            <div class="panel-section">
+                <h2>Enemy</h2>
+                <div class="enemy-stats">
+                    <div class="stat-item">
+                        <div class="stat-icon health-icon"></div>
+                        <div class="stat-content">
+                            <h3>HP</h3>
+                            <div class="stat-bar">
+                                <div class="stat-bar-fill enemy-health-fill" style="width: 100%"></div>
+                                <span class="stat-value" id="enemyHealth">{{ enemy_stats.stats.hp }}/{{ enemy_stats.stats.max_hp }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="enemy-name" id="enemyName">{{ enemy_stats.name }}</div>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h2>Actions</h2>
+                <div class="action-container">
+                    <div class="action-tabs">
+                        <button class="tab-btn active" data-tab="basic">Basic</button>
+                        <button class="tab-btn" data-tab="spells">Spells</button>
+                    </div>
+                    
+                    <div class="tab-content active" id="basic-tab">
+                        <div class="attack-list">
+                            {% for attack_name, attack in basic_attacks.items() %}
+                            <div class="attack-item" data-attack="{{ attack_name }}" data-damage="{{ attack.damage }}" data-range="{{ attack.range }}" data-aoe="{{ attack.area_radius }}" data-type="basic">
+                                <div class="attack-name">{{ attack_name }}</div>
+                                <div class="attack-stats">
+                                    <span class="attack-stat">Damage: {{ attack.damage }}</span>
+                                    <span class="attack-stat">Range: {{ attack.range }}</span>
+                                    {% if attack.area_radius > 0 %}
+                                    <span class="attack-stat">AoE: {{ attack.area_radius }}</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div class="tab-content" id="spells-tab">
+                        <div class="spells-container">
+                            <h3>Level 1 Spells</h3>
+                            <div class="attack-list">
+                                {% for spell_name, spell in spells_1lvl.items() %}
+                                <div class="attack-item" data-attack="{{ spell_name }}" data-damage="{{ spell.damage|default('0') }}" data-healing="{{ spell.healing|default('0') }}" data-range="{{ spell.range }}" data-aoe="{{ spell.area_radius }}" data-mana="{{ spell.mana_cost }}" data-type="spell" data-level="1">
+                                    <div class="attack-name">{{ spell_name }}</div>
+                                    <div class="attack-stats">
+                                        {% if spell.damage is defined %}
+                                        <span class="attack-stat">Damage: {{ spell.damage }}</span>
+                                        {% endif %}
+                                        {% if spell.healing is defined %}
+                                        <span class="attack-stat">Healing: {{ spell.healing }}</span>
+                                        {% endif %}
+                                        <span class="attack-stat">Range: {{ spell.range }}</span>
+                                        {% if spell.area_radius > 0 %}
+                                        <span class="attack-stat">AoE: {{ spell.area_radius }}</span>
+                                        {% endif %}
+                                        <span class="attack-stat mana-cost">Mana: {{ spell.mana_cost }}</span>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            
+                            <h3>Level 2 Spells</h3>
+                            <div class="attack-list">
+                                {% for spell_name, spell in spells_2lvl.items() %}
+                                <div class="attack-item" data-attack="{{ spell_name }}" data-damage="{{ spell.damage|default('0') }}" data-healing="{{ spell.healing|default('0') }}" data-range="{{ spell.range }}" data-aoe="{{ spell.area_radius|default('0') }}" data-mana="{{ spell.mana_cost }}" data-type="spell" data-level="2">
+                                    <div class="attack-name">{{ spell_name }}</div>
+                                    <div class="attack-stats">
+                                        {% if spell.damage != "0" %}
+                                        <span class="attack-stat">Damage: {{ spell.damage }}</span>
+                                        {% endif %}
+                                        {% if spell.healing is defined %}
+                                        <span class="attack-stat">Healing: {{ spell.healing }}</span>
+                                        {% endif %}
+                                        <span class="attack-stat">Range: {{ spell.range }}</span>
+                                        {% if spell.area_radius|default('0')|int > 0 %}
+                                        <span class="attack-stat">AoE: {{ spell.area_radius }}</span>
+                                        {% endif %}
+                                        <span class="attack-stat mana-cost">Mana: {{ spell.mana_cost }}</span>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h2>Turn Actions</h2>
+                <div class="turn-actions">
+                    <button id="confirmMoveBtn" class="action-btn" disabled>Confirm Move</button>
+                    <button id="attackBtn" class="action-btn" disabled>Attack</button>
+                    <button id="endTurnBtn" class="action-btn end-turn">End Turn</button>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h2>Battle Log</h2>
+                <div class="battle-log" id="battleLog">
+                    <div class="log-entry">Battle has begun! Your turn.</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Dice Rolling Modal -->
+    <div id="diceModal" class="modal">
+        <div class="modal-content">
+            <h2>Rolling Dice</h2>
+            <div class="dice-container">
+                <div class="dice" id="diceGraphic">
+                    <div class="dice-face">?</div>
+                </div>
+            </div>
+            <div class="dice-result">
+                <p>Rolling <span id="diceNotation">1d20</span></p>
+                <p>Result: <span id="diceResult">-</span></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Game Configuration Data -->
+<script>
+    // Pass Python data to JavaScript
+    const GAME_CONFIG = {
+        battlefield: {{ battlefield_config|tojson }},
+        player: {
+            stats: {{ player_stats|tojson }},
+            position: {{ battlefield_config.player_start|tojson }}
+        },
+        enemy: {
+            stats: {{ enemy_stats.stats|tojson }},
+            name: "{{ enemy_stats.name }}",
+            position: {{ battlefield_config.enemy_start|tojson }},
+            abilities: {{ enemy_stats.abilities|tojson }}
+        },
+        game_rules: {{ game_rules|tojson }},
+        spell_mana_costs: {{ spell_mana_costs|tojson }}
+    };
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/battle_field.js') }}"></script>
+<script src="{{ url_for('static', filename='js/battle_hexgrid.js') }}"></script>
+<script src="{{ url_for('static', filename='js/battle_combat.js') }}"></script>
+{% endblock %} 

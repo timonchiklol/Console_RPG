@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+
+{% block title %}D&D Battlefield - Character Creation{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/battle_index.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <header class="main-header">
+        <h1>D&D Battlefield</h1>
+        <p class="subtitle">Create your character and choose your battlefield</p>
+    </header>
+    
+    <main class="creation-panel">
+        <form action="{{ url_for('battle') }}" method="GET" id="characterForm">
+            <div class="form-section">
+                <h2>Choose Your Character</h2>
+                
+                <div class="selection-container">
+                    <div class="selection-column">
+                        <h3>Race</h3>
+                        <div class="race-grid">
+                            {% for race_id, race in races.items() %}
+                            <div class="card race-card" data-race="{{ race_id }}">
+                                <div class="card-image">
+                                    <div class="race-icon race-{{ race_id.lower() }}"></div>
+                                </div>
+                                <div class="card-content">
+                                    <h4>{{ race_id }}</h4>
+                                    <p>{{ race.description }}</p>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div class="selection-column">
+                        <h3>Class</h3>
+                        <div class="class-grid">
+                            {% for class_id, class_data in classes.items() %}
+                            <div class="card class-card" data-class="{{ class_id }}">
+                                <div class="card-image">
+                                    <div class="class-icon class-{{ class_id.lower() }}"></div>
+                                </div>
+                                <div class="card-content">
+                                    <h4>{{ class_id }}</h4>
+                                    <p>{{ class_data.description }}</p>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-section">
+                <h2>Choose Your Battlefield</h2>
+                <div class="battlefield-grid">
+                    {% for battlefield_id, battlefield in battlefield_configs.items() %}
+                    <div class="card battlefield-card" data-battlefield="{{ battlefield_id }}">
+                        <div class="card-image">
+                            <div class="battlefield-icon battlefield-{{ battlefield_id }}"></div>
+                        </div>
+                        <div class="card-content">
+                            <h4>{{ battlefield.name }}</h4>
+                            <p>{{ battlefield.description }}</p>
+                            <div class="difficulty-badge difficulty-{{ battlefield.difficulty }}">
+                                {{ battlefield.difficulty|capitalize }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <div class="character-summary">
+                <h3>Your Character</h3>
+                <div class="summary-content">
+                    <p><strong>Race:</strong> <span id="selectedRace">Human</span></p>
+                    <p><strong>Class:</strong> <span id="selectedClass">Warrior</span></p>
+                    <p><strong>Battlefield:</strong> <span id="selectedBattlefield">Forest Ambush</span></p>
+                </div>
+            </div>
+            
+            <input type="hidden" name="race" id="raceInput" value="Human">
+            <input type="hidden" name="class" id="classInput" value="Warrior">
+            <input type="hidden" name="battlefield" id="battlefieldInput" value="forest_ambush">
+            
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Begin Battle</button>
+            </div>
+        </form>
+    </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/battle_index.js') }}"></script>
+{% endblock %} 
