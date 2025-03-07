@@ -89,10 +89,10 @@
                 <div class="mb-4">
                     <div class="border-b border-gray-700">
                         <nav class="flex -mb-px">
-                            <button class="group inline-flex items-center py-2 px-4 border-b-2 border-amber-500 text-amber-200 font-medium text-sm" role="tab" aria-selected="true">
+                            <button class="tab-btn group inline-flex items-center py-2 px-4 border-b-2 border-amber-500 text-amber-200 font-medium text-sm" role="tab" aria-selected="true" data-tab="basic-attacks">
                                 Basic Attacks
                             </button>
-                            <button class="group inline-flex items-center py-2 px-4 border-b-2 border-transparent text-gray-400 hover:text-gray-300 font-medium text-sm" role="tab" aria-selected="false">
+                            <button class="tab-btn group inline-flex items-center py-2 px-4 border-b-2 border-transparent text-gray-400 hover:text-gray-300 font-medium text-sm" role="tab" aria-selected="false" data-tab="spell-list">
                                 Spells
                             </button>
                         </nav>
@@ -100,7 +100,7 @@
                     
                     <!-- Basic Attacks -->
                     <div class="pt-3">
-                        <div class="basic-attacks grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div id="basic-attacks" class="basic-attacks">
                             {% for attack_name, attack in character.abilities.items() %}
                             <button class="attack-button basic-attack text-left text-sm bg-gray-700 hover:bg-gray-600 text-white p-3 rounded transition-colors"
                                     data-attack-type="{{ attack_name }}"
@@ -114,7 +114,7 @@
                         </div>
                         
                         <!-- Spells (Initially Hidden) -->
-                        <div class="spell-list hidden">
+                        <div id="spell-list" class="spell-list hidden">
                             <div class="mb-2">
                                 <h4 class="text-blue-300 text-sm font-bold mb-1">Level 1 Spells</h4>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -163,6 +163,13 @@
                 </div>
                 
                 <div id="attackPreview" class="mt-3 p-2 bg-gray-700 rounded text-gray-300 text-sm hidden"></div>
+                
+                <!-- Teleport Button Container -->
+                <div id="teleport-button-container" class="mt-3 hidden">
+                    <button id="teleportButton" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded transition-colors">
+                        Confirm Teleport
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -182,44 +189,114 @@
 <script>
     // JavaScript to handle tab switching between Basic Attacks and Spells
     document.addEventListener('DOMContentLoaded', function() {
-        const tabButtons = document.querySelectorAll('[role="tab"]');
-        const basicAttacks = document.querySelector('.basic-attacks');
-        const spellList = document.querySelector('.spell-list');
+        // Tab switching
+        const tabButtons = document.querySelectorAll('.tab-btn');
         
-        tabButtons[0].addEventListener('click', function() {
-            tabButtons[0].classList.add('border-amber-500', 'text-amber-200');
-            tabButtons[0].classList.remove('border-transparent', 'text-gray-400');
-            tabButtons[1].classList.add('border-transparent', 'text-gray-400');
-            tabButtons[1].classList.remove('border-amber-500', 'text-amber-200');
-            basicAttacks.classList.remove('hidden');
-            spellList.classList.add('hidden');
+        tabButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Remove active class from all tabs
+                tabButtons.forEach(tab => {
+                    tab.classList.remove('border-amber-500', 'text-amber-200');
+                    tab.classList.add('border-transparent', 'text-gray-400');
+                    tab.setAttribute('aria-selected', 'false');
+                });
+                
+                // Add active class to clicked tab
+                this.classList.add('border-amber-500', 'text-amber-200');
+                this.classList.remove('border-transparent', 'text-gray-400');
+                this.setAttribute('aria-selected', 'true');
+                
+                // Hide all tab content
+                document.getElementById('basic-attacks').classList.add('hidden');
+                document.getElementById('spell-list').classList.remove('hidden');
+                
+                // Show selected tab content
+                const tabId = this.getAttribute('data-tab');
+                document.getElementById(tabId).classList.remove('hidden');
+                
+                if (tabId !== 'basic-attacks') {
+                    document.getElementById('basic-attacks').classList.add('hidden');
+                }
+            });
         });
-        
-        tabButtons[1].addEventListener('click', function() {
-            tabButtons[1].classList.add('border-amber-500', 'text-amber-200');
-            tabButtons[1].classList.remove('border-transparent', 'text-gray-400');
-            tabButtons[0].classList.add('border-transparent', 'text-gray-400');
-            tabButtons[0].classList.remove('border-amber-500', 'text-amber-200');
-            spellList.classList.remove('hidden');
-            basicAttacks.classList.add('hidden');
-        });
-    });
 
-    // Исправляем обработчик кнопки телепортации
-    document.addEventListener('DOMContentLoaded', function() {
-        // Кнопка телепортации
+        // Initialize special abilities
+        // Add Misty Step and Hold Person to the spell list
+        const level2SpellList = document.querySelector('.spell-list .grid:nth-child(2)');
+        if (level2SpellList) {
+            // Add Misty Step button if it doesn't exist
+            if (!document.querySelector('[data-spell-name="Misty Step"]')) {
+                const mistyStepBtn = document.createElement('button');
+                mistyStepBtn.className = 'attack-button spell-btn text-left text-sm bg-purple-900 hover:bg-purple-800 text-white p-3 rounded transition-colors';
+                mistyStepBtn.setAttribute('data-spell-name', 'Misty Step');
+                mistyStepBtn.setAttribute('data-spell-level', '2');
+                mistyStepBtn.setAttribute('data-range', '6');
+                mistyStepBtn.setAttribute('data-type', 'teleport');
+                mistyStepBtn.innerHTML = '<div class="font-bold">Misty Step</div><div class="text-xs text-gray-300">Range: 6, Type: Teleport</div>';
+                level2SpellList.appendChild(mistyStepBtn);
+            }
+            
+            // Add Hold Person button if it doesn't exist
+            if (!document.querySelector('[data-spell-name="Hold Person"]')) {
+                const holdPersonBtn = document.createElement('button');
+                holdPersonBtn.className = 'attack-button spell-btn text-left text-sm bg-purple-900 hover:bg-purple-800 text-white p-3 rounded transition-colors';
+                holdPersonBtn.setAttribute('data-spell-name', 'Hold Person');
+                holdPersonBtn.setAttribute('data-spell-level', '2');
+                holdPersonBtn.setAttribute('data-range', '6');
+                holdPersonBtn.setAttribute('data-type', 'debuff');
+                holdPersonBtn.innerHTML = '<div class="font-bold">Hold Person</div><div class="text-xs text-gray-300">Range: 6, Type: Debuff</div>';
+                level2SpellList.appendChild(holdPersonBtn);
+            }
+        }
+        
+        // Handle spell button clicks
+        document.querySelectorAll('.spell-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Clear previous selections
+                document.querySelectorAll('.attack-button').forEach(b => b.classList.remove('selected'));
+                this.classList.add('selected');
+                
+                const spellName = this.getAttribute('data-spell-name');
+                const spellType = this.getAttribute('data-type');
+                const range = parseInt(this.getAttribute('data-range'));
+                
+                // Enable the Cast Spell button
+                document.getElementById('castSpellButton').removeAttribute('disabled');
+                
+                // Handle special abilities
+                if (spellType === 'teleport') {
+                    // For Misty Step
+                    if (window.activateMistyStep) {
+                        window.activateMistyStep(range);
+                        document.getElementById('teleport-button-container').classList.remove('hidden');
+                        document.getElementById('instructions').textContent = "Select a destination to teleport to.";
+                    }
+                } else if (spellType === 'debuff') {
+                    // For Hold Person
+                    if (window.activateHoldPerson) {
+                        window.activateHoldPerson(range);
+                        document.getElementById('instructions').textContent = "Select an enemy to hold.";
+                    }
+                } else {
+                    // Regular area or single target spells
+                    if (window.highlightRange) {
+                        window.highlightRange(window.playerPos, range);
+                        document.getElementById('instructions').textContent = `Select a target for ${spellName}.`;
+                    }
+                }
+            });
+        });
+        
+        // Teleport button functionality
         const teleportButton = document.getElementById('teleportButton');
         if (teleportButton) {
             teleportButton.addEventListener('click', function() {
                 if (window.teleportToSelectedCell) {
                     window.teleportToSelectedCell();
-                } else {
-                    alert("Функция телепортации не найдена!");
+                    document.getElementById('teleport-button-container').classList.add('hidden');
                 }
             });
         }
-        
-        // Остальной код...
     });
 </script>
 {% endblock %} 

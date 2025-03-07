@@ -2,6 +2,13 @@
 let playerPos = { col: 0, row: 0 };  // Will be updated from GAME_CONFIG
 let enemyPos = { col: 5, row: 4 };  // This will be set by the server
 
+// Interaction mode flags
+let interactionMode = 'move'; // Possible values: 'move', 'attack', 'drag'
+let isDragging = false;
+let isDrawingPath = false;
+let selectedTargetCell = null;
+let currentAOECells = [];
+
 // Get player stats from config
 const PLAYER = {
     stats: {
@@ -19,16 +26,23 @@ let drawingPath = false;
 // Add these variables at the top with other globals
 let highlightedCells = [];
 let currentRange = 0;
-let selectedCell = null;  // Store selected cell for AOE
-let currentAOE = 0;      // Store current AOE size
+let currentAOE = 0;
+let previewAOECell = null;  // Add this for AOE preview
 
-// Grid dimensions from config
-const gridCols = window.GAME_CONFIG.battlefield.dimensions.cols;
-const gridRows = window.GAME_CONFIG.battlefield.dimensions.rows;
-const hexSize = window.GAME_CONFIG.battlefield.dimensions.hex_size;
+// Grid dimensions - use defaults if config is missing
+const gridCols = window.GAME_CONFIG?.battlefield?.dimensions?.cols || 20;
+const gridRows = window.GAME_CONFIG?.battlefield?.dimensions?.rows || 15;
+const hexSize = window.GAME_CONFIG?.battlefield?.dimensions?.hex_size || 30;
 
-// Current terrain settings
-let currentTerrain = window.GAME_CONFIG.battlefield.terrain_types[window.GAME_CONFIG.currentTerrain];
+// Current terrain settings - add fallbacks
+let currentTerrain = window.GAME_CONFIG?.battlefield?.terrain_types?.[window.GAME_CONFIG?.currentTerrain] || {
+    hex_fill: {
+        colors: ['#2a6b3c'],  // Default green if not provided
+        frequency: 0.3
+    },
+    grid_color: '#1a4020',
+    movement_cost: 1
+};
 let hexColors = [];
 
 // Добавляем переменные для Misty Step
@@ -37,6 +51,44 @@ let selectedTeleportCell = null;
 
 // Добавляем поддержку Hold Person
 let holdPersonActive = false;
+
+// Simple zoom and pan variables
+let scale = 1;
+let translateX = 0;
+let translateY = 0;
+let isPanning = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+let lastTouchX = 0;
+let lastTouchY = 0;
+let longPressTimer = null;
+
+// Min and max zoom
+const MIN_SCALE = 0.5;
+const MAX_SCALE = 3.0;
+
+// Helper function for distance calculation
+function getDistance(col1, row1, col2, row2) {
+    // Basic Euclidean distance for now, can be replaced with a more hex-appropriate distance
+    return Math.sqrt(Math.pow(col1 - col2, 2) + Math.pow(row1 - row2, 2));
+}
+
+// Function to get current path cost
+function getCurrentPathCost() {
+    if (currentPath.length < 2) return 0;
+    const steps = currentPath.length - 1;
+    const terrainMultiplier = currentTerrain.movement_cost || 1;
+    return Math.floor(steps * window.GAME_CONFIG.rules.movement.base_cost * terrainMultiplier);
+}
+
+// Add zoom in/out helper functions
+function zoomIn() {
+    zoomCanvas(0.1);
+}
+
+function zoomOut() {
+    zoomCanvas(-0.1);
+}
 
 // Single DOMContentLoaded event listener
 document.addEventListener('DOMContentLoaded', function() {
@@ -59,7 +111,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Show range for spells/attacks if a range is specified
             if (range) {
-                highlightRange(range, aoe);
+                highlightRange(playerPos, range, aoe);
             }
 
             // Call the selectAttack function if it exists
@@ -149,10 +201,457 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Add zoom button control in corner
+    addZoomControls();
+    
+    // Update player position from game config
+    updatePlayerPosition();
+    
+    // Set up event handlers for canvas
+    setupCanvasEvents();
+    
     // Update end turn button style
     updateEndTurnButton();
 });
 
+// Function to add zoom controls
+function addZoomControls() {
+    const container = document.createElement('div');
+    container.className = 'zoom-controls';
+    container.style.position = 'absolute';
+    container.style.bottom = '10px';
+    container.style.right = '10px';
+    container.style.zIndex = '1000';
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.gap = '5px';
+    
+    // Add zoom in button
+    const zoomInBtn = document.createElement('button');
+    zoomInBtn.innerHTML = '🔍+';
+    zoomInBtn.className = 'bg-gray-800 hover:bg-gray-700 text-white rounded p-2';
+    zoomInBtn.onclick = function() {
+        zoomCanvas(0.1);
+    };
+    
+    // Add zoom out button
+    const zoomOutBtn = document.createElement('button');
+    zoomOutBtn.innerHTML = '🔍-';
+    zoomOutBtn.className = 'bg-gray-800 hover:bg-gray-700 text-white rounded p-2';
+    zoomOutBtn.onclick = function() {
+        zoomCanvas(-0.1);
+    };
+    
+    // Add reset button
+    const resetBtn = document.createElement('button');
+    resetBtn.innerHTML = '↺';
+    resetBtn.className = 'bg-gray-800 hover:bg-gray-700 text-white rounded p-2';
+    resetBtn.onclick = function() {
+        resetView();
+    };
+    
+    // Add buttons to container
+    container.appendChild(zoomInBtn);
+    container.appendChild(zoomOutBtn);
+    container.appendChild(resetBtn);
+    
+    // Add container to canvas container
+    const canvasContainer = document.querySelector('.canvas-container');
+    if (canvasContainer) {
+        canvasContainer.appendChild(container);
+    }
+}
+
+// Set up canvas event handlers
+function setupCanvasEvents() {
+    const canvas = document.getElementById('hexCanvas');
+    if (!canvas) return;
+    
+    // Add interaction mode controls
+    addInteractionControls();
+    
+    // Mouse wheel for zoom
+    canvas.addEventListener('wheel', function(e) {
+        e.preventDefault(); // Prevent page scrolling
+        const delta = e.deltaY < 0 ? 0.1 : -0.1;
+        zoomCanvas(delta, e.offsetX, e.offsetY);
+    });
+    
+    // Variables for pinch zoom
+    let initialPinchDistance = 0;
+    let initialScale = 1;
+    
+    // Touch start
+    canvas.addEventListener('touchstart', function(e) {
+        const rect = canvas.getBoundingClientRect();
+        
+        // Handle pinch zoom
+        if (e.touches.length === 2) {
+            // Store initial distance for pinch zoom
+            initialPinchDistance = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            initialScale = scale;
+        } 
+        // Handle panning or path drawing
+        else if (e.touches.length === 1) {
+            const touch = e.touches[0];
+            
+            // Store touch position for panning
+            lastTouchX = touch.clientX;
+            lastTouchY = touch.clientY;
+            
+            // Calculate transformed coordinates for path/selection
+            const x = (touch.clientX - rect.left - translateX) / scale;
+            const y = (touch.clientY - rect.top - translateY) / scale;
+            const cell = getCellFromPixel(x, y);
+            
+            if (interactionMode === 'move') {
+                // If touching player position, start drawing path
+                if (cell && cell.col === playerPos.col && cell.row === playerPos.row) {
+                    isDrawingPath = true;
+                    currentPath = [playerPos];
+                    drawHexGrid();
+                } else if (cell && playerSpeed > 0) {
+                    // Allow starting the path from any position by clicking
+                    currentPath = computePath(playerPos, cell);
+                    drawHexGrid();
+                }
+                // Otherwise, switch to panning if long press
+                else {
+                    // Will be handled by timeout for long press
+                    isDragging = false;
+                    longPressTimer = setTimeout(() => {
+                        setInteractionMode('drag');
+                        isDragging = true;
+                    }, 500); // 500ms for long press
+                }
+            } else if (interactionMode === 'attack') {
+                // Handle attack targeting - check if in range
+                if (cell && highlightedCells.some(c => c.col === cell.col && c.row === cell.row)) {
+                    selectedTargetCell = cell;
+                    currentAOECells = currentAOE > 0 ? getCellsInAOE(cell, currentAOE) : [];
+                    drawHexGrid();
+                }
+            } else if (interactionMode === 'drag') {
+                // Start panning
+                isDragging = true;
+            }
+        }
+    });
+    
+    // Touch move
+    canvas.addEventListener('touchmove', function(e) {
+        e.preventDefault(); // Prevent scrolling
+        
+        // Clear long press timer on movement
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+        
+        const rect = canvas.getBoundingClientRect();
+        
+        // Handle pinch zoom
+        if (e.touches.length === 2) {
+            const curDistance = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            
+            const ratio = curDistance / initialPinchDistance;
+            const newScale = Math.min(Math.max(initialScale * ratio, MIN_SCALE), MAX_SCALE);
+            
+            // Zoom toward center of two fingers
+            const touchCenter = {
+                x: (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left,
+                y: (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top
+            };
+            
+            const scaleDiff = newScale - scale;
+            translateX = translateX - (touchCenter.x - translateX) * (scaleDiff / scale);
+            translateY = translateY - (touchCenter.y - translateY) * (scaleDiff / scale);
+            scale = newScale;
+            
+            drawHexGrid();
+        } 
+        // Handle panning
+        else if (e.touches.length === 1) {
+            const touch = e.touches[0];
+            
+            if (interactionMode === 'drag' && isDragging) {
+                const dx = touch.clientX - lastTouchX;
+                const dy = touch.clientY - lastTouchY;
+                
+                translateX += dx;
+                translateY += dy;
+                
+                lastTouchX = touch.clientX;
+                lastTouchY = touch.clientY;
+                
+                drawHexGrid();
+            }
+            // Handle path drawing
+            else if (interactionMode === 'move' && isDrawingPath) {
+                const x = (touch.clientX - rect.left - translateX) / scale;
+                const y = (touch.clientY - rect.top - translateY) / scale;
+                const cell = getCellFromPixel(x, y);
+                
+                if (cell) {
+                    // Don't allow moving to enemy position
+                    if (cell.col === enemyPos.col && cell.row === enemyPos.row) {
+                        return;
+                    }
+                    
+                    // Calculate path to current cell
+                    currentPath = computePath(playerPos, cell);
+                    drawHexGrid();
+                }
+            }
+            // Handle attack targeting on touch move (for previewing AOE)
+            else if (interactionMode === 'attack') {
+                const x = (touch.clientX - rect.left - translateX) / scale;
+                const y = (touch.clientY - rect.top - translateY) / scale;
+                const cell = getCellFromPixel(x, y);
+                
+                if (cell && highlightedCells.some(c => c.col === cell.col && c.row === cell.row)) {
+                    // Update AOE preview but don't select yet
+                    previewAOECell = cell;
+                    drawHexGrid();
+                }
+            }
+        }
+    });
+    
+    // Touch end
+    canvas.addEventListener('touchend', function() {
+        // Clear long press timer
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+        
+        isPanning = false;
+        isDrawingPath = false;
+        isDragging = false;
+    });
+    
+    // Mouse events
+    canvas.addEventListener('mousedown', function(e) {
+        // Get transformed coordinates
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left - translateX) / scale;
+        const y = (e.clientY - rect.top - translateY) / scale;
+        const cell = getCellFromPixel(x, y);
+        
+        // Store mouse position for panning
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+        
+        // Handle special case: Misty Step target selection
+        if (awaitingMistyStepTarget) {
+            handleMistyStepTargetSelection(cell);
+            return;
+        }
+        
+        // Handle special case: Hold Person target selection
+        if (holdPersonActive) {
+            handleHoldPersonTargetSelection(cell);
+            return;
+        }
+        
+        // Right mouse button or Alt/Ctrl/Shift + left button always triggers drag mode
+        if (e.button === 2 || e.altKey || e.ctrlKey || e.shiftKey) {
+            e.preventDefault();
+            setInteractionMode('drag');
+            isDragging = true;
+            canvas.style.cursor = 'grabbing';
+            return;
+        }
+        
+        // Handle based on current interaction mode
+        if (interactionMode === 'move') {
+            if (cell) {
+                // Check if we're on the player's position or if a path already exists
+                if ((cell.col === playerPos.col && cell.row === playerPos.row) || currentPath.length > 0) {
+                    if (playerSpeed <= 0) return; // No movement left
+                    
+                    isDrawingPath = true;
+                    if (currentPath.length === 0) {
+                        currentPath = [playerPos];
+                    }
+                    drawHexGrid();
+                } else {
+                    // Start a new path from player to this cell
+                    if (playerSpeed > 0) {
+                        currentPath = computePath(playerPos, cell);
+                        drawHexGrid();
+                    }
+                }
+            }
+        }
+        else if (interactionMode === 'attack') {
+            if (cell && highlightedCells.some(c => c.col === cell.col && c.row === cell.row)) {
+                selectedTargetCell = cell;
+                currentAOECells = currentAOE > 0 ? getCellsInAOE(cell, currentAOE) : [];
+                drawHexGrid();
+                
+                // Update the attack preview if available
+                updateAttackPreview(cell);
+            }
+        }
+        else if (interactionMode === 'drag') {
+            isDragging = true;
+            canvas.style.cursor = 'grabbing';
+        }
+    });
+    
+    // Mouse move
+    canvas.addEventListener('mousemove', function(e) {
+        const rect = canvas.getBoundingClientRect();
+        
+        // Calculate grid coordinates from screen coordinates, accounting for zoom and pan
+        const x = (e.clientX - rect.left - translateX) / scale;
+        const y = (e.clientY - rect.top - translateY) / scale;
+        const cell = getCellFromPixel(x, y);
+        
+        // Handle panning in drag mode
+        if (interactionMode === 'drag' && isDragging) {
+            const dx = e.clientX - lastMouseX;
+            const dy = e.clientY - lastMouseY;
+            
+            translateX += dx;
+            translateY += dy;
+            
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            
+            drawHexGrid();
+            return;
+        }
+        
+        // Handle path drawing in move mode
+        if (interactionMode === 'move' && isDrawingPath) {
+            if (cell) {
+                // Don't allow moving to enemy position
+                if (cell.col === enemyPos.col && cell.row === enemyPos.row) {
+                    return;
+                }
+                
+                // Calculate path to current cell
+                currentPath = computePath(playerPos, cell);
+                drawHexGrid();
+            }
+            return;
+        }
+        
+        // Preview AOE in attack mode on hover
+        if (interactionMode === 'attack' && cell) {
+            // Check if the cell is within range
+            if (highlightedCells.some(c => c.col === cell.col && c.row === cell.row)) {
+                previewAOECell = cell;
+                drawHexGrid();
+            } else {
+                if (previewAOECell) {
+                    previewAOECell = null;
+                    drawHexGrid();
+                }
+            }
+        }
+    });
+    
+    // Mouse up
+    canvas.addEventListener('mouseup', function() {
+        isDragging = false;
+        isDrawingPath = false;
+        canvas.style.cursor = 'default';
+    });
+    
+    // Mouse leave
+    canvas.addEventListener('mouseleave', function() {
+        isDragging = false;
+        isDrawingPath = false;
+        previewAOECell = null;
+        canvas.style.cursor = 'default';
+        drawHexGrid(); // Redraw to clear hover effects
+    });
+    
+    // Prevent context menu on canvas
+    canvas.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+    });
+}
+
+// Function to zoom canvas
+function zoomCanvas(delta, focalX, focalY) {
+    const canvas = document.getElementById("hexCanvas");
+    if (!canvas) return;
+    
+    // Calculate new scale with limits
+    const newScale = Math.min(Math.max(scale + delta, MIN_SCALE), MAX_SCALE);
+    
+    // If no change in scale, exit early
+    if (newScale === scale) return;
+    
+    // If focal point not provided, use center of canvas
+    if (focalX === undefined || focalY === undefined) {
+        focalX = canvas.width / 2;
+        focalY = canvas.height / 2;
+    }
+    
+    // Adjust translate to keep focal point fixed
+    const scaleDiff = newScale - scale;
+    translateX = translateX - (focalX - translateX) * (scaleDiff / scale);
+    translateY = translateY - (focalY - translateY) * (scaleDiff / scale);
+    
+    // Apply new scale
+    scale = newScale;
+    
+    // Redraw
+    drawHexGrid();
+    
+    // Show notification with debouncing
+    if (window.showNotification) {
+        // Remove any existing zoom notifications
+        const container = document.querySelector('.notification-container');
+        if (container) {
+            const notifications = container.querySelectorAll('.notification');
+            notifications.forEach(notif => {
+                if (notif.textContent.includes('Zoom:')) {
+                    notif.remove();
+                }
+            });
+        }
+        
+        // Add new notification
+        window.showNotification(`Zoom: ${Math.round(scale * 100)}%`, "info", 1000);
+    }
+}
+
+// Reset view to original state
+function resetView() {
+    scale = 1;
+    translateX = 0;
+    translateY = 0;
+    drawHexGrid();
+    
+    if (window.showNotification) {
+        window.showNotification("View reset to default", "info");
+    }
+}
+
+// Update player position from game config
+function updatePlayerPosition() {
+    if (window.GAME_CONFIG && window.GAME_CONFIG.character && window.GAME_CONFIG.character.pos) {
+        playerPos = window.GAME_CONFIG.character.pos;
+    }
+    if (window.GAME_CONFIG && window.GAME_CONFIG.enemy && window.GAME_CONFIG.enemy.pos) {
+        enemyPos = window.GAME_CONFIG.enemy.pos;
+    }
+}
+
+// Initialize hex colors
 function initializeHexColors() {
     hexColors = [];
     for (let col = 0; col < gridCols; col++) {
@@ -180,8 +679,10 @@ function drawHexGrid() {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    let hexWidth = hexSize * 2;
-    let hexHeight = Math.sqrt(3) * hexSize;
+    // Apply transformations
+    ctx.save();
+    ctx.translate(translateX, translateY);
+    ctx.scale(scale, scale);
     
     // Initialize hex colors if needed
     if (hexColors.length === 0) {
@@ -191,14 +692,14 @@ function drawHexGrid() {
     // Draw hexagons
     for (let col = 0; col < gridCols; col++) {
         for (let row = 0; row < gridRows; row++) {
-            // Вычисляем координаты центра гексагона
+            // Calculate the center coordinates of the hexagon
             let x = col * hexSize * 1.5 + hexSize;
             let y = row * hexSize * Math.sqrt(3) + (col % 2) * hexSize * Math.sqrt(3) / 2 + hexSize;
             
-            // Проверка, находится ли клетка в подсвеченной зоне
+            // Check if the cell is in a highlighted zone
             let isHighlighted = highlightedCells.some(cell => cell.col === col && cell.row === row);
-            let isInAOE = selectedCell && currentAOE > 0 && 
-                          getDistance(col, row, selectedCell.col, selectedCell.row) <= currentAOE;
+            let isInAOE = selectedTargetCell && currentAOE > 0 && 
+                          getDistance(col, row, selectedTargetCell.col, selectedTargetCell.row) <= currentAOE;
             
             drawHexagon(ctx, x, y, hexSize, isHighlighted, isInAOE, col, row);
         }
@@ -211,10 +712,20 @@ function drawHexGrid() {
     
     // Draw tokens
     drawTokens(ctx);
+    
+    // Restore context (removes transformations)
+    ctx.restore();
+    
+    // Draw zoom indicator
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(10, 10, 100, 30);
+    ctx.fillStyle = 'white';
+    ctx.font = '12px Arial';
+    ctx.fillText(`Zoom: ${Math.round(scale * 100)}%`, 20, 30);
 }
 
 function drawPath(ctx) {
-    if (currentPath.length < 2) return;
+    if (currentPath.length < 2 || interactionMode === 'attack') return;
     
     ctx.beginPath();
     ctx.strokeStyle = "green";
@@ -225,8 +736,9 @@ function drawPath(ctx) {
     
     for (let i = 0; i < currentPath.length; i++) {
         let cell = currentPath[i];
-        let x = cell.col * hexWidth * 0.75 + hexSize;
-        let y = cell.row * hexHeight + ((cell.col % 2) * hexHeight / 2) + hexSize;
+        // Use the same hex center calculation as in drawHexagon
+        let x = cell.col * hexSize * 1.5 + hexSize;
+        let y = cell.row * hexSize * Math.sqrt(3) + ((cell.col % 2) * hexSize * Math.sqrt(3) / 2) + hexSize;
         
         if (i === 0) {
             ctx.moveTo(x, y);
@@ -261,8 +773,8 @@ function drawTokens(ctx) {
     let hexHeight = Math.sqrt(3) * hexSize;
     
     // Draw player token (blue circle)
-    let x = playerPos.col * hexWidth * 0.75 + hexSize;
-    let y = playerPos.row * hexHeight + ((playerPos.col % 2) * hexHeight / 2) + hexSize;
+    let x = playerPos.col * hexSize * 1.5 + hexSize;
+    let y = playerPos.row * hexSize * Math.sqrt(3) + ((playerPos.col % 2) * hexSize * Math.sqrt(3) / 2) + hexSize;
     
     ctx.beginPath();
     ctx.arc(x, y, hexSize / 3, 0, 2 * Math.PI);
@@ -283,8 +795,8 @@ function drawTokens(ctx) {
     ctx.fillText('P', x, y);
     
     // Draw enemy token (red circle)
-    x = enemyPos.col * hexWidth * 0.75 + hexSize;
-    y = enemyPos.row * hexHeight + ((enemyPos.col % 2) * hexHeight / 2) + hexSize;
+    x = enemyPos.col * hexSize * 1.5 + hexSize;
+    y = enemyPos.row * hexSize * Math.sqrt(3) + ((enemyPos.col % 2) * hexSize * Math.sqrt(3) / 2) + hexSize;
     
     ctx.beginPath();
     ctx.arc(x, y, hexSize / 3, 0, 2 * Math.PI);
@@ -366,61 +878,89 @@ function drawHexagon(ctx, x, y, size, isHighlighted, isInAOE, col, row) {
         }
     }
     
+    // Add target selection highlight
+    if (selectedTargetCell && col === selectedTargetCell.col && row === selectedTargetCell.row) {
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.5)'; // Gold color for selected target
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 215, 0, 0.8)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.lineWidth = 1;
+    }
+    
+    // Add AOE preview highlight on hover
+    if (previewAOECell && currentAOE > 0 && 
+        previewAOECell.col !== col && previewAOECell.row !== row && // Not the hovered cell
+        Math.abs(previewAOECell.col - col) + Math.abs(previewAOECell.row - row) <= currentAOE) {
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+        ctx.fill();
+    }
+    
     ctx.strokeStyle = currentTerrain.grid_color;
     ctx.stroke();
 }
 
-// Исправленная функция получения клетки из координат клика
+// Modified getCellFromPixel to account for transforms
 function getCellFromPixel(x, y) {
-    // Размеры шестиугольника
+    // Note: x and y should already be adjusted for translation and scale
+    
+    // Hexagon dimensions
     const hexWidth = hexSize * 2;
     const hexHeight = Math.sqrt(3) * hexSize;
     
-    // Сначала находим приблизительную колонку и строку
-    let col = Math.floor(x / (hexWidth * 0.75));
-    let row = Math.floor(y / hexHeight);
+    // First find approximate column and row
+    let col = Math.floor(x / (hexSize * 1.5));
+    let row;
     
-    // Учитываем смещение для нечетных колонок
-    if (col % 2 === 1) {
-        row = Math.floor((y - hexHeight / 2) / hexHeight);
+    // Account for offset on odd columns
+    if (col % 2 === 0) {
+        row = Math.floor(y / (hexSize * Math.sqrt(3)));
+    } else {
+        row = Math.floor((y - (hexSize * Math.sqrt(3) / 2)) / (hexSize * Math.sqrt(3)));
     }
     
-    // Дополнительная проверка для граничных ячеек
-    // Поскольку шестиугольники имеют наклонные границы
-    const centerX = col * (hexWidth * 0.75) + hexSize;
-    const centerY = row * hexHeight + ((col % 2) * (hexHeight / 2)) + hexSize;
+    // Additional check for boundary cells
+    // Since hexagons have sloped boundaries
+    const centerX = col * (hexSize * 1.5) + hexSize;
+    const centerY = row * (hexSize * Math.sqrt(3)) + ((col % 2) * (hexSize * Math.sqrt(3) / 2)) + hexSize;
     
-    // Расчет расстояния от центра ячейки до точки клика
+    // Calculate distance from cell center to click point
     const dx = x - centerX;
     const dy = y - centerY;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
-    // Если точка находится далеко от центра, проверяем соседние ячейки
+    // If point is far from center, check neighboring cells
     if (distance > hexSize / 2) {
-        // Проверяем соседние ячейки, чтобы найти ближайшую
+        // Check neighboring cells to find the closest
         const possibleCells = [
             {col: col, row: row},
             {col: col+1, row: row},
             {col: col-1, row: row},
             {col: col, row: row+1},
-            {col: col, row: row-1},
-            {col: col+1, row: row + (col % 2 === 0 ? 0 : 1)},
-            {col: col-1, row: row + (col % 2 === 0 ? 0 : 1)},
-            {col: col+1, row: row + (col % 2 === 0 ? -1 : 0)},
-            {col: col-1, row: row + (col % 2 === 0 ? -1 : 0)}
+            {col: col, row: row-1}
         ];
+        
+        // Add diagonal neighbors based on column parity
+        if (col % 2 === 0) {
+            possibleCells.push({col: col+1, row: row-1});
+            possibleCells.push({col: col-1, row: row-1});
+        } else {
+            possibleCells.push({col: col+1, row: row+1});
+            possibleCells.push({col: col-1, row: row+1});
+        }
         
         let bestDistance = distance;
         let bestCell = {col, row};
         
         for (const cell of possibleCells) {
-            // Пропускаем ячейки за пределами сетки
+            // Skip cells outside the grid
             if (cell.col < 0 || cell.col >= gridCols || cell.row < 0 || cell.row >= gridRows) {
                 continue;
             }
             
-            const cellCenterX = cell.col * (hexWidth * 0.75) + hexSize;
-            const cellCenterY = cell.row * hexHeight + ((cell.col % 2) * (hexHeight / 2)) + hexSize;
+            // Calculate coordinates for cell center using same formula as in drawHexGrid
+            const cellCenterX = cell.col * (hexSize * 1.5) + hexSize;
+            const cellCenterY = cell.row * (hexSize * Math.sqrt(3)) + ((cell.col % 2) * (hexSize * Math.sqrt(3) / 2)) + hexSize;
             
             const cellDx = x - cellCenterX;
             const cellDy = y - cellCenterY;
@@ -436,15 +976,12 @@ function getCellFromPixel(x, y) {
         row = bestCell.row;
     }
     
-    // Проверка границ сетки
-    if (col < 0) col = 0;
-    if (row < 0) row = 0;
-    if (col >= gridCols) col = gridCols - 1;
-    if (row >= gridRows) row = gridRows - 1;
+    // Check that the found cell is within the grid
+    if (col < 0 || col >= gridCols || row < 0 || row >= gridRows) {
+        return null;
+    }
     
-    console.log(`Точные координаты клика: (${x}, ${y}), выбрана клетка: (${col}, ${row})`);
-    
-    return { col, row };
+    return {col, row};
 }
 
 if (typeof addToBattleLog !== 'function') {
@@ -569,106 +1106,6 @@ async function applyMove() {
     }
 }
 
-// Mouse event handlers
-let canvas = document.getElementById("hexCanvas");
-
-canvas.addEventListener("mousedown", function(e) {
-    console.log("Mouse down event", awaitingMistyStepTarget);
-    
-    // Сначала проверяем режим Misty Step (важно проверить это первым)
-    if (awaitingMistyStepTarget) {
-        console.log("In Misty Step target selection mode");
-        let rect = canvas.getBoundingClientRect();
-        let x = e.clientX - rect.left;
-        let y = e.clientY - rect.top;
-        let cell = getCellFromPixel(x, y);
-        
-        console.log("Selected cell:", cell);
-        
-        // Проверяем, что клетка не занята врагом
-        if (cell.col === enemyPos.col && cell.row === enemyPos.row) {
-            if (window.showNotification) {
-                window.showNotification("Нельзя телепортироваться на клетку с врагом", "warning");
-            } else {
-                alert("Нельзя телепортироваться на клетку с врагом");
-            }
-            return;
-        }
-        
-        // Сохраняем выбранную клетку
-        selectedTeleportCell = cell;
-        
-        // Перерисовываем с новой выбранной клеткой
-        drawHexGrid();
-        
-        if (window.showNotification) {
-            window.showNotification(`Клетка (${cell.col}, ${cell.row}) выбрана. Нажмите 'Teleport' для телепортации.`, "info");
-        } else {
-            alert(`Клетка (${cell.col}, ${cell.row}) выбрана. Нажмите 'Teleport' для телепортации.`);
-        }
-        
-        // Включаем кнопку телепортации
-        const teleportButton = document.getElementById('teleportButton');
-        if (teleportButton) {
-            teleportButton.classList.remove('hidden');
-        }
-        
-        return; // Прерываем обработку
-    }
-    
-    // Оставшийся код для движения
-    // Новая проверка - можно ли двигаться
-    if (playerSpeed <= 0) {
-        return;  // No more movement left
-    }
-    
-    let rect = canvas.getBoundingClientRect();
-    let x = e.clientX - rect.left;
-    let y = e.clientY - rect.top;
-    let cell = getCellFromPixel(x, y);
-    
-    // Only start drawing if clicking on player position
-    if (cell && cell.col === playerPos.col && cell.row === playerPos.row) {
-        drawingPath = true;
-        currentPath = [playerPos];
-        drawHexGrid();
-    }
-});
-
-canvas.addEventListener("mousemove", function(e) {
-    if (!drawingPath) return;
-    
-    let rect = canvas.getBoundingClientRect();
-    let x = e.clientX - rect.left;
-    let y = e.clientY - rect.top;
-    let cell = getCellFromPixel(x, y);
-    
-    if (cell) {
-        // Don't allow moving to enemy position
-        if (cell.col === enemyPos.col && cell.row === enemyPos.row) {
-            return;
-        }
-        
-        // Calculate path to current cell
-        currentPath = computePath(playerPos, cell);
-        drawHexGrid();
-    }
-});
-
-canvas.addEventListener("mouseup", function() {
-    drawingPath = false;
-});
-
-canvas.addEventListener("mouseleave", function() {
-    drawingPath = false;
-});
-
-// Initialize
-window.addEventListener("load", function() {
-    initializeHexColors();
-    drawHexGrid();
-});
-
 // Add this function to get cells within range using BFS
 function getCellsInRange(startCell, range) {
     let cells = [];
@@ -701,10 +1138,10 @@ function getCellsInRange(startCell, range) {
 }
 
 // Add function to highlight range
-function highlightRange(range, aoe = 0) {
+function highlightRange(center, range, aoe = 0) {
     currentRange = range;
     currentAOE = aoe;
-    highlightedCells = getCellsInRange(playerPos, range);
+    highlightedCells = getCellsInRange(center, range);
     drawHexGrid();
 }
 
@@ -713,13 +1150,18 @@ function clearHighlight() {
     highlightedCells = [];
     currentRange = 0;
     currentAOE = 0;
-    selectedCell = null;
+    selectedTargetCell = null;
+    currentAOECells = [];
+    previewAOECell = null;
     
-    // Сбрасываем состояние Misty Step и Hold Person
+    // Reset special mode states
     awaitingMistyStepTarget = false;
     selectedTeleportCell = null;
     holdPersonActive = false;
     window.holdPersonTarget = null;
+    
+    // Reset to move mode
+    setInteractionMode('move');
     
     drawHexGrid();
 }
@@ -929,60 +1371,241 @@ function activateHoldPerson() {
     }
 }
 
-// Исправляем обработчик клика для правильного выбора клетки
-canvas.onclick = function(e) {
-    // Если активен режим Hold Person
-    if (holdPersonActive) {
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        const cell = getCellFromPixel(x, y);
-        
-        if (!cell) return; // Защита от клика вне поля
-        
-        // Проверяем, что клетка находится в диапазоне заклинания
-        const isInRange = highlightedCells.some(c => c.col === cell.col && c.row === cell.row);
-        if (!isInRange) {
-            if (window.showNotification) {
-                window.showNotification("Эта клетка вне диапазона Hold Person", "warning");
-            }
-            return;
-        }
-        
-        // Проверяем, есть ли враг на этой клетке
-        if (cell.col === enemyPos.col && cell.row === enemyPos.row) {
-            // Выбираем или обновляем выбор цели
-            window.holdPersonTarget = {col: cell.col, row: cell.row};
-            
-            // Перерисовываем поле с новой выделенной клеткой
-            drawHexGrid();
-            
-            if (window.showNotification) {
-                window.showNotification("Враг выбран для Hold Person. Нажмите 'Cast Spell'", "success");
-            }
-        } else {
-            if (window.showNotification) {
-                window.showNotification("В этой клетке нет врага для Hold Person", "warning");
-            }
-        }
-        
-        return; // Предотвращаем дальнейшую обработку
+// Helper function to update attack preview
+function updateAttackPreview(cell) {
+    const previewElement = document.getElementById('attackPreview');
+    if (!previewElement) return;
+    
+    const selectedAttack = document.querySelector('.attack-button.selected');
+    if (!selectedAttack) {
+        previewElement.classList.add('hidden');
+        return;
     }
     
-    // Обработка для Misty Step и других случаев
-    // ...остальной код обработчика клика...
-};
+    const attackType = selectedAttack.dataset.attackType;
+    const spellName = selectedAttack.dataset.spellName;
+    
+    // Get target name (enemy if targeting enemy position)
+    const isTargetingEnemy = cell.col === enemyPos.col && cell.row === enemyPos.row;
+    const targetName = isTargetingEnemy ? 'Enemy' : `Hex (${cell.col},${cell.row})`;
+    
+    // Calculate affected cells
+    const affectedCellsCount = currentAOECells.length;
+    
+    let previewText = `Targeting ${targetName} with ${spellName || attackType}. `;
+    if (affectedCellsCount > 0) {
+        previewText += `Affects ${affectedCellsCount} cells.`;
+    }
+    
+    previewElement.textContent = previewText;
+    previewElement.classList.remove('hidden');
+}
+
+// Function to add interaction controls
+function addInteractionControls() {
+    // Create controls container if it doesn't exist
+    let controls = document.querySelector('.interaction-controls');
+    if (!controls) {
+        controls = document.createElement('div');
+        controls.className = 'interaction-controls';
+        
+        // Create move mode button
+        const moveBtn = document.createElement('button');
+        moveBtn.innerHTML = '🏃 Move';
+        moveBtn.title = 'Movement Mode';
+        moveBtn.classList.add('active');
+        moveBtn.addEventListener('click', () => setInteractionMode('move'));
+        
+        // Create attack mode button  
+        const attackBtn = document.createElement('button');
+        attackBtn.innerHTML = '⚔️ Attack';
+        attackBtn.title = 'Attack Mode';
+        attackBtn.addEventListener('click', () => setInteractionMode('attack'));
+        
+        // Create pan mode button
+        const panBtn = document.createElement('button');
+        panBtn.innerHTML = '👆 Pan';
+        panBtn.title = 'Pan Mode';
+        panBtn.addEventListener('click', () => setInteractionMode('drag'));
+        
+        // Add buttons to controls
+        controls.appendChild(moveBtn);
+        controls.appendChild(attackBtn);
+        controls.appendChild(panBtn);
+        
+        // Add controls to canvas container
+        const canvasContainer = document.querySelector('.canvas-container');
+        if (canvasContainer) {
+            canvasContainer.appendChild(controls);
+        }
+    }
+}
+
+// Function to switch interaction mode
+function setInteractionMode(mode) {
+    interactionMode = mode;
+    // Clear appropriate visual elements based on mode
+    if (mode === 'attack' || mode === 'drag') {
+        currentPath = [];
+    }
+    if (mode === 'move' || mode === 'drag') {
+        selectedTargetCell = null;
+        currentAOECells = [];
+    }
+    // Update UI to reflect current mode
+    const canvas = document.getElementById('hexCanvas');
+    if (canvas) {
+        canvas.className = mode === 'drag' ? 'pan-mode' : (mode === 'move' ? 'move-mode' : 'attack-mode');
+    }
+    
+    // Update instructions text
+    const instructions = document.getElementById('instructions');
+    if (instructions) {
+        switch(mode) {
+            case 'move':
+                instructions.textContent = `Click and drag from your character to plan movement. Movement cost: ${window.GAME_CONFIG.rules.movement.base_cost} speed per hex.`;
+                break;
+            case 'attack':
+                instructions.textContent = 'Select a tile within range to target with your attack or spell.';
+                break;
+            case 'drag':
+                instructions.textContent = 'Click and drag to move the map. Right-click or use Alt+drag to pan.';
+                break;
+        }
+    }
+    
+    // Redraw to update visualization
+    drawHexGrid();
+}
+
+// Helper functions for special spells
+function handleMistyStepTargetSelection(cell) {
+    console.log("In Misty Step target selection mode");
+    
+    if (!cell) return;
+    
+    // Check if cell is valid for teleport
+    if (cell.col === enemyPos.col && cell.row === enemyPos.row) {
+        if (window.showNotification) {
+            window.showNotification("Cannot teleport to enemy's position", "warning");
+        } else {
+            alert("Cannot teleport to enemy's position");
+        }
+        return;
+    }
+    
+    // Save selected cell and redraw
+    selectedTeleportCell = cell;
+    drawHexGrid();
+    
+    if (window.showNotification) {
+        window.showNotification(`Cell (${cell.col}, ${cell.row}) selected. Click 'Teleport' to confirm.`, "info");
+    } else {
+        alert(`Cell (${cell.col}, ${cell.row}) selected. Click 'Teleport' to confirm.`);
+    }
+    
+    // Show teleport button
+    const teleportButton = document.getElementById('teleportButton');
+    if (teleportButton) {
+        teleportButton.classList.remove('hidden');
+    }
+}
+
+function handleHoldPersonTargetSelection(cell) {
+    if (!cell) return;
+    
+    // Check if cell is in range
+    const isInRange = highlightedCells.some(c => c.col === cell.col && c.row === cell.row);
+    if (!isInRange) {
+        if (window.showNotification) {
+            window.showNotification("This cell is out of Hold Person range", "warning");
+        }
+        return;
+    }
+    
+    // Check if enemy is in cell
+    if (cell.col === enemyPos.col && cell.row === enemyPos.row) {
+        window.holdPersonTarget = {col: cell.col, row: cell.row};
+        drawHexGrid();
+        
+        if (window.showNotification) {
+            window.showNotification("Enemy targeted for Hold Person. Click 'Cast Spell'", "success");
+        }
+    } else {
+        if (window.showNotification) {
+            window.showNotification("No enemy in this cell for Hold Person", "warning");
+        }
+    }
+}
 
 /* Expose functions and variables to the global window object */
+// Core game variables
 window.playerPos = playerPos;
 window.enemyPos = enemyPos;
 window.playerSpeed = playerSpeed;
 window.currentPath = currentPath;
+window.hexSize = hexSize;
+window.gridCols = gridCols;
+window.gridRows = gridRows;
+
+// Core rendering functions
 window.drawHexGrid = drawHexGrid;
 window.initializeHexColors = initializeHexColors;
-window.getCellsInRange = getCellsInRange;
-window.checkAdjacent = checkAdjacent;
+window.drawTokens = drawTokens;
+
+// Path and movement functions
+window.computePath = computePath;
 window.applyMove = applyMove;
-window.activateMistyStep = activateMistyStep;
+window.getCurrentPathCost = getCurrentPathCost;
+window.getNeighbors = getNeighbors;
+window.checkAdjacent = checkAdjacent;
+
+// Targeting and range functions
+window.getCellsInRange = getCellsInRange;
+window.highlightRange = highlightRange;
+window.clearHighlight = clearHighlight;
+window.isInRange = isInRange;
+window.getCellsInAOE = getCellsInAOE;
+window.updateAttackPreview = updateAttackPreview;
+window.selectAttack = selectAttack;
+window.selectedTargetCell = selectedTargetCell;
+
+// Special abilities functions
 window.teleportToSelectedCell = teleportToSelectedCell;
-window.activateHoldPerson = activateHoldPerson; 
+window.activateMistyStep = activateMistyStep;
+window.activateHoldPerson = activateHoldPerson;
+window.handleMistyStepTargetSelection = handleMistyStepTargetSelection;
+window.handleHoldPersonTargetSelection = handleHoldPersonTargetSelection;
+
+// Utility functions
+window.getCellFromPixel = getCellFromPixel;
+window.updatePlayerPosition = updatePlayerPosition;
+window.updateEndTurnButton = updateEndTurnButton;
+window.setInteractionMode = setInteractionMode;
+
+// Zoom and pan functions
+window.zoomCanvas = zoomCanvas;
+window.zoomOut = zoomOut;
+window.zoomIn = zoomIn;
+window.resetView = resetView;
+
+// State variables
+window.currentRange = currentRange;
+window.currentAOE = currentAOE;
+window.highlightedCells = highlightedCells;
+window.previewAOECell = previewAOECell;
+window.awaitingMistyStepTarget = awaitingMistyStepTarget;
+window.selectedTeleportCell = selectedTeleportCell;
+window.holdPersonActive = holdPersonActive;
+
+// Zoom and pan state
+window.scale = scale;
+window.translateX = translateX;
+window.translateY = translateY;
+window.isPanning = isPanning;
+window.lastMouseX = lastMouseX;
+window.lastMouseY = lastMouseY;
+window.lastTouchX = lastTouchX;
+window.lastTouchY = lastTouchY;
+window.MIN_SCALE = MIN_SCALE;
+window.MAX_SCALE = MAX_SCALE; 

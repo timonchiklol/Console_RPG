@@ -1,239 +1,130 @@
-// UI-related functionality
-class GameUI {
-    constructor(config) {
-        this.config = config;
-        this.setupEventListeners();
-        this.adjustCanvasSize();
-    }
-
-    setupEventListeners() {
-        // Terrain button handlers
-        document.querySelectorAll('.terrain-btn').forEach(btn => {
-            btn.addEventListener('click', () => this.changeTerrain(btn.dataset.terrain));
-        });
-
-        // End turn button handler
-        const endTurnButton = document.getElementById('endTurnButton');
-        if (endTurnButton) {
-            endTurnButton.onclick = (event) => this.handleEndTurn(event.target);
-        }
-
-        // Adjust canvas size on window resize
-        window.addEventListener('resize', () => {
-            this.adjustCanvasSize();
-            this.fixScrolling();
-        });
-        
-        // Call fixScrolling when window is fully loaded to ensure correct formatting
-        window.addEventListener('load', () => this.fixScrolling());
-        
-        // Ensure page is scrollable
-        this.fixScrolling();
-    }
+// UI utilities
+const gameUI = {
+    battleLogContainer: null,
     
-    // Make sure page is scrollable
-    fixScrolling() {
-        // Fix the game container for proper scrolling
-        const gameContainer = document.querySelector('.game-container');
-        if (gameContainer) {
-            gameContainer.style.display = 'flex';
-            gameContainer.style.flexDirection = 'column';
-            gameContainer.style.height = '100vh';
-            gameContainer.style.overflow = 'hidden';
+    // Initialize UI elements
+    init: function() {
+        // Create battle log if needed
+        if (!this.battleLogContainer) {
+            this.createBattleLog();
         }
         
-        // Make the main content area scrollable
-        const mainContent = document.querySelector('.main-content');
-        if (mainContent) {
-            mainContent.style.height = 'auto';
-            mainContent.style.flex = '1';
-            mainContent.style.overflowY = 'auto';
-            mainContent.style.overflowX = 'hidden';
-            mainContent.style.padding = '0 1rem';
-        }
-    }
+        // Add keyboard shortcuts
+        this.setupKeyboardShortcuts();
+    },
     
-    // Adjust canvas size based on container width
-    adjustCanvasSize() {
-        const canvas = document.getElementById('hexCanvas');
-        if (!canvas) return;
+    // Create a battle log container
+    createBattleLog: function() {
+        const container = document.createElement('div');
+        container.className = 'battle-log-container';
+        container.style.position = 'fixed';
+        container.style.bottom = '10px';
+        container.style.left = '10px';
+        container.style.maxWidth = '300px';
+        container.style.maxHeight = '200px';
+        container.style.overflowY = 'auto';
+        container.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        container.style.color = 'white';
+        container.style.padding = '10px';
+        container.style.borderRadius = '5px';
+        container.style.zIndex = '1000';
+        container.style.fontSize = '14px';
         
-        const container = canvas.parentElement;
-        const containerWidth = container.clientWidth;
+        document.body.appendChild(container);
+        this.battleLogContainer = container;
         
-        // Maintain aspect ratio for the hexCanvas
-        const aspectRatio = 1.6; // width/height
-        const height = containerWidth / aspectRatio;
+        // Add a title
+        const title = document.createElement('div');
+        title.textContent = 'Battle Log';
+        title.style.fontWeight = 'bold';
+        title.style.borderBottom = '1px solid #666';
+        title.style.marginBottom = '5px';
+        title.style.paddingBottom = '5px';
         
-        canvas.width = containerWidth;
-        canvas.height = height;
-        
-        // Redraw the grid with new dimensions
-        if (window.drawHexGrid) {
-            window.drawHexGrid();
+        container.appendChild(title);
+    },
+    
+    // Add a message to the battle log
+    addToBattleLog: function(message) {
+        if (!this.battleLogContainer) {
+            this.createBattleLog();
         }
-    }
-
-    async handleEndTurn(buttonElement) {
-        console.log("End turn clicked");
         
-        // Show notification
-        window.showNotification("Ending your turn...", "info", buttonElement);
+        const logEntry = document.createElement('div');
+        logEntry.textContent = message;
+        logEntry.style.marginBottom = '5px';
+        logEntry.style.borderBottom = '1px solid #333';
+        logEntry.style.paddingBottom = '5px';
         
-        // Reset movement state
-        window.hasMoved = false;
-        window.playerSpeed = this.config.player.stats.speed;
-        window.currentPath = [];
-        this.clearHighlight();
+        this.battleLogContainer.appendChild(logEntry);
         
-        // Update UI
-        document.getElementById('char_speed').textContent = `${window.playerSpeed}/${this.config.player.stats.speed}`;
-        window.drawHexGrid();
-        
-        // Enemy turn
-        try {
-            const response = await fetch('/api/enemy_attack', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
+        // Scroll to bottom
+        this.battleLogContainer.scrollTop = this.battleLogContainer.scrollHeight;
+    },
+    
+    // Set up keyboard shortcuts
+    setupKeyboardShortcuts: function() {
+        document.addEventListener('keydown', function(e) {
+            // 'M' key for move mode
+            if (e.key === 'm' || e.key === 'M') {
+                if (window.setInteractionMode) {
+                    window.setInteractionMode('move');
                 }
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
             }
             
-            const data = await response.json();
-            console.log("Enemy turn response:", data);
-            
-            // Используем нашу новую функцию для обработки хода врага
-            if (typeof handleEnemyTurnResponse === 'function') {
-                handleEnemyTurnResponse(data);
-            } else {
-                // Резервный вариант, если функция не определена
-                if (data.combat_log) {
-                    window.showNotification(data.combat_log, "info");
-                }
-                
-                // Update UI
-                document.getElementById('char_hp').textContent = data.character_hp;
-                document.getElementById('enemy_hp').textContent = data.enemy_hp;
-                
-                // Update enemy position
-                if (data.enemy_pos) {
-                    const oldPos = JSON.stringify(window.enemyPos);
-                    const newPos = JSON.stringify(data.enemy_pos);
-                    
-                    window.enemyPos = data.enemy_pos;
-                    window.drawHexGrid();
-                    
-                    // Показываем сообщение только если позиция действительно изменилась
-                    if (oldPos !== newPos) {
-                        window.showNotification("Enemy has moved!", "info");
-                    }
+            // 'A' key for attack mode
+            if (e.key === 'a' || e.key === 'A') {
+                if (window.setInteractionMode) {
+                    window.setInteractionMode('attack');
                 }
             }
-        } catch (error) {
-            console.error('Error during enemy turn:', error);
-            window.showNotification('Error during enemy turn: ' + error.message, "error", buttonElement);
-        }
+            
+            // 'D' key for drag/pan mode
+            if (e.key === 'd' || e.key === 'D') {
+                if (window.setInteractionMode) {
+                    window.setInteractionMode('drag');
+                }
+            }
+            
+            // '+' key for zoom in
+            if (e.key === '+' || e.key === '=') {
+                if (window.zoomIn) {
+                    window.zoomIn();
+                }
+            }
+            
+            // '-' key for zoom out
+            if (e.key === '-' || e.key === '_') {
+                if (window.zoomOut) {
+                    window.zoomOut();
+                }
+            }
+            
+            // 'R' key to reset view
+            if (e.key === 'r' || e.key === 'R') {
+                if (window.resetView) {
+                    window.resetView();
+                }
+            }
+            
+            // Space to end turn
+            if (e.key === ' ') {
+                const endTurnButton = document.getElementById('endTurnButton');
+                if (endTurnButton) {
+                    endTurnButton.click();
+                }
+            }
+        });
     }
+};
 
-    changeTerrain(terrainType) {
-        window.currentTerrain = this.config.battlefield.terrain_types[terrainType];
-        window.initializeHexColors();
-        window.drawHexGrid();
-        window.showNotification(`Changed terrain to ${terrainType}`, "info");
-    }
+// Expose functions to window
+window.gameUI = gameUI;
+window.addToBattleLog = function(message) {
+    gameUI.addToBattleLog(message);
+};
 
-    addToBattleLog(message, targetElement = null) {
-        // Use the notification system instead
-        window.showNotification(message, "info", targetElement);
-    }
-
-    clearHighlight() {
-        window.highlightedCells = [];
-        window.currentRange = 0;
-        window.currentAOE = 0;
-        window.selectedCell = null;
-        window.drawHexGrid();
-    }
-
-    highlightRange(range, aoe = 0) {
-        window.currentRange = range;
-        window.currentAOE = aoe;
-        window.highlightedCells = window.getCellsInRange(window.playerPos, range);
-        window.drawHexGrid();
-    }
-
-    checkAdjacent() {
-        return window.checkAdjacent();
-    }
-
-    isInRange(targetCol, targetRow, range) {
-        return window.isInRange(targetCol, targetRow, range);
-    }
-}
-
-// Initialize UI manager when the DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    window.gameUI = new GameUI(window.GAME_CONFIG);
+// Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    gameUI.init();
 });
-
-// Изменим функцию handleEnemyTurnResponse для учета статуса врага
-function handleEnemyTurnResponse(response) {
-    // Обновляем здоровье персонажа и врага
-    if (document.getElementById('character_hp')) {
-        document.getElementById('character_hp').textContent = response.character_hp;
-    }
-    if (document.getElementById('enemy_hp')) {
-        document.getElementById('enemy_hp').textContent = response.enemy_hp;
-    }
-    
-    // Проверяем статус врага - мы добавили специальный флаг в ответ сервера
-    const enemyStatus = response.enemy_status;
-    const isFrozenOrParalyzed = enemyStatus === "frozen" || enemyStatus === "paralyzed" ||
-                              (response.combat_log && 
-                               (response.combat_log.includes("заморожен") || 
-                                response.combat_log.includes("парализован")));
-    
-    // Обновляем позицию врага и проверяем движение
-    if (response.enemy_pos) {
-        const oldPos = JSON.stringify(window.enemyPos || {});
-        const newPos = JSON.stringify(response.enemy_pos);
-        
-        // Обновляем позицию врага в любом случае
-        window.enemyPos = response.enemy_pos;
-        
-        // Показываем сообщение только если:
-        // 1. Позиция реально изменилась
-        // 2. Враг НЕ заморожен и НЕ парализован
-        if (oldPos !== newPos && !isFrozenOrParalyzed) {
-            console.log("Enemy moved from", oldPos, "to", newPos);
-            if (window.showNotification) {
-                window.showNotification("Enemy has moved!", "info");
-            }
-        }
-    }
-    
-    // Перерисовываем поле
-    if (window.drawHexGrid) {
-        window.drawHexGrid();
-    }
-    
-    // Добавляем боевой лог
-    if (response.combat_log) {
-        if (window.showNotification) {
-            window.showNotification(response.combat_log, "info");
-        }
-        
-        if (window.addToBattleLog) {
-            window.addToBattleLog(response.combat_log);
-        }
-    }
-
-    // Добавим в handleEnemyTurnResponse дополнительные отладочные сообщения
-    console.log("Enemy position from server:", response.enemy_pos);
-    console.log("Current enemy position:", window.enemyPos);
-    console.log("Is frozen or paralyzed:", isFrozenOrParalyzed);
-} 

@@ -3,7 +3,7 @@ class CombatManager {
     constructor(config) {
         this.config = config;
         this.currentAttack = null;
-        this.attackUsedThisTurn = false; // Флаг для отслеживания использования атаки в текущем ходу
+        this.attackUsedThisTurn = false; // Flag to track if attack was used this turn
         this.setupEventListeners();
     }
 
@@ -14,8 +14,16 @@ class CombatManager {
         });
 
         // Attack and cast buttons
-        document.getElementById('attackButton').addEventListener('click', (event) => this.performAttack(event));
-        document.getElementById('castSpellButton').addEventListener('click', (event) => this.castSpell(event));
+        const attackButton = document.getElementById('attackButton');
+        const castSpellButton = document.getElementById('castSpellButton');
+        
+        if (attackButton) {
+            attackButton.addEventListener('click', (event) => this.performAttack(event));
+        }
+        
+        if (castSpellButton) {
+            castSpellButton.addEventListener('click', (event) => this.castSpell(event));
+        }
         
         // End turn button
         const endTurnButton = document.getElementById('endTurnButton');
@@ -24,12 +32,12 @@ class CombatManager {
         }
     }
     
-    // Метод для завершения хода
+    // Method to end turn
     endTurn() {
-        // Сбрасываем флаг использования атаки
+        // Reset attack flag
         this.attackUsedThisTurn = false;
         
-        // Активируем кнопки атак
+        // Enable attack buttons
         const attackButton = document.getElementById('attackButton');
         const castSpellButton = document.getElementById('castSpellButton');
         
@@ -37,23 +45,21 @@ class CombatManager {
             attackButton.disabled = false;
         }
         if (castSpellButton) {
-            castSpellButton.disabled = true; // По умолчанию кнопка заклинаний отключена
+            castSpellButton.disabled = true; // Spell button disabled by default
         }
         
-        // Здесь могут быть другие действия при завершении хода
-        
-        // Отправляем запрос на сервер для завершения хода
+        // Send request to server to end turn
         fetch('/api/end_turn', {
             method: 'POST'
         })
         .then(response => response.json())
         .then(data => {
-            // Обработка ответа сервера
             if (window.showNotification) {
                 window.showNotification("Your turn ended", 'info');
             }
             
-            // Здесь может быть обновление интерфейса или другие действия
+            // Handle enemy response
+            handleEnemyTurnResponse(data);
         })
         .catch(error => {
             console.error('Error ending turn:', error);
@@ -61,7 +67,7 @@ class CombatManager {
     }
 
     handleAttackButtonClick(button, event) {
-        // Если атака уже использована в этом ходу, не позволяем выбирать новую
+        // If attack already used this turn, prevent selecting a new one
         if (this.attackUsedThisTurn) {
             if (window.showNotification) {
                 window.showNotification("You've already attacked this turn", 'warning');
@@ -90,13 +96,13 @@ class CombatManager {
         };
 
         // Clear any previous highlights
-        if (window.gameUI) {
-            window.gameUI.clearHighlight();
+        if (window.clearHighlight) {
+            window.clearHighlight();
         }
 
         // Show range for spells/attacks
-        if (range && window.gameUI) {
-            window.gameUI.highlightRange(range, aoe);
+        if (range && window.highlightRange) {
+            window.highlightRange(window.playerPos, range, aoe);
         }
 
         // Show notification for selected attack or spell
@@ -110,12 +116,30 @@ class CombatManager {
             }
         }
 
-        this.selectAttack(attackType, range, spellName);
+        // Call window.selectAttack and switch to attack mode
+        if (window.selectAttack) {
+            window.selectAttack(attackType, range, spellName);
+            
+            // Also switch to attack mode if we have that function
+            if (window.setInteractionMode) {
+                window.setInteractionMode('attack');
+            }
+            
+            // Update the attack preview
+            const previewElement = document.getElementById('attackPreview');
+            if (previewElement) {
+                previewElement.classList.remove('hidden');
+                previewElement.textContent = spellName 
+                    ? `Selected spell: ${spellName} (Range: ${range})`
+                    : `Selected attack: ${attackType} (Range: ${range})`;
+            }
+        }
 
-        // В handleAttackButtonClick добавляем обработку Misty Step
+        // Handle special spells
         if (spellName === "Misty Step") {
             if (window.activateMistyStep) {
                 window.activateMistyStep();
+                document.getElementById('teleport-button-container').classList.remove('hidden');
             }
         } else if (spellName === "Hold Person") {
             if (window.activateHoldPerson) {
@@ -138,10 +162,15 @@ class CombatManager {
             attackButton.disabled = false;
             castSpellButton.disabled = true;
         }
+        
+        // Clear current path when selecting an attack
+        if (window.currentPath) {
+            window.currentPath = [];
+        }
     }
 
     async performAttack(event) {
-        // Проверяем, не использована ли атака в этом ходу
+        // Check if attack was already used this turn
         if (this.attackUsedThisTurn) {
             if (window.showNotification) {
                 window.showNotification("You've already attacked this turn", 'warning');
@@ -152,16 +181,38 @@ class CombatManager {
         try {
             const selectedAttack = document.querySelector('.attack-button.selected');
             
-            // Если нет выбранной атаки, просто используем базовую атаку
+            // Get selected target cell if available
+            const targetCell = window.selectedTargetCell;
+            
+            // If no target is selected, show a notification
+            if (!targetCell) {
+                if (window.showNotification) {
+                    window.showNotification("Please select a target within range", 'warning');
+                }
+                return;
+            }
+            
+            // Check if target is in range
+            if (!window.isInRange(targetCell.col, targetCell.row, this.currentAttack?.range)) {
+                if (window.showNotification) {
+                    window.showNotification("Target is out of range", 'warning');
+                }
+                return;
+            }
+            
+            // If no attack is selected, use basic attack
             const attackType = selectedAttack ? selectedAttack.dataset.attackType : "melee_attack";
             
-            // Отправляем запрос на атаку
+            // Send attack request
             const response = await fetch('/api/attack', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Content-Type': 'application/json',
                 },
-                body: `attack_type=${attackType}`
+                body: JSON.stringify({
+                    attack_type: attackType,
+                    target: targetCell
+                })
             });
             
             const data = await response.json();
@@ -173,10 +224,10 @@ class CombatManager {
                     alert(data.error);
                 }
             } else {
-                // Помечаем, что атака использована в этом ходу
+                // Mark attack as used this turn
                 this.attackUsedThisTurn = true;
                 
-                // Отключаем кнопки атак до следующего хода
+                // Disable attack buttons until next turn
                 const attackButton = document.getElementById('attackButton');
                 const castSpellButton = document.getElementById('castSpellButton');
                 
@@ -187,83 +238,116 @@ class CombatManager {
                     castSpellButton.disabled = true;
                 }
                 
-                // Обновление интерфейса
-                const charHpElement = document.getElementById('char_hp');
-                const enemyHpElement = document.getElementById('enemy_hp');
-                const charSpeedElement = document.getElementById('char_speed');
+                // Update UI
+                updateInterfaceAfterAction(data);
                 
-                if (charHpElement) {
-                    charHpElement.textContent = `${data.character_hp}/${this.config.player.max_hp}`;
-                }
-                
-                if (enemyHpElement) {
-                    enemyHpElement.textContent = `${data.enemy_hp}/${this.config.enemy.max_hp}`;
-                }
-                
-                if (charSpeedElement) {
-                    charSpeedElement.textContent = `${data.movement_left}/${this.config.player.speed}`;
-                }
-                
-                if (window.showNotification) {
-                    window.showNotification(data.combat_log, 'info');
-                    
-                    // Проверка победы
-                    if (data.enemy_defeated) {
-                        window.showNotification("You defeated the enemy!", 'success');
-                    }
-                } else {
-                    alert(data.combat_log);
-                }
+                // Clear highlightings and selections
+                window.clearHighlight();
             }
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Attack error:', error);
             if (window.showNotification) {
-                window.showNotification('An error occurred while attacking', 'error');
-            } else {
-                alert('An error occurred while attacking');
+                window.showNotification("Error performing attack: " + error.message, 'error');
             }
         }
     }
 
     async castSpell(event) {
-        // Если текущая атака - Misty Step и выбрана клетка
-        if (this.currentAttack.spellName === "Misty Step" && window.selectedTeleportCell) {
-            // Вызываем телепортацию напрямую
-            window.teleportToSelectedCell();
+        try {
+            const selectedSpell = document.querySelector('.spell-btn.selected');
             
-            // Отмечаем атаку как использованную, если нужно
-            this.attackUsedThisTurn = true;
+            if (!selectedSpell) {
+                if (window.showNotification) {
+                    window.showNotification("Please select a spell first", 'warning');
+                }
+                return;
+            }
             
-            // Обновляем UI
-            this.updateUIAfterAction();
+            const spellName = selectedSpell.dataset.spellName;
+            const spellLevel = selectedSpell.dataset.spellLevel;
+            const spellType = selectedSpell.dataset.type;
             
-            return; // Прерываем выполнение, не отправляя запрос на сервер
-        }
-        
-        // Проверяем, не использована ли атака в этом ходу
-        if (this.attackUsedThisTurn) {
+            // Special handling for Misty Step - already handled by teleportToSelectedCell
+            if (spellName === "Misty Step") {
+                // This is handled by the teleport button directly
+                return;
+            }
+            
+            // Special handling for Hold Person - check if target is selected
+            if (spellName === "Hold Person") {
+                if (!window.holdPersonTarget) {
             if (window.showNotification) {
-                window.showNotification("You've already attacked this turn", 'warning');
+                        window.showNotification("Please select an enemy target for Hold Person", 'warning');
             }
             return;
         }
         
-        if (!this.currentAttack?.spellName) {
+                // Send request to cast Hold Person
+                const response = await fetch('/api/cast_spell', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        spell_name: spellName,
+                        target: window.holdPersonTarget,
+                        spell_level: spellLevel
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
             if (window.showNotification) {
-                window.showNotification("No spell selected!", 'error');
-            }
+                        window.showNotification(data.error, 'error');
+                    }
+                } else {
+                    // Mark spell as cast this turn
+                    this.attackUsedThisTurn = true;
+                    
+                    // Disable buttons
+                    const attackButton = document.getElementById('attackButton');
+                    const castSpellButton = document.getElementById('castSpellButton');
+                    
+                    if (attackButton) attackButton.disabled = true;
+                    if (castSpellButton) castSpellButton.disabled = true;
+                    
+                    // Update UI
+                    updateInterfaceAfterAction(data);
+                    
+                    // Apply Hold Person effect visually
+                    applyHoldPersonEffect(window.holdPersonTarget);
+                    
+                    // Reset Hold Person state
+                    window.holdPersonActive = false;
+                    window.holdPersonTarget = null;
+                }
+                
+                // Clear highlights
+                window.clearHighlight();
             return;
         }
 
-        try {
+            // For regular spells, check target
+            const targetCell = window.selectedTargetCell;
+            
+            if (!targetCell) {
+                if (window.showNotification) {
+                    window.showNotification("Please select a target for your spell", 'warning');
+                }
+                return;
+            }
+            
+            // Send request to cast spell
             const response = await fetch('/api/cast_spell', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    spell_name: this.currentAttack.spellName,
-                    target: window.enemyPos || {}
+                    spell_name: spellName,
+                    target: targetCell,
+                    spell_level: spellLevel
                 })
             });
 
@@ -273,111 +357,139 @@ class CombatManager {
                 if (window.showNotification) {
                     window.showNotification(data.error, 'error');
                 }
-                return;
-            }
-
-            // Помечаем, что атака использована в этом ходу
+            } else {
+                // Mark spell as cast this turn
             this.attackUsedThisTurn = true;
             
-            // Отключаем кнопки атак до следующего хода
+                // Disable buttons
             const attackButton = document.getElementById('attackButton');
             const castSpellButton = document.getElementById('castSpellButton');
             
-            if (attackButton) {
-                attackButton.disabled = true;
-            }
-            if (castSpellButton) {
-                castSpellButton.disabled = true;
-            }
+                if (attackButton) attackButton.disabled = true;
+                if (castSpellButton) castSpellButton.disabled = true;
 
             // Update UI
-            const charHpElement = document.getElementById('char_hp');
-            const enemyHpElement = document.getElementById('enemy_hp');
-            const spellSlots1Element = document.getElementById('spell_slots_1');
-            const spellSlots2Element = document.getElementById('spell_slots_2');
-            
-            if (charHpElement) {
-                charHpElement.textContent = data.character_hp;
-            }
-            
-            if (enemyHpElement) {
-                enemyHpElement.textContent = data.enemy_hp;
-            }
-            
-            if (spellSlots1Element) {
-                spellSlots1Element.textContent = data.spell_slots['1'];
-            }
-            
-            if (spellSlots2Element) {
-                spellSlots2Element.textContent = data.spell_slots['2'];
-            }
-
-            // Show spell effect notification
-            if (window.showNotification) {
-                window.showNotification(data.combat_log, 'success');
-            }
-
-            // Clear range highlight after casting
-            if (window.gameUI) {
-                window.gameUI.clearHighlight();
-            }
-            if (window.drawHexGrid) {
-                window.drawHexGrid();
-            }
-
-            // В castSpell добавляем обработку телепортации
-            if (this.currentAttack && this.currentAttack.spellName === "Misty Step") {
-                // Телепортируем игрока на выбранную клетку
-                if (window.teleportToSelectedCell) {
-                    window.teleportToSelectedCell();
+                updateInterfaceAfterAction(data);
+                
+                // Update spell slots
+                if (data.spell_slots) {
+                    const level1Element = document.getElementById('spell_slots_1');
+                    const level2Element = document.getElementById('spell_slots_2');
                     
-                    // Расходуем слот заклинания
-                    if (spellSlots2Element) {
-                        const current = parseInt(spellSlots2Element.textContent);
-                        spellSlots2Element.textContent = Math.max(0, current - 1);
+                    if (level1Element && data.spell_slots['1'] !== undefined) {
+                        level1Element.textContent = data.spell_slots['1'];
                     }
                     
-                    // Не помечаем атаку как использованную, чтобы можно было ходить
-                    return;
+                    if (level2Element && data.spell_slots['2'] !== undefined) {
+                        level2Element.textContent = data.spell_slots['2'];
+                    }
                 }
             }
+            
+            // Clear highlights
+                window.clearHighlight();
 
         } catch (error) {
-            console.error('Error casting spell:', error);
+            console.error('Spell casting error:', error);
             if (window.showNotification) {
-                window.showNotification('Error casting spell: ' + error.message, 'error');
+                window.showNotification("Error casting spell: " + error.message, 'error');
             }
         }
     }
 }
 
-// Initialize combat manager when the DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    window.combatManager = new CombatManager(window.GAME_CONFIG);
-});
-
-// Находим и исправляем функцию, которая обрабатывает ответ после хода врага
-function handleEnemyTurnResponse(response) {
-    // ... существующий код ...
+// Function to handle enemy turn response
+function handleEnemyTurnResponse(data) {
+    if (!data) return;
     
-    // Проверяем, действительно ли враг переместился, сравнивая старую и новую позиции
-    const oldEnemyPos = JSON.stringify(window.enemyPos || {});
-    const newEnemyPos = JSON.stringify(response.enemy_pos || {});
+    // Update UI elements
+    const charHpElement = document.getElementById('char_hp');
+    const enemyHpElement = document.getElementById('enemy_hp');
     
-    // Обновляем позицию врага
-    window.enemyPos = response.enemy_pos;
-    
-    // Перерисовываем поле
-    if (window.drawHexGrid) {
-        window.drawHexGrid();
+    if (charHpElement && data.character_hp !== undefined) {
+        charHpElement.textContent = data.character_hp;
     }
     
-    // Показываем сообщение о перемещении только если позиция действительно изменилась
-    if (oldEnemyPos !== newEnemyPos) {
-        if (window.showNotification) {
-            window.showNotification("Enemy has moved!", "info");
+    if (enemyHpElement && data.enemy_hp !== undefined) {
+        enemyHpElement.textContent = data.enemy_hp;
+    }
+    
+    // Update enemy position if provided
+    if (data.enemy_pos && window.enemyPos) {
+        window.enemyPos = data.enemy_pos;
+        if (window.drawHexGrid) {
+            window.drawHexGrid();
         }
     }
     
-    // ... остальной код ...
-} 
+    // Show combat log if provided
+    if (data.combat_log && window.addToBattleLog) {
+        window.addToBattleLog(data.combat_log);
+    }
+    
+    // Handle special status
+    if (data.enemy_status === "frozen") {
+        if (window.showNotification) {
+            window.showNotification("Enemy is frozen and skips their turn!", "success");
+        }
+    }
+}
+
+// Helper function to update interface after an action
+function updateInterfaceAfterAction(data) {
+    if (!data) return;
+    
+    // Update HP displays
+    const charHpElement = document.getElementById('char_hp');
+    const enemyHpElement = document.getElementById('enemy_hp');
+    const charSpeedElement = document.getElementById('char_speed');
+    
+    if (charHpElement && data.character_hp !== undefined) {
+        charHpElement.textContent = data.character_hp;
+    }
+    
+    if (enemyHpElement && data.enemy_hp !== undefined) {
+        enemyHpElement.textContent = data.enemy_hp;
+    }
+    
+    if (charSpeedElement && data.movement_left !== undefined) {
+        charSpeedElement.textContent = data.movement_left;
+    }
+    
+    // Display combat log
+    if (data.combat_log) {
+        if (window.showNotification) {
+            window.showNotification(data.combat_log, 'info');
+        }
+        
+        if (window.addToBattleLog) {
+            window.addToBattleLog(data.combat_log);
+        }
+    }
+}
+
+// Function to apply Hold Person effect visually
+function applyHoldPersonEffect(targetCell) {
+    if (!targetCell) return;
+    
+    // Add visual indicator
+    const enemyPos = window.enemyPos;
+    if (enemyPos && enemyPos.col === targetCell.col && enemyPos.row === targetCell.row) {
+        // Here you could add a visual effect to the enemy
+        if (window.showNotification) {
+            window.showNotification("Enemy is held in place!", "success");
+        }
+    }
+}
+
+// Initialize combat manager when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    window.combatManager = new CombatManager(window.GAME_CONFIG);
+    
+    // If we don't have addToBattleLog defined, create a simple version
+    if (typeof window.addToBattleLog !== 'function') {
+        window.addToBattleLog = function(message) {
+            console.log('Battle Log:', message);
+        };
+    }
+});
