@@ -283,7 +283,60 @@ def api_enemy_attack():
         
         combat_log = ""
         
-        # Проверка эффектов в правильном порядке
+        # Обработка эффектов урона с течением времени (DOT)
+
+        # Проверяем эффект горения
+        if 'burning' in enemy_effects:
+            print("DEBUG: Обрабатываем эффект горения")
+            burning_effect = enemy_effects['burning']
+            burning_effect['duration'] -= 1
+            
+            # Наносим ФИКСИРОВАННЫЙ урон от горения (2 единицы) вместо случайного
+            burn_damage = 2  # Фиксированный урон вместо random.randint(1, 4)
+            enemy['hp'] -= burn_damage
+            combat_log += f"Враг получает {burn_damage} урона от горения! "
+            
+            if burning_effect['duration'] <= 0:
+                combat_log += "Пламя погасло. "
+                del enemy_effects['burning']
+                print("DEBUG: Эффект горения закончился")
+            else:
+                print(f"DEBUG: Осталось {burning_effect['duration']} ходов горения")
+
+        # Проверяем эффект кровотечения
+        if 'bleeding' in enemy_effects:
+            print("DEBUG: Обрабатываем эффект кровотечения")
+            bleeding_effect = enemy_effects['bleeding']
+            bleeding_effect['duration'] -= 1
+            
+            # Наносим ФИКСИРОВАННЫЙ урон от кровотечения
+            bleed_damage = 1  # Фиксированный урон вместо random.randint(1, 3)
+            enemy['hp'] -= bleed_damage
+            combat_log += f"Враг теряет {bleed_damage} здоровья от кровотечения! "
+            
+            if bleeding_effect['duration'] <= 0:
+                combat_log += "Кровотечение остановилось. "
+                del enemy_effects['bleeding']
+                print("DEBUG: Эффект кровотечения закончился")
+            else:
+                print(f"DEBUG: Осталось {bleeding_effect['duration']} ходов кровотечения")
+
+        # Проверяем, не умер ли враг от эффектов
+        if enemy['hp'] <= 0:
+            combat_log += "Враг повержен! "
+            session['character'] = character
+            session['enemy'] = enemy
+            session['effects'] = effects
+            session.modified = True
+            
+            return jsonify({
+                "combat_log": combat_log,
+                "character_hp": character['hp'],
+                "enemy_hp": 0,
+                "enemy_pos": enemy['pos'],
+                "enemy_defeated": True
+            })
+        
         # Проверяем наличие эффекта паралича
         if 'paralyze' in enemy_effects:
             print("DEBUG: Обрабатываем эффект паралича")
@@ -567,7 +620,14 @@ def api_cast_spell():
         elif spell_name == "Burning Hands":
             damage = random.randint(1, 6)
             enemy['hp'] -= damage
-            effects['enemy']['burning'] = {'duration': 3, 'source': spell_name}
+            
+            # Уточняем эффект горения - 3 хода по 2 урона
+            effects['enemy']['burning'] = {
+                'duration': 3, 
+                'source': spell_name,
+                'damage_per_turn': 2  # Для ясности добавляем параметр урона
+            }
+            
             combat_log += f"burns enemy for {damage} damage and sets them on fire! "
 
         elif spell_name == "Scorching Ray":
@@ -600,7 +660,11 @@ def api_cast_spell():
         elif spell_name == "Cloud of Daggers":
             damage = random.randint(1, 6)
             enemy['hp'] -= damage
-            effects['enemy']['bleeding'] = {'duration': 3, 'source': spell_name}
+            effects['enemy']['bleeding'] = {
+                'duration': 3, 
+                'source': spell_name,
+                'damage_per_turn': 1  # Для ясности добавляем параметр урона
+            }
             combat_log += f"creates Cloud of Daggers for {damage} damage and causes bleeding! "
 
         # Используем слот заклинания соответствующего уровня
