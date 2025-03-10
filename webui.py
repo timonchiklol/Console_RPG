@@ -528,7 +528,27 @@ def api_enemy_attack():
             "enemy_pos": session.get('enemy', {}).get('pos', ENEMIES['goblin']['position'])
         })
 
-# Обновляем функцию api_cast_spell, добавляем эффекты для новых заклинаний
+# Общая функция для нанесения урона от заклинаний
+def apply_spell_damage(spell_name, spell_dict):
+    """Извлекает формулу урона из словаря заклинаний и рассчитывает урон"""
+    damage_formula = None
+    
+    # Определяем, из какого словаря брать информацию
+    if spell_name in spells_1lvl:
+        damage_formula = spells_1lvl[spell_name].get("damage")
+    elif spell_name in spells_2lvl:
+        damage_formula = spells_2lvl[spell_name].get("damage")
+    elif spell_name in basic_attacks:
+        damage_formula = basic_attacks[spell_name].get("damage")
+    
+    # Если формула определена, рассчитываем урон
+    if damage_formula:
+        return calculate_damage(damage_formula)
+    
+    # Если формула не найдена, возвращаем базовый урон
+    return random.randint(1, 6)  # Базовый урон по умолчанию
+
+# Затем в api_cast_spell используем эту функцию
 @app.route("/api/cast_spell", methods=["POST"])
 def api_cast_spell():
     try:
@@ -544,7 +564,7 @@ def api_cast_spell():
         
         # Специальная обработка для Melee Attack
         if spell_name == "Melee Attack":
-            damage = random.randint(1, 6)  # 1d6 урона
+            damage = apply_spell_damage(spell_name, basic_attacks)
             enemy['hp'] -= damage
             combat_log += f"performs melee attack for {damage} damage! "
             
@@ -582,43 +602,43 @@ def api_cast_spell():
             effects['enemy']['paralyze'] = {
                 'duration': 3,
                 'source': spell_name,
-                'breaks_on_damage': True  # Новый флаг для эффектов, которые спадают при уроне
+                'breaks_on_damage': True
             }
             combat_log += "casts Hold Person and paralyzes the enemy! "
 
         elif spell_name == "Ice Knife":
-            damage = random.randint(1, 6)
+            damage = apply_spell_damage(spell_name, spells_1lvl)
             enemy['hp'] -= damage
             effects['enemy']['frozen'] = {'duration': 2, 'source': spell_name}
             combat_log += f"hits with Ice Knife for {damage} damage and freezes the enemy! "
 
         elif spell_name == "Healing Word":
-            healing = random.randint(1, 4) + 2
+            healing_formula = spells_1lvl[spell_name].get("healing")
+            healing = calculate_damage(healing_formula)
             old_hp = character['hp']
             character['hp'] = min(character['hp'] + healing, character['max_hp'])
             actual_healing = character['hp'] - old_hp
             combat_log += f"uses Healing Word and heals for {actual_healing} HP! "
 
         elif spell_name == "Chromatic Orb":
-            # Наносим 3d8 урона
-            damage = sum(random.randint(1, 8) for _ in range(3))
+            damage = apply_spell_damage(spell_name, spells_1lvl)
             enemy['hp'] = max(0, enemy['hp'] - damage)
             
             # Добавляем эффект испуга с увеличенной продолжительностью
             effects['enemy']['fear'] = {
-                'duration': 2,  # Изменяем с 1 на 2, чтобы эффект действовал полный ход
+                'duration': 2,
                 'source': 'Chromatic Orb'
             }
             
             combat_log += f"hits with Chromatic Orb for {damage} damage! The enemy is frightened!"
 
         elif spell_name == "Magic Missile":
-            damage = random.randint(1, 4) + random.randint(1, 4) + random.randint(1, 4)
+            damage = apply_spell_damage(spell_name, spells_1lvl)
             enemy['hp'] -= damage
             combat_log += f"launches Magic Missiles for {damage} damage! "
 
         elif spell_name == "Burning Hands":
-            damage = random.randint(1, 6)
+            damage = apply_spell_damage(spell_name, spells_1lvl)
             enemy['hp'] -= damage
             
             # Уточняем эффект горения - 3 хода по 2 урона
@@ -635,7 +655,7 @@ def api_cast_spell():
             hits = []
             for i in range(3):
                 if random.randint(1, 20) >= 10:  # Hit roll for each ray
-                    damage = random.randint(1, 6)
+                    damage = apply_spell_damage("Scorching Ray", spells_2lvl)
                     total_damage += damage
                     hits.append(damage)
             if hits:
@@ -645,25 +665,24 @@ def api_cast_spell():
                 combat_log += "misses with all Scorching Rays! "
 
         elif spell_name == "Dragon's Breath":
-            # Наносим 3d6 урона
-            damage = sum(random.randint(1, 6) for _ in range(3))
+            damage = apply_spell_damage("Dragon's Breath", spells_2lvl)
             enemy['hp'] = max(0, enemy['hp'] - damage)
             
-            # Добавляем эффект испуга с увеличенной продолжительностью
+            # Добавляем эффект испуга
             effects['enemy']['fear'] = {
-                'duration': 2,  # Изменяем с 1 на 2, чтобы эффект действовал полный ход
+                'duration': 2,
                 'source': 'Dragon\'s Breath'
             }
             
             combat_log = f"{character.get('name', 'Character')} uses Dragon's Breath for {damage} damage! The enemy is frightened!"
 
         elif spell_name == "Cloud of Daggers":
-            damage = random.randint(1, 6)
+            damage = apply_spell_damage("Cloud of Daggers", spells_2lvl)
             enemy['hp'] -= damage
             effects['enemy']['bleeding'] = {
                 'duration': 3, 
                 'source': spell_name,
-                'damage_per_turn': 1  # Для ясности добавляем параметр урона
+                'damage_per_turn': 1
             }
             combat_log += f"creates Cloud of Daggers for {damage} damage and causes bleeding! "
 
@@ -723,6 +742,43 @@ def api_end_turn():
     except Exception as e:
         print(f"Error in end_turn: {e}")
         return jsonify({"error": f"Failed to end turn: {str(e)}"})
+
+def calculate_damage(damage_formula):
+    """Рассчитывает урон на основе строковой формулы типа 'XdY+Z'"""
+    try:
+        if not damage_formula or isinstance(damage_formula, (int, float)):
+            return damage_formula
+            
+        # Обрабатываем простые случаи фиксированного урона
+        if isinstance(damage_formula, (int, float)):
+            return damage_formula
+            
+        # Разделяем на части для кубиков и модификаторов
+        if '+' in damage_formula:
+            dice_part, mod_part = damage_formula.split('+')
+            modifier = int(mod_part.strip())
+        elif '-' in damage_formula:
+            dice_part, mod_part = damage_formula.split('-')
+            modifier = -int(mod_part.strip())
+        else:
+            dice_part = damage_formula
+            modifier = 0
+            
+        # Обрабатываем кубики
+        if 'd' in dice_part:
+            count, sides = dice_part.lower().split('d')
+            count = int(count.strip()) if count.strip() else 1
+            sides = int(sides.strip())
+            
+            # Бросаем кубики
+            total = sum(random.randint(1, sides) for _ in range(count))
+            return total + modifier
+        else:
+            # Если нет кубиков, просто возвращаем число
+            return int(dice_part) + modifier
+    except Exception as e:
+        print(f"Error calculating damage from formula {damage_formula}: {e}")
+        return random.randint(1, 6)  # Аварийное значение
 
 if __name__ == "__main__":
     # This web UI runs on port 5000 and is accessible from other devices

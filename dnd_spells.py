@@ -2,31 +2,31 @@ from random import randint
 
 spells_1lvl = {
     "Chromatic Orb": {
-        "damage": randint(0, 9),
+        "damage": "3d8",  # 3 кубика d8
         "range": 3,
         "area_radius": 2
     },
     
     "Magic Missile": {
-        "damage": randint(3, 9),
+        "damage": "3d4",  # 3 кубика d4
         "range": 4,
         "area_radius": 0
     },
     
     "Ice Knife": {
-        "damage": randint(1, 9),
+        "damage": "1d6+2",  # 1 кубик d6 + 2
         "range": 2,
         "area_radius": 1
     },
     
     "Healing Word": {
-        "healing": randint(1, 4) + 3,
+        "healing": "1d4+3",  # 1 кубик d4 + 3
         "range": 1,
         "area_radius": 1
     },
     
     "Burning Hands": {
-        "damage": randint(5, 13),
+        "damage": "3d6",  # 3 кубика d6
         "range": 1,
         "area_radius": 1
     }
@@ -35,30 +35,30 @@ spells_1lvl = {
 # Словарь с заклинаниями второго уровня
 spells_2lvl = {
     "Scorching Ray": {
-        "damage": randint(1, 20),
+        "damage": "2d6",  # 2 кубика d6 для каждого луча
         "range": 5,
         "area_radius": 0,
     },
 
     "Dragon's Breath": {
-        "damage": randint(1, 12),
+        "damage": "3d6",  # 3 кубика d6
         "range": 3,
         "area_radius": 2,
     },
 
     "Misty Step": {
-        "damage": 0,
+        "damage": "0",  # Нет урона
         "range": 100,
     },
 
     "Cloud of Daggers": {
-        "damage": randint(3, 16),
+        "damage": "4d4",  # 4 кубика d4
         "range": 3,
         "area_radius": 1,
     },
 
     "Hold Person": {
-        "damage": 0,
+        "damage": "0",  # Нет урона
         "range": 5,
     }
 }
@@ -66,7 +66,7 @@ spells_2lvl = {
 # Добавим словарь для базовых атак
 basic_attacks = {
     "Melee Attack": {
-        "damage": randint(1, 6),
+        "damage": "1d6",  # 1 кубик d6
         "range": 2,
         "area_radius": 0,
         "game_mechanics": "базовая атака ближнего боя",
