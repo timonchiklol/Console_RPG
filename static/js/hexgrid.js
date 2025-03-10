@@ -41,6 +41,13 @@ let holdPersonActive = false;
 // Добавляем в начало файла с другими глобальными переменными
 let zoomLevel = 1.0; // Начальный масштаб
 
+// Добавляем глобальные переменные для поддержки перемещения карты
+let isPanMode = false;       // Режим перемещения карты
+let isDragging = false;      // Состояние перетаскивания
+let panOffsetX = 0;          // Смещение карты по X
+let panOffsetY = 0;          // Смещение карты по Y
+let lastMouseX, lastMouseY;  // Последние координаты мыши
+
 // Single DOMContentLoaded event listener
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize hex colors and draw grid
@@ -163,6 +170,34 @@ document.addEventListener('DOMContentLoaded', function() {
             drawHexGrid(); // Перерисовываем сетку с новым масштабом
         });
     }
+
+    // Добавляем обработчики для кнопок переключения режимов
+    const selectModeBtn = document.getElementById('selectModeBtn');
+    const panModeBtn = document.getElementById('panModeBtn');
+    
+    if (selectModeBtn && panModeBtn) {
+        selectModeBtn.addEventListener('click', function() {
+            setMapMode('select');
+        });
+        
+        panModeBtn.addEventListener('click', function() {
+            setMapMode('pan');
+        });
+    }
+    
+    // Обработчики для перемещения карты
+    const canvas = document.getElementById('hexCanvas');
+    if (canvas) {
+        canvas.addEventListener('mousedown', handleMouseDown);
+        canvas.addEventListener('mousemove', handleMouseMove);
+        canvas.addEventListener('mouseup', handleMouseUp);
+        canvas.addEventListener('mouseleave', handleMouseUp);
+        
+        // Обработчики для мобильных устройств
+        canvas.addEventListener('touchstart', handleTouchStart);
+        canvas.addEventListener('touchmove', handleTouchMove);
+        canvas.addEventListener('touchend', handleTouchEnd);
+    }
 });
 
 function initializeHexColors() {
@@ -192,14 +227,14 @@ function drawHexGrid() {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Применяем масштаб
+    // Применяем масштаб и смещение
     ctx.save();
     
     // Масштабируем с центром в середине холста
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
     
-    ctx.translate(centerX, centerY);
+    ctx.translate(centerX + panOffsetX, centerY + panOffsetY);  // Добавляем смещение
     ctx.scale(zoomLevel, zoomLevel);
     ctx.translate(-centerX, -centerY);
     
@@ -396,16 +431,16 @@ function drawHexagon(ctx, x, y, size, isHighlighted, isInAOE, col, row) {
     ctx.stroke();
 }
 
-// Модифицируем функцию getCellFromPixel для учета масштаба
+// Модифицируем функцию getCellFromPixel для учета смещения
 function getCellFromPixel(x, y) {
-    // Учитываем масштаб при обратном преобразовании координат
+    // Учитываем масштаб и смещение при обратном преобразовании
     const canvas = document.getElementById("hexCanvas");
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
     
     // Обратное преобразование координат
-    x = (x - centerX) / zoomLevel + centerX;
-    y = (y - centerY) / zoomLevel + centerY;
+    x = (x - centerX - panOffsetX) / zoomLevel + centerX;
+    y = (y - centerY - panOffsetY) / zoomLevel + centerY;
     
     // Размеры шестиугольника
     const hexWidth = hexSize * 2;
@@ -1020,4 +1055,130 @@ window.checkAdjacent = checkAdjacent;
 window.applyMove = applyMove;
 window.activateMistyStep = activateMistyStep;
 window.teleportToSelectedCell = teleportToSelectedCell;
-window.activateHoldPerson = activateHoldPerson; 
+window.activateHoldPerson = activateHoldPerson;
+
+// Функция переключения режима карты
+function setMapMode(mode) {
+    const selectModeBtn = document.getElementById('selectModeBtn');
+    const panModeBtn = document.getElementById('panModeBtn');
+    
+    if (mode === 'pan') {
+        isPanMode = true;
+        
+        if (selectModeBtn && panModeBtn) {
+            selectModeBtn.classList.remove('bg-amber-600', 'hover:bg-amber-700', 'active');
+            selectModeBtn.classList.add('bg-gray-600', 'hover:bg-gray-700');
+            
+            panModeBtn.classList.remove('bg-gray-600', 'hover:bg-gray-700');
+            panModeBtn.classList.add('bg-amber-600', 'hover:bg-amber-700', 'active');
+        }
+        
+        // Очищаем выделения при переходе в режим карты
+        clearHighlight();
+        drawingPath = false;
+        currentPath = [];
+        
+    } else { // mode === 'select'
+        isPanMode = false;
+        
+        if (selectModeBtn && panModeBtn) {
+            panModeBtn.classList.remove('bg-amber-600', 'hover:bg-amber-700', 'active');
+            panModeBtn.classList.add('bg-gray-600', 'hover:bg-gray-700');
+            
+            selectModeBtn.classList.remove('bg-gray-600', 'hover:bg-gray-700');
+            selectModeBtn.classList.add('bg-amber-600', 'hover:bg-amber-700', 'active');
+        }
+    }
+    
+    // Перерисовываем карту
+    drawHexGrid();
+}
+
+// Обработчик нажатия мыши
+function handleMouseDown(e) {
+    if (isPanMode) {
+        // В режиме перемещения карты
+        isDragging = true;
+        const rect = e.target.getBoundingClientRect();
+        lastMouseX = e.clientX - rect.left;
+        lastMouseY = e.clientY - rect.top;
+        e.target.style.cursor = 'grabbing';
+    } else {
+        // В режиме выбора, используем стандартное поведение
+        // Не изменяем существующие обработчики кликов
+    }
+}
+
+// Обработчик движения мыши
+function handleMouseMove(e) {
+    if (isPanMode && isDragging) {
+        // Перемещение карты в режиме карты
+        const rect = e.target.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        
+        // Вычисляем смещение
+        const deltaX = mouseX - lastMouseX;
+        const deltaY = mouseY - lastMouseY;
+        
+        // Обновляем общее смещение
+        panOffsetX += deltaX;
+        panOffsetY += deltaY;
+        
+        // Обновляем последнюю позицию мыши
+        lastMouseX = mouseX;
+        lastMouseY = mouseY;
+        
+        // Перерисовываем карту
+        drawHexGrid();
+    }
+}
+
+// Обработчик окончания нажатия
+function handleMouseUp(e) {
+    if (isPanMode) {
+        isDragging = false;
+        if (e.target) e.target.style.cursor = 'grab';
+    }
+}
+
+// Обработчики для сенсорных устройств
+function handleTouchStart(e) {
+    if (isPanMode && e.touches.length === 1) {
+        isDragging = true;
+        const rect = e.target.getBoundingClientRect();
+        lastMouseX = e.touches[0].clientX - rect.left;
+        lastMouseY = e.touches[0].clientY - rect.top;
+    }
+}
+
+function handleTouchMove(e) {
+    if (isPanMode && isDragging && e.touches.length === 1) {
+        e.preventDefault(); // Предотвращаем прокрутку страницы
+        
+        const rect = e.target.getBoundingClientRect();
+        const touchX = e.touches[0].clientX - rect.left;
+        const touchY = e.touches[0].clientY - rect.top;
+        
+        // Вычисляем смещение
+        const deltaX = touchX - lastMouseX;
+        const deltaY = touchY - lastMouseY;
+        
+        // Обновляем общее смещение
+        panOffsetX += deltaX;
+        panOffsetY += deltaY;
+        
+        // Обновляем последнюю позицию касания
+        lastMouseX = touchX;
+        lastMouseY = touchY;
+        
+        // Перерисовываем карту
+        drawHexGrid();
+    }
+}
+
+function handleTouchEnd() {
+    if (isPanMode) {
+        isDragging = false;
+    }
+} 

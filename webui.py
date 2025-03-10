@@ -725,5 +725,5 @@ def api_end_turn():
         return jsonify({"error": f"Failed to end turn: {str(e)}"})
 
 if __name__ == "__main__":
-    # This web UI runs on port 5000.
-    app.run(port=5000, debug=True) 
+    # This web UI runs on port 5000 and is accessible from other devices
+    app.run(host='0.0.0.0', port=5000, debug=True)

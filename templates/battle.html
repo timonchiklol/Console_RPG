@@ -173,10 +173,16 @@
     window.GAME_CONFIG = JSON.parse('{{ config_data|tojson|safe }}');
 </script>
 
-<!-- Добавляем в конец файла, перед закрывающим тегом body -->
+<!-- Переводим надпись у ползунка масштаба -->
 <div class="zoom-control" style="position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.6); padding: 8px; border-radius: 10px; display: flex; align-items: center; z-index: 100;">
-    <span style="color: white; margin-right: 10px;">Масштаб:</span>
+    <span style="color: white; margin-right: 10px;">Zoom:</span>
     <input type="range" id="zoomSlider" min="0.5" max="2.0" step="0.1" value="1.0" style="width: 150px;">
+</div>
+
+<!-- Переводим кнопки переключения режимов карты -->
+<div class="map-controls" style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.6); padding: 8px; border-radius: 10px; display: flex; gap: 10px; z-index: 100;">
+    <button id="selectModeBtn" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded active">Cell Select</button>
+    <button id="panModeBtn" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">Map View</button>
 </div>
 {% endblock %}
 
