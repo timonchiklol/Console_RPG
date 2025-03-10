@@ -172,6 +172,12 @@
 <script>
     window.GAME_CONFIG = JSON.parse('{{ config_data|tojson|safe }}');
 </script>
+
+<!-- Добавляем в конец файла, перед закрывающим тегом body -->
+<div class="zoom-control" style="position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.6); padding: 8px; border-radius: 10px; display: flex; align-items: center; z-index: 100;">
+    <span style="color: white; margin-right: 10px;">Масштаб:</span>
+    <input type="range" id="zoomSlider" min="0.5" max="2.0" step="0.1" value="1.0" style="width: 150px;">
+</div>
 {% endblock %}
 
 {% block scripts %}

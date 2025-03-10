@@ -38,6 +38,9 @@ let selectedTeleportCell = null;
 // Добавляем поддержку Hold Person
 let holdPersonActive = false;
 
+// Добавляем в начало файла с другими глобальными переменными
+let zoomLevel = 1.0; // Начальный масштаб
+
 // Single DOMContentLoaded event listener
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize hex colors and draw grid
@@ -151,6 +154,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Update end turn button style
     updateEndTurnButton();
+
+    // Инициализация ползунка масштабирования
+    const zoomSlider = document.getElementById('zoomSlider');
+    if (zoomSlider) {
+        zoomSlider.addEventListener('input', function() {
+            zoomLevel = parseFloat(this.value);
+            drawHexGrid(); // Перерисовываем сетку с новым масштабом
+        });
+    }
 });
 
 function initializeHexColors() {
@@ -179,6 +191,17 @@ function drawHexGrid() {
     
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Применяем масштаб
+    ctx.save();
+    
+    // Масштабируем с центром в середине холста
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    
+    ctx.translate(centerX, centerY);
+    ctx.scale(zoomLevel, zoomLevel);
+    ctx.translate(-centerX, -centerY);
     
     let hexWidth = hexSize * 2;
     let hexHeight = Math.sqrt(3) * hexSize;
@@ -211,6 +234,9 @@ function drawHexGrid() {
     
     // Draw tokens
     drawTokens(ctx);
+    
+    // Восстанавливаем контекст в конце функции
+    ctx.restore();
 }
 
 function drawPath(ctx) {
@@ -370,8 +396,17 @@ function drawHexagon(ctx, x, y, size, isHighlighted, isInAOE, col, row) {
     ctx.stroke();
 }
 
-// Исправленная функция получения клетки из координат клика
+// Модифицируем функцию getCellFromPixel для учета масштаба
 function getCellFromPixel(x, y) {
+    // Учитываем масштаб при обратном преобразовании координат
+    const canvas = document.getElementById("hexCanvas");
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    
+    // Обратное преобразование координат
+    x = (x - centerX) / zoomLevel + centerX;
+    y = (y - centerY) / zoomLevel + centerY;
+    
     // Размеры шестиугольника
     const hexWidth = hexSize * 2;
     const hexHeight = Math.sqrt(3) * hexSize;
@@ -387,12 +422,12 @@ function getCellFromPixel(x, y) {
     
     // Дополнительная проверка для граничных ячеек
     // Поскольку шестиугольники имеют наклонные границы
-    const centerX = col * (hexWidth * 0.75) + hexSize;
-    const centerY = row * hexHeight + ((col % 2) * (hexHeight / 2)) + hexSize;
+    const centerX_i = col * (hexWidth * 0.75) + hexSize;
+    const centerY_i = row * hexHeight + ((col % 2) * (hexHeight / 2)) + hexSize;
     
     // Расчет расстояния от центра ячейки до точки клика
-    const dx = x - centerX;
-    const dy = y - centerY;
+    const dx = x - centerX_i;
+    const dy = y - centerY_i;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
     // Если точка находится далеко от центра, проверяем соседние ячейки

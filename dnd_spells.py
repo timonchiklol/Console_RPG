@@ -1,30 +1,32 @@
+from random import randint
+
 spells_1lvl = {
     "Chromatic Orb": {
-        "damage": "2d4",
+        "damage": randint(0, 9),
         "range": 3,
         "area_radius": 2
     },
     
     "Magic Missile": {
-        "damage": "d3",
+        "damage": randint(3, 9),
         "range": 4,
         "area_radius": 0
     },
     
     "Ice Knife": {
-        "damage": "1d8",
+        "damage": randint(1, 9),
         "range": 2,
         "area_radius": 1
     },
     
     "Healing Word": {
-        "healing": "1d4+3",
+        "healing": randint(1, 4) + 3,
         "range": 1,
         "area_radius": 1
     },
     
     "Burning Hands": {
-        "damage": "3d4",
+        "damage": randint(5, 13),
         "range": 1,
         "area_radius": 1
     }
@@ -33,30 +35,30 @@ spells_1lvl = {
 # Словарь с заклинаниями второго уровня
 spells_2lvl = {
     "Scorching Ray": {
-        "damage": "3d6",
+        "damage": randint(1, 20),
         "range": 5,
         "area_radius": 0,
     },
 
     "Dragon's Breath": {
-        "damage": "2d6",
+        "damage": randint(1, 12),
         "range": 3,
         "area_radius": 2,
     },
 
     "Misty Step": {
-        "damage": "0",
+        "damage": 0,
         "range": 100,
     },
 
     "Cloud of Daggers": {
-        "damage": "6d2",
+        "damage": randint(3, 16),
         "range": 3,
         "area_radius": 1,
     },
 
     "Hold Person": {
-        "damage": "0",
+        "damage": 0,
         "range": 5,
     }
 }
@@ -64,7 +66,7 @@ spells_2lvl = {
 # Добавим словарь для базовых атак
 basic_attacks = {
     "Melee Attack": {
-        "damage": "1d6",
+        "damage": randint(1, 6),
         "range": 2,
         "area_radius": 0,
         "game_mechanics": "базовая атака ближнего боя",
