@@ -656,24 +656,42 @@ body, html {
     
     .character-panel, .action-panel {
         width: 100%;
-        max-height: 300px;
+        max-height: none;
         border: none;
+        border-bottom: 1px solid #34495e;
     }
     
     .battlefield-container {
-        height: 50vh;
+        height: 60vh;
+        min-height: 400px;
+        order: 1;
     }
     
     .character-panel {
         order: 2;
     }
     
-    .battlefield-container {
-        order: 1;
-    }
-    
     .action-panel {
         order: 3;
+    }
+    
+    /* Improve tabs on mobile */
+    .action-tabs {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .tab-btn {
+        min-width: 100px;
+        white-space: nowrap;
+    }
+    
+    /* Pan indicator position for mobile */
+    .pan-indicator {
+        top: auto;
+        bottom: 70px;
+        left: 20px;
     }
 }
 
@@ -689,6 +707,83 @@ body, html {
     }
     
     .ability-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, 1fr);
     }
+    
+    /* Adjust zoom controls position on mobile */
+    .zoom-controls {
+        bottom: 20px;
+        right: 10px;
+    }
+    
+    .battlefield-container {
+        height: 50vh;
+        min-height: 300px;
+    }
+    
+    /* Make buttons larger for touch on mobile */
+    .action-btn, .zoom-btn {
+        padding: 12px;
+        margin-bottom: 10px;
+    }
+    
+    .panel-section {
+        padding: 0.75rem;
+    }
+    
+    /* Portrait mode adjustments */
+    .battlefield-container {
+        height: 40vh;
+    }
+    
+    .character-panel, .action-panel {
+        max-height: 30vh;
+        overflow-y: auto;
+    }
+}
+
+/* Pan indicator */
+.pan-indicator {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background-color: rgba(44, 62, 80, 0.8);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+    z-index: 10;
+    opacity: 0.9;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.pan-indicator:hover {
+    opacity: 1;
+}
+
+.pan-icon {
+    width: 24px;
+    height: 24px;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" fill="white" viewBox="0 0 24 24"><path d="M10 9h4V6h3l-5-5-5 5h3v3zm-1 1H6V7l-5 5 5 5v-3h3v-4zm14 2l-5-5v3h-3v4h3v3l5-5zm-9 3h-4v3H7l5 5 5-5h-3v-3z"/></svg>');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    animation: pulse 2s infinite;
+}
+
+.pan-text {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* Show pan indicator briefly when the canvas is first interacted with */
+@keyframes fadeInOut {
+    0% { opacity: 0; }
+    20% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { opacity: 0; }
 } 

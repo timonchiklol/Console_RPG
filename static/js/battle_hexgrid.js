@@ -36,6 +36,7 @@ let zoomLevel = 1;
 let panOffset = { x: 0, y: 0 };
 let lastPanPos = { x: 0, y: 0 };
 let isPanning = false;
+let isDragging = false;
 
 // Initialize the game
 function initGame() {
@@ -85,10 +86,11 @@ function handleMouseDown(e) {
     const x = (e.clientX - rect.left) / zoomLevel - panOffset.x;
     const y = (e.clientY - rect.top) / zoomLevel - panOffset.y;
     
-    // Right-click or ctrl+click for panning
-    if (e.button === 2 || e.ctrlKey) {
+    // Right-click or middle-click or ctrl+click for panning
+    if (e.button === 2 || e.button === 1 || e.ctrlKey) {
         e.preventDefault();
         isPanning = true;
+        isDragging = true;
         lastPanPos = { x: e.clientX, y: e.clientY };
         canvas.style.cursor = 'grabbing';
         return;
@@ -99,21 +101,24 @@ function handleMouseDown(e) {
     
     if (cell) {
         if (interactionMode === 'move') {
-            // Start drawing a movement path
+            // Only start drawing path if clicking on player
             if (cell.col === playerPos.col && cell.row === playerPos.row) {
                 isDrawingPath = true;
                 currentPath = [{ col: cell.col, row: cell.row }];
                 drawBattlefield();
+            } else {
+                // Don't auto-calculate path when clicking elsewhere
+                // The path will remain visible until user applies the move or draws a new path
             }
         } else if (interactionMode === 'attack') {
-            // Select a target for attack
-            if (isInRange(cell.col, cell.row, currentAttack.range)) {
+            // Select a target for attack using proper hex distance
+            if (isInHexRange(cell.col, cell.row, currentAttack.range)) {
                 selectedTargetCell = cell;
                 document.getElementById('attackBtn').disabled = false;
                 
-                // Calculate AoE cells
+                // Calculate AoE cells using proper hex geometry
                 if (currentAttack.aoe > 0) {
-                    currentAOECells = getCellsInAOE(selectedTargetCell, currentAttack.aoe);
+                    currentAOECells = getHexCellsInAOE(selectedTargetCell, currentAttack.aoe);
                 }
                 
                 drawBattlefield();
@@ -129,7 +134,7 @@ function handleMouseMove(e) {
     const y = (e.clientY - rect.top) / zoomLevel - panOffset.y;
     
     // If panning
-    if (isPanning) {
+    if (isPanning && isDragging) {
         const dx = e.clientX - lastPanPos.x;
         const dy = e.clientY - lastPanPos.y;
         
@@ -144,29 +149,32 @@ function handleMouseMove(e) {
     const cell = getCellFromPixel(x, y);
     
     if (cell) {
-        if (interactionMode === 'move' && isDrawingPath) {
-            // Continue drawing movement path
-            if (isCellAdjacent(currentPath[currentPath.length - 1], cell)) {
-                if (!isCellInPath(cell)) {
-                    currentPath.push({ col: cell.col, row: cell.row });
-                } else {
-                    // If moving back, remove cells after this one
-                    const index = currentPath.findIndex(p => p.col === cell.col && p.row === cell.row);
-                    currentPath = currentPath.slice(0, index + 1);
+        if (interactionMode === 'move') {
+            if (isDrawingPath) {
+                // Only draw path if user clicked on player and is dragging
+                if (isHexAdjacent(currentPath[currentPath.length - 1], cell)) {
+                    if (!isHexCellInPath(cell)) {
+                        // Add new cell to path
+                        currentPath.push({ col: cell.col, row: cell.row });
+                    } else {
+                        // If moving back, remove cells after this one
+                        const index = currentPath.findIndex(p => p.col === cell.col && p.row === cell.row);
+                        currentPath = currentPath.slice(0, index + 1);
+                    }
+                    
+                    // Check if path is within speed limit
+                    const pathCost = calculateManualPathCost(currentPath);
+                    document.getElementById('confirmMoveBtn').disabled = pathCost > currentPlayerSpeed;
+                    
+                    drawBattlefield();
                 }
-                
-                // Update button state based on path cost
-                const pathCost = calculatePathCost(currentPath);
-                document.getElementById('confirmMoveBtn').disabled = pathCost > currentPlayerSpeed;
-                
-                drawBattlefield();
             }
+            // Remove the auto path preview on hover since we want the path to stay visible
         } else if (interactionMode === 'attack') {
-            // Preview AoE if hovering over a valid target
-            if (isInRange(cell.col, cell.row, currentAttack.range)) {
-                // Display AoE preview
+            // Preview AoE if hovering over a valid target using hex geometry
+            if (isInHexRange(cell.col, cell.row, currentAttack.range)) {
                 if (currentAttack.aoe > 0) {
-                    currentAOECells = getCellsInAOE(cell, currentAttack.aoe);
+                    currentAOECells = getHexCellsInAOE(cell, currentAttack.aoe);
                 } else {
                     currentAOECells = [];
                 }
@@ -181,13 +189,27 @@ function handleMouseMove(e) {
 function handleMouseUp(e) {
     if (isPanning) {
         isPanning = false;
+        isDragging = false;
         canvas.style.cursor = 'default';
         return;
     }
     
-    if (interactionMode === 'move') {
+    if (interactionMode === 'move' && isDrawingPath) {
+        // End path drawing but keep the path visible
         isDrawingPath = false;
+        
+        // Enable/disable confirm button based on path cost
+        if (currentPath.length > 1) {
+            const pathCost = calculateManualPathCost(currentPath);
+            document.getElementById('confirmMoveBtn').disabled = pathCost > currentPlayerSpeed;
+        } else {
+            document.getElementById('confirmMoveBtn').disabled = true;
+        }
+        
+        drawBattlefield();
     }
+    
+    isDragging = false;
 }
 
 // Handle mouse wheel for zooming
@@ -213,21 +235,92 @@ function handleMouseWheel(e) {
     drawBattlefield();
 }
 
-// Touch event handlers for mobile
+// Touch event handlers for mobile - updated for manual path drawing
 function handleTouchStart(e) {
     e.preventDefault();
     
     if (e.touches.length === 1) {
-        // Single touch - convert to mouse event
+        // Single touch - check for interaction first, then pan
         const touch = e.touches[0];
-        const mouseEvent = new MouseEvent('mousedown', {
-            clientX: touch.clientX,
-            clientY: touch.clientY
-        });
-        canvas.dispatchEvent(mouseEvent);
+        const rect = canvas.getBoundingClientRect();
+        const x = (touch.clientX - rect.left) / zoomLevel - panOffset.x;
+        const y = (touch.clientY - rect.top) / zoomLevel - panOffset.y;
+        
+        const cell = getCellFromPixel(x, y);
+        
+        // Start touch tracking for potential pan operation
+        lastPanPos = { x: touch.clientX, y: touch.clientY };
+        
+        if (cell) {
+            if (interactionMode === 'move') {
+                // If touching player, start drawing path
+                if (cell.col === playerPos.col && cell.row === playerPos.row) {
+                    isDrawingPath = true;
+                    currentPath = [{ col: cell.col, row: cell.row }];
+                    drawBattlefield();
+                    
+                    // Set flag to prevent immediate panning
+                    isDragging = false;
+                    return;
+                } else {
+                    // If touching elsewhere, calculate auto path
+                    pathDrawingMode = 'auto';
+                    const pathCost = calculateHexDistance(playerPos, cell) * GAME_CONFIG.game_rules.movement.base_cost * (terrainConfig.movement_cost || 1);
+                    
+                    if (pathCost <= currentPlayerSpeed) {
+                        currentPath = findHexPath(playerPos, cell);
+                        document.getElementById('confirmMoveBtn').disabled = false;
+                    } else {
+                        currentPath = [];
+                        document.getElementById('confirmMoveBtn').disabled = true;
+                        addBattleLog(`That location is too far away. Maximum movement: ${currentPlayerSpeed}`);
+                    }
+                    drawBattlefield();
+                    return;
+                }
+            } else if (interactionMode === 'attack') {
+                // Select attack target
+                if (isInHexRange(cell.col, cell.row, currentAttack.range)) {
+                    selectedTargetCell = cell;
+                    document.getElementById('attackBtn').disabled = false;
+                    
+                    if (currentAttack.aoe > 0) {
+                        currentAOECells = getHexCellsInAOE(selectedTargetCell, currentAttack.aoe);
+                    }
+                    
+                    drawBattlefield();
+                    return;
+                }
+            }
+        }
+        
+        // If not interacting with a cell, enable panning after a short delay and movement
+        setTimeout(() => {
+            // Only start panning if the touch has moved significantly
+            if (Math.abs(touch.clientX - lastPanPos.x) > 10 || 
+                Math.abs(touch.clientY - lastPanPos.y) > 10) {
+                isPanning = true;
+                isDragging = true;
+            }
+        }, 100);
+        
     } else if (e.touches.length === 2) {
-        // Two touches - prepare for pinch zoom
+        // Two touches - pinch zoom
         isPanning = false;
+        isDragging = false;
+        isDrawingPath = false;
+        
+        // Calculate initial distance for zoom
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        const initialDistance = Math.hypot(
+            touch2.clientX - touch1.clientX,
+            touch2.clientY - touch1.clientY
+        );
+        
+        // Store initial values
+        canvas.dataset.initialPinchDistance = initialDistance;
+        canvas.dataset.initialZoom = zoomLevel;
     }
 }
 
@@ -235,21 +328,108 @@ function handleTouchMove(e) {
     e.preventDefault();
     
     if (e.touches.length === 1) {
-        // Single touch - convert to mouse event
         const touch = e.touches[0];
-        const mouseEvent = new MouseEvent('mousemove', {
-            clientX: touch.clientX,
-            clientY: touch.clientY
-        });
-        canvas.dispatchEvent(mouseEvent);
+        const rect = canvas.getBoundingClientRect();
+        const x = (touch.clientX - rect.left) / zoomLevel - panOffset.x;
+        const y = (touch.clientY - rect.top) / zoomLevel - panOffset.y;
+        
+        // Handle manual path drawing
+        if (isDrawingPath && pathDrawingMode === 'manual' && interactionMode === 'move') {
+            const cell = getCellFromPixel(x, y);
+            
+            if (cell && isHexAdjacent(currentPath[currentPath.length - 1], cell)) {
+                if (!isHexCellInPath(cell)) {
+                    // Add new cell to path
+                    currentPath.push({ col: cell.col, row: cell.row });
+                } else {
+                    // If moving back, remove cells after this one
+                    const index = currentPath.findIndex(p => p.col === cell.col && p.row === cell.row);
+                    currentPath = currentPath.slice(0, index + 1);
+                }
+                
+                // Check if path is within speed limit
+                const pathCost = calculateManualPathCost(currentPath);
+                document.getElementById('confirmMoveBtn').disabled = pathCost > currentPlayerSpeed;
+                
+                drawBattlefield();
+                
+                // Since we're drawing a path, don't pan
+                isPanning = false;
+                return;
+            }
+        }
+        
+        // Handle panning
+        if (isPanning && isDragging) {
+            const dx = touch.clientX - lastPanPos.x;
+            const dy = touch.clientY - lastPanPos.y;
+            
+            panOffset.x += dx / zoomLevel;
+            panOffset.y += dy / zoomLevel;
+            
+            lastPanPos = { x: touch.clientX, y: touch.clientY };
+            drawBattlefield();
+        } else {
+            // Update last position even if not actively panning
+            lastPanPos = { x: touch.clientX, y: touch.clientY };
+        }
+    } else if (e.touches.length === 2) {
+        // Two finger pinch zoom
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        
+        // Calculate new distance
+        const currentDistance = Math.hypot(
+            touch2.clientX - touch1.clientX,
+            touch2.clientY - touch1.clientY
+        );
+        
+        // Get initial values
+        const initialDistance = parseFloat(canvas.dataset.initialPinchDistance);
+        const initialZoom = parseFloat(canvas.dataset.initialZoom);
+        
+        if (initialDistance && initialZoom) {
+            // Calculate new zoom level
+            const scaleFactor = currentDistance / initialDistance;
+            const newZoom = Math.max(0.5, Math.min(3, initialZoom * scaleFactor));
+            
+            // Calculate center point of the pinch
+            const centerX = (touch1.clientX + touch2.clientX) / 2;
+            const centerY = (touch1.clientY + touch2.clientY) / 2;
+            
+            // Adjust pan offset to zoom around center of pinch
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = centerX - rect.left;
+            const mouseY = centerY - rect.top;
+            
+            // Adjust pan offset to zoom around pinch center
+            if (newZoom !== zoomLevel) {
+                panOffset.x = mouseX / zoomLevel - (mouseX / newZoom - panOffset.x * zoomLevel / newZoom);
+                panOffset.y = mouseY / zoomLevel - (mouseY / newZoom - panOffset.y * zoomLevel / newZoom);
+                zoomLevel = newZoom;
+            }
+            
+            drawBattlefield();
+        }
     }
 }
 
 function handleTouchEnd(e) {
     e.preventDefault();
     
-    const mouseEvent = new MouseEvent('mouseup');
-    canvas.dispatchEvent(mouseEvent);
+    // Reset states
+    if (e.touches.length === 0) {
+        isPanning = false;
+        isDragging = false;
+        
+        if (interactionMode === 'move') {
+            isDrawingPath = false;
+        }
+    }
+    
+    // Clean up pinch zoom data
+    delete canvas.dataset.initialPinchDistance;
+    delete canvas.dataset.initialZoom;
 }
 
 // Set up interaction control buttons
@@ -394,11 +574,11 @@ function setInteractionMode(mode) {
 // Confirm movement
 function confirmMove() {
     if (currentPath.length > 1) {
-        // Calculate path cost
-        const pathCost = calculatePathCost(currentPath);
+        // Calculate path cost using the manual path cost calculation
+        const pathCost = calculateManualPathCost(currentPath);
         
         if (pathCost <= currentPlayerSpeed) {
-            // Update player position
+            // Update player position to the end of the path
             playerPos = { ...currentPath[currentPath.length - 1] };
             
             // Deduct movement speed
@@ -476,7 +656,7 @@ function highlightCellsInRange(center, range) {
     
     for (let col = 0; col < cols; col++) {
         for (let row = 0; row < rows; row++) {
-            const distance = getDistance(center.col, center.row, col, row);
+            const distance = calculateHexDistance(center, { col, row });
             if (distance <= range) {
                 highlightedCells.push({ col, row });
             }
@@ -700,21 +880,24 @@ function drawHexagon(x, y, col, row, isHighlighted, isInAOE, isTarget, hexFillCo
         ctx.fillStyle = 'rgba(255, 255, 0, 0.2)';
     } else {
         // Regular terrain cell
-        // Choose a fill color randomly but consistently for each cell
+        // Use deterministic color generation based on cell position
         const colorIndex = Math.floor((col * 3 + row * 7) % hexFillColors.length);
+        const baseColor = hexFillColors[colorIndex];
         
-        // Apply color variation based on frequency
-        if (Math.random() < hexFillFrequency) {
-            ctx.fillStyle = hexFillColors[colorIndex];
+        // Use a deterministic random value instead of Math.random()
+        // This ensures consistent coloring regardless of interactions
+        const pseudoRandom = ((col * 13 + row * 23) % 100) / 100;
+        
+        if (pseudoRandom < hexFillFrequency) {
+            ctx.fillStyle = baseColor;
         } else {
-            // Alternate with a slightly different shade
-            const baseColor = hexFillColors[colorIndex];
+            // Create a slightly different shade in a deterministic way
             const r = parseInt(baseColor.slice(1, 3), 16);
             const g = parseInt(baseColor.slice(3, 5), 16);
             const b = parseInt(baseColor.slice(5, 7), 16);
             
-            // Lighten or darken the color slightly
-            const factor = 0.9 + Math.random() * 0.2;
+            // Use deterministic factor instead of random
+            const factor = 0.9 + (((col * 7 + row * 11) % 20) / 100);
             ctx.fillStyle = `rgb(${Math.floor(r * factor)}, ${Math.floor(g * factor)}, ${Math.floor(b * factor)})`;
         }
     }
@@ -844,6 +1027,382 @@ function addBattleLog(message) {
     
     // Scroll to bottom
     log.scrollTop = log.scrollHeight;
+}
+
+// Add a function to calculate minimal path cost (A* algorithm)
+function calculateMinimalPathCost(startCell, endCell) {
+    // Implement a simplified distance calculation
+    const terrainMovementCost = terrainConfig.movement_cost || 1;
+    const baseCost = GAME_CONFIG.game_rules.movement.base_cost;
+    
+    // Calculate Manhattan distance for hex grid
+    const dx = Math.abs(endCell.col - startCell.col);
+    const dy = Math.abs(endCell.row - startCell.row);
+    
+    // The cost is the distance multiplied by the base movement cost and terrain modifier
+    const distance = Math.max(dx, dy);
+    return distance * baseCost * terrainMovementCost;
+}
+
+// Add pathfinding function using A* algorithm
+function findShortestPath(startCell, endCell) {
+    // Create open and closed sets for A* search
+    const openSet = [startCell];
+    const closedSet = [];
+    
+    // Store g-scores (movement cost from start) and f-scores (g-score + heuristic)
+    const gScore = {};
+    const fScore = {};
+    
+    // Store how we got to each cell
+    const cameFrom = {};
+    
+    // Initialize scores
+    const startKey = `${startCell.col},${startCell.row}`;
+    gScore[startKey] = 0;
+    fScore[startKey] = heuristic(startCell, endCell);
+    
+    while (openSet.length > 0) {
+        // Find cell with lowest f-score
+        let current = openSet[0];
+        let lowestFScore = fScore[`${current.col},${current.row}`];
+        let currentIndex = 0;
+        
+        for (let i = 1; i < openSet.length; i++) {
+            const cell = openSet[i];
+            const cellKey = `${cell.col},${cell.row}`;
+            
+            if (fScore[cellKey] < lowestFScore) {
+                lowestFScore = fScore[cellKey];
+                current = cell;
+                currentIndex = i;
+            }
+        }
+        
+        // If we've reached the end, reconstruct and return the path
+        if (current.col === endCell.col && current.row === endCell.row) {
+            return reconstructPath(cameFrom, current);
+        }
+        
+        // Remove current from open set and add to closed set
+        openSet.splice(currentIndex, 1);
+        closedSet.push(current);
+        
+        // Check all neighbors
+        const neighbors = getNeighbors(current);
+        
+        for (const neighbor of neighbors) {
+            const neighborKey = `${neighbor.col},${neighbor.row}`;
+            
+            // Skip if in closed set
+            if (closedSet.some(cell => cell.col === neighbor.col && cell.row === neighbor.row)) {
+                continue;
+            }
+            
+            // Calculate new g-score
+            const currentKey = `${current.col},${current.row}`;
+            const moveCost = 1; // Basic move cost between adjacent cells
+            const terrainFactor = terrainConfig.movement_cost || 1;
+            const newGScore = gScore[currentKey] + (moveCost * GAME_CONFIG.game_rules.movement.base_cost * terrainFactor);
+            
+            // If not in open set, add it
+            if (!openSet.some(cell => cell.col === neighbor.col && cell.row === neighbor.row)) {
+                openSet.push(neighbor);
+            }
+            // Skip if we already have a better path
+            else if (gScore[neighborKey] !== undefined && newGScore >= gScore[neighborKey]) {
+                continue;
+            }
+            
+            // This is the best path so far
+            cameFrom[neighborKey] = current;
+            gScore[neighborKey] = newGScore;
+            fScore[neighborKey] = newGScore + heuristic(neighbor, endCell);
+        }
+    }
+    
+    // No path found
+    return [startCell];
+}
+
+// Heuristic function for A* (Manhattan distance for hex grid)
+function heuristic(a, b) {
+    return Math.max(Math.abs(a.col - b.col), Math.abs(a.row - b.row));
+}
+
+// Get all valid neighbors of a cell
+function getNeighbors(cell) {
+    const neighbors = [];
+    
+    // Directions for hex grid
+    const directions = [
+        { col: 1, row: 0 },   // right
+        { col: -1, row: 0 },  // left
+        { col: 0, row: 1 },   // down
+        { col: 0, row: -1 },  // up
+        { col: 1, row: -1 },  // up-right
+        { col: -1, row: -1 }, // up-left
+        { col: 1, row: 1 },   // down-right
+        { col: -1, row: 1 }   // down-left
+    ];
+    
+    for (const dir of directions) {
+        const newCol = cell.col + dir.col;
+        const newRow = cell.row + dir.row;
+        
+        // Check if within bounds
+        if (newCol >= 0 && newCol < cols && newRow >= 0 && newRow < rows) {
+            neighbors.push({ col: newCol, row: newRow });
+        }
+    }
+    
+    return neighbors;
+}
+
+// Reconstruct path from cameFrom records
+function reconstructPath(cameFrom, current) {
+    const path = [current];
+    
+    while (true) {
+        const currentKey = `${current.col},${current.row}`;
+        
+        if (cameFrom[currentKey] === undefined) {
+            break;
+        }
+        
+        current = cameFrom[currentKey];
+        path.unshift(current);
+    }
+    
+    return path;
+}
+
+// Calculate proper hex grid distance (cube coordinates method)
+function calculateHexDistance(a, b) {
+    // Convert to cube coordinates first
+    const aCube = offsetToCube(a.col, a.row);
+    const bCube = offsetToCube(b.col, b.row);
+    
+    // Calculate cube distance
+    return Math.max(
+        Math.abs(aCube.x - bCube.x),
+        Math.abs(aCube.y - bCube.y),
+        Math.abs(aCube.z - bCube.z)
+    );
+}
+
+// Convert offset coordinates to cube coordinates
+function offsetToCube(col, row) {
+    // For odd-q offset (horizontal layout, odd rows shifted right)
+    const x = col - Math.floor(row / 2);
+    const z = row;
+    const y = -x - z;
+    return { x, y, z };
+}
+
+// Convert cube coordinates to offset coordinates
+function cubeToOffset(x, y, z) {
+    const col = x + Math.floor(z / 2);
+    const row = z;
+    return { col, row };
+}
+
+// Check if a cell is in hex range from player
+function isInHexRange(col, row, range) {
+    return calculateHexDistance(playerPos, { col, row }) <= range;
+}
+
+// Get all cells within hex AoE radius
+function getHexCellsInAOE(center, radius) {
+    const aoeCells = [];
+    const centerCube = offsetToCube(center.col, center.row);
+    
+    // Check all potential cells within bounds
+    for (let col = 0; col < cols; col++) {
+        for (let row = 0; row < rows; row++) {
+            const cellCube = offsetToCube(col, row);
+            
+            // Calculate hex distance in cube coordinates
+            const distance = Math.max(
+                Math.abs(centerCube.x - cellCube.x),
+                Math.abs(centerCube.y - cellCube.y),
+                Math.abs(centerCube.z - cellCube.z)
+            );
+            
+            if (distance <= radius) {
+                aoeCells.push({ col, row });
+            }
+        }
+    }
+    
+    return aoeCells;
+}
+
+// Find a path using proper hex neighbors
+function findHexPath(startCell, endCell) {
+    // Create open and closed sets
+    const openSet = [startCell];
+    const closedSet = [];
+    
+    // Store g-scores and f-scores
+    const gScore = {};
+    const fScore = {};
+    
+    // Store how we got to each cell
+    const cameFrom = {};
+    
+    // Initialize scores
+    const startKey = `${startCell.col},${startCell.row}`;
+    gScore[startKey] = 0;
+    fScore[startKey] = hexHeuristic(startCell, endCell);
+    
+    while (openSet.length > 0) {
+        // Find cell with lowest f-score
+        let current = openSet[0];
+        let lowestFScore = fScore[`${current.col},${current.row}`];
+        let currentIndex = 0;
+        
+        for (let i = 1; i < openSet.length; i++) {
+            const cell = openSet[i];
+            const cellKey = `${cell.col},${cell.row}`;
+            
+            if (fScore[cellKey] < lowestFScore) {
+                lowestFScore = fScore[cellKey];
+                current = cell;
+                currentIndex = i;
+            }
+        }
+        
+        // If we've reached the end, reconstruct and return the path
+        if (current.col === endCell.col && current.row === endCell.row) {
+            return reconstructHexPath(cameFrom, current);
+        }
+        
+        // Remove current from open set and add to closed set
+        openSet.splice(currentIndex, 1);
+        closedSet.push(current);
+        
+        // Check all hex neighbors
+        const neighbors = getHexNeighbors(current);
+        
+        for (const neighbor of neighbors) {
+            const neighborKey = `${neighbor.col},${neighbor.row}`;
+            
+            // Skip if in closed set
+            if (closedSet.some(cell => cell.col === neighbor.col && cell.row === neighbor.row)) {
+                continue;
+            }
+            
+            // Calculate new g-score
+            const currentKey = `${current.col},${current.row}`;
+            const moveCost = GAME_CONFIG.game_rules.movement.base_cost * (terrainConfig.movement_cost || 1);
+            const newGScore = gScore[currentKey] + moveCost;
+            
+            // If not in open set, add it
+            if (!openSet.some(cell => cell.col === neighbor.col && cell.row === neighbor.row)) {
+                openSet.push(neighbor);
+            }
+            // Skip if we already have a better path
+            else if (gScore[neighborKey] !== undefined && newGScore >= gScore[neighborKey]) {
+                continue;
+            }
+            
+            // This is the best path so far
+            cameFrom[neighborKey] = current;
+            gScore[neighborKey] = newGScore;
+            fScore[neighborKey] = newGScore + hexHeuristic(neighbor, endCell);
+        }
+    }
+    
+    // No path found
+    return [startCell];
+}
+
+// Hex-specific heuristic for A* (hex distance)
+function hexHeuristic(a, b) {
+    return calculateHexDistance(a, b);
+}
+
+// Get all valid hex neighbors
+function getHexNeighbors(cell) {
+    const neighbors = [];
+    
+    // Proper hex directions for odd-q offset grid
+    const directions = [
+        [+1,  0], // right
+        [+1, -1], // up-right
+        [ 0, -1], // up-left
+        [-1,  0], // left
+        [ 0, +1], // down-left
+        [+1, +1]  // down-right
+    ];
+    
+    // Even rows have different neighbors than odd rows
+    if (cell.row % 2 === 1) {
+        // Odd row
+        directions[1] = [0, -1]; // up-right -> up
+        directions[2] = [-1, -1]; // up-left
+        directions[4] = [-1, +1]; // down-left
+        directions[5] = [0, +1]; // down-right -> down
+    }
+    
+    for (const [dCol, dRow] of directions) {
+        const newCol = cell.col + dCol;
+        const newRow = cell.row + dRow;
+        
+        // Check if within bounds
+        if (newCol >= 0 && newCol < cols && newRow >= 0 && newRow < rows) {
+            neighbors.push({ col: newCol, row: newRow });
+        }
+    }
+    
+    return neighbors;
+}
+
+// Reconstruct path from cameFrom records
+function reconstructHexPath(cameFrom, current) {
+    const path = [current];
+    
+    while (true) {
+        const currentKey = `${current.col},${current.row}`;
+        
+        if (cameFrom[currentKey] === undefined) {
+            break;
+        }
+        
+        current = cameFrom[currentKey];
+        path.unshift(current);
+    }
+    
+    return path;
+}
+
+// Calculate the cost of a manually drawn path
+function calculateManualPathCost(path) {
+    if (path.length <= 1) return 0;
+    
+    let cost = 0;
+    const terrainMovementCost = terrainConfig.movement_cost || 1;
+    
+    for (let i = 1; i < path.length; i++) {
+        // Base movement cost from game rules
+        const baseCost = GAME_CONFIG.game_rules.movement.base_cost;
+        
+        // Apply terrain modifier
+        cost += baseCost * terrainMovementCost;
+    }
+    
+    return cost;
+}
+
+// Check if two hex cells are adjacent
+function isHexAdjacent(cell1, cell2) {
+    return calculateHexDistance(cell1, cell2) === 1;
+}
+
+// Check if a cell is in the current path
+function isHexCellInPath(cell) {
+    return currentPath.some(p => p.col === cell.col && p.row === cell.row);
 }
 
 // Initialize the game when the page loads

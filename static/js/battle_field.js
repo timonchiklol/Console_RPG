@@ -13,6 +13,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add button visual effects
     setupButtonEffects();
     
+    // Setup pan indicator behavior
+    setupPanIndicator();
+    
     // Prevent context menu on battlefield canvas (for right-click panning)
     document.getElementById('battlefieldCanvas').addEventListener('contextmenu', function(e) {
         e.preventDefault();
@@ -175,4 +178,40 @@ function setupButtonEffects() {
         }
     `;
     document.head.appendChild(style);
-})(); 
+})();
+
+// Set up pan indicator behavior
+function setupPanIndicator() {
+    const panIndicator = document.getElementById('panIndicator');
+    const canvas = document.getElementById('battlefieldCanvas');
+    
+    if (panIndicator && canvas) {
+        // Initially show the indicator
+        panIndicator.style.opacity = '0.9';
+        
+        // Hide the indicator after a few seconds
+        setTimeout(() => {
+            panIndicator.style.opacity = '0';
+        }, 5000);
+        
+        // Show the indicator when the mouse enters the canvas
+        canvas.addEventListener('mouseenter', () => {
+            panIndicator.style.opacity = '0.9';
+            
+            // Hide it again after a short delay
+            setTimeout(() => {
+                panIndicator.style.opacity = '0';
+            }, 2000);
+        });
+        
+        // Also show on touch start on mobile
+        canvas.addEventListener('touchstart', () => {
+            panIndicator.style.opacity = '0.9';
+            
+            // Hide it again after a short delay
+            setTimeout(() => {
+                panIndicator.style.opacity = '0';
+            }, 2000);
+        }, { passive: false });
+    }
+} 
