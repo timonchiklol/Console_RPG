@@ -548,7 +548,51 @@ def apply_spell_damage(spell_name, spell_dict):
     # Если формула не найдена, возвращаем базовый урон
     return random.randint(1, 6)  # Базовый урон по умолчанию
 
-# Затем в api_cast_spell используем эту функцию
+# Добавим функцию для проверки расстояния
+def get_distance(pos1, pos2):
+    """Упрощенное вычисление расстояния"""
+    col1, row1 = pos1['col'], pos1['row']
+    col2, row2 = pos2['col'], pos2['row']
+    
+    # Евклидово расстояние, деленное на 2 для приближения к игровой механике
+    dx = col1 - col2
+    dy = row1 - row2
+    return math.ceil(math.sqrt(dx * dx + dy * dy) / 2)
+
+def get_hex_neighbors(col, row):
+    """Возвращает соседние клетки для гексагональной сетки"""
+    neighbors = []
+    
+    # Смещения зависят от четности столбца
+    if col % 2 == 0:  # Четный столбец
+        directions = [
+            (0, -1),  # вверх
+            (1, -1),  # вверх-вправо
+            (1, 0),   # вправо
+            (0, 1),   # вниз
+            (-1, 0),  # влево
+            (-1, -1)  # вверх-влево
+        ]
+    else:  # Нечетный столбец
+        directions = [
+            (0, -1),  # вверх
+            (1, 0),   # вверх-вправо
+            (1, 1),   # вправо
+            (0, 1),   # вниз
+            (-1, 1),  # влево
+            (-1, 0)   # вверх-влево
+        ]
+    
+    # Добавляем всех соседей
+    for dc, dr in directions:
+        next_col, next_row = col + dc, row + dr
+        
+        # Проверяем границы сетки (можно настроить под ваш размер)
+        if 0 <= next_col < 20 and 0 <= next_row < 20:
+            neighbors.append((next_col, next_row))
+    
+    return neighbors
+
 @app.route("/api/cast_spell", methods=["POST"])
 def api_cast_spell():
     try:
@@ -580,10 +624,14 @@ def api_cast_spell():
 
         # Определяем уровень заклинания для всех остальных заклинаний
         spell_level = None
+        spell_range = 0
+        
         if spell_name in spells_1lvl:
             spell_level = '1'
+            spell_range = spells_1lvl[spell_name].get('range', 0)
         elif spell_name in spells_2lvl:
             spell_level = '2'
+            spell_range = spells_2lvl[spell_name].get('range', 0)
         
         # Проверяем наличие ячеек нужного уровня
         if spell_level and character['spell_slots'].get(spell_level, 0) <= 0:
@@ -596,6 +644,47 @@ def api_cast_spell():
             is_spell = True
             if character['spell_slots']['1'] <= 0 and character['spell_slots']['2'] <= 0:
                 return jsonify({"error": "No spell slots remaining!"})
+
+        # Проверяем, находится ли противник в радиусе действия заклинания
+        # За исключением заклинаний с самонаведением или тех, что не требуют проверки расстояния
+        distance_check_required = True
+        
+        # Список заклинаний, которые не требуют проверки расстояния (самолечение и т.д.)
+        distance_exceptions = ["Healing Word", "Misty Step"]
+        
+        if spell_name in distance_exceptions:
+            distance_check_required = False
+        
+        if distance_check_required:
+            # Сохраняем старое расстояние для сравнения
+            old_method = math.sqrt((character['pos']['col'] - enemy['pos']['col'])**2 + 
+                                  (character['pos']['row'] - enemy['pos']['row'])**2)
+            # Новый метод
+            distance = get_distance(character['pos'], enemy['pos'])
+            
+            print(f"DEBUG: Spell: {spell_name}, Range: {spell_range}")
+            print(f"DEBUG: Player at {character['pos']}, Enemy at {enemy['pos']}")
+            print(f"DEBUG: New distance calc: {distance}, Old Euclidean/2: {old_method/2}")
+            
+            if distance > spell_range:
+                # Если враг вне радиуса действия, регистрируем промах
+                # Все равно расходуем слот заклинания
+                if spell_level:
+                    character['spell_slots'][spell_level] -= 1
+                
+                combat_log += f"пытается применить {spell_name}, но противник вне радиуса действия ({math.ceil(distance)} > {spell_range})."
+                
+                session['character'] = character
+                session.modified = True
+                
+                return jsonify({
+                    "combat_log": combat_log,
+                    "character_hp": character['hp'],
+                    "enemy_hp": enemy['hp'],
+                    "enemy_defeated": False,
+                    "spell_slots": character['spell_slots'],
+                    "spell_missed": True
+                })
 
         # Специальная обработка для каждого заклинания
         if spell_name == "Hold Person":

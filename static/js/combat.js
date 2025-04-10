@@ -312,9 +312,16 @@ class CombatManager {
                 spellSlots2Element.textContent = data.spell_slots['2'];
             }
 
-            // Show spell effect notification
-            if (window.showNotification) {
-                window.showNotification(data.combat_log, 'success');
+            // Специальная обработка для промахов
+            if (data.spell_missed) {
+                if (window.showNotification) {
+                    window.showNotification(data.combat_log, 'warning');
+                }
+            } else {
+                // Show spell effect notification
+                if (window.showNotification) {
+                    window.showNotification(data.combat_log, 'success');
+                }
             }
 
             // Clear range highlight after casting
